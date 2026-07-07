@@ -153,8 +153,19 @@ export interface ConfidenceVerdict {
 export interface KnownIssue {
   title: string;
   description: string;
-  /** When it typically bites, e.g. { kmMin: 90000 } or { yearMax: 2017 } */
-  applicability: { kmMin?: number; kmMax?: number; yearMin?: number; yearMax?: number };
+  /**
+   * When it typically bites. fuel/gearbox use canonical tokens matched
+   * loosely against listing values: "diesel" | "gasoline", "automatic" | "manual".
+   * A listing with the field missing counts as applicable (can't rule it out).
+   */
+  applicability: {
+    kmMin?: number;
+    kmMax?: number;
+    yearMin?: number;
+    yearMax?: number;
+    fuel?: "diesel" | "gasoline";
+    gearbox?: "automatic" | "manual";
+  };
   typicalRepairCostEur?: { min: number; max: number };
   /** What evidence rules it in or out for a specific unit. */
   evidence: string[];

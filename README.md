@@ -33,10 +33,13 @@ same token plus `CORE_API_URL=http://localhost:3000`.
 ### Try the Scout loop end to end
 
 ```
-curl -X POST http://localhost:3000/api/dev/seed    # dev user + sample brief (VW Golf, Madrid)
-curl -X POST http://localhost:3000/api/dev/sweep   # enqueue a Wallapop search job
-pnpm dev:runner                                    # leases the job, searches, reports back
-curl http://localhost:3000/api/dev/state           # counts: jobs, listings, leads
+curl -X POST http://localhost:3000/api/dev/seed          # dev user + sample brief (VW Golf, Madrid)
+curl -X POST http://localhost:3000/api/dev/seed-dossier  # reviewed Golf VII reliability dossier
+curl -X POST http://localhost:3000/api/dev/sweep         # enqueue search jobs (Wallapop + AutoScout24)
+pnpm dev:runner                                          # leases jobs, searches, reports back
+curl http://localhost:3000/api/dev/state                 # counts: jobs, listings, leads
+curl -X POST http://localhost:3000/api/dev/reevaluate    # refresh verdicts (dossier + benchmark)
+curl "http://localhost:3000/api/dev/leads?limit=5"       # top leads with full verdicts
 ```
 
 Then open http://localhost:3000 — shortlisted leads with confidence grades.

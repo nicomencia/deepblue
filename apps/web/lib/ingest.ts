@@ -5,11 +5,12 @@
 
 import {
   evaluateListing,
+  type ModelDossier,
   type NormalizedListing,
   type PriceBenchmark,
 } from "@deepblue/core";
-import { briefs, events, leads, listings, type Db } from "@deepblue/db";
-import { and, eq, sql } from "drizzle-orm";
+import { briefs, events, leads, listings, modelDossiers, type Db } from "@deepblue/db";
+import { and, desc, eq, isNotNull, sql } from "drizzle-orm";
 
 export interface IngestStats {
   received: number;
@@ -29,6 +30,7 @@ export async function ingestSearchResults(
   if (!brief) throw new Error(`brief ${briefId} not found`);
 
   const benchmarkCache = new Map<string, PriceBenchmark | undefined>();
+  const dossierCache = new Map<string, ModelDossier | undefined>();
 
   for (const item of items) {
     // Upsert into the global corpus; price/mileage/title refresh on re-sighting.
@@ -41,6 +43,9 @@ export async function ingestSearchResults(
         title: item.title,
         description: item.description,
         priceEur: item.priceEur,
+        make: item.make,
+        model: item.model,
+        version: item.version,
         year: item.year,
         km: item.km,
         fuel: item.fuel,
@@ -57,6 +62,9 @@ export async function ingestSearchResults(
         set: {
           title: item.title,
           priceEur: item.priceEur,
+          make: item.make,
+          model: item.model,
+          version: item.version,
           km: item.km,
           active: true,
           lastSeenAt: new Date(),
@@ -72,8 +80,15 @@ export async function ingestSearchResults(
       .limit(1);
     if (existingLead) continue;
 
-    const benchmark = await getBenchmark(db, item, benchmarkCache);
-    const evaluation = evaluateListing(item, brief.criteria, brief.hardLimits, benchmark);
+    const benchmark = await getBenchmark(db, item.make, item.model, benchmarkCache);
+    const dossier = await getDossier(db, item.make, item.model, dossierCache);
+    const evaluation = evaluateListing(
+      item,
+      brief.criteria,
+      brief.hardLimits,
+      benchmark,
+      dossier,
+    );
 
     const [lead] = await db
       .insert(leads)
@@ -113,16 +128,14 @@ export async function ingestSearchResults(
  * Grows more meaningful with every sweep; evaluateListing ignores it
  * below its minimum sample size.
  */
-async function getBenchmark(
+export async function getBenchmark(
   db: Db,
-  item: NormalizedListing,
+  make: string | undefined,
+  model: string | undefined,
   cache: Map<string, PriceBenchmark | undefined>,
 ): Promise<PriceBenchmark | undefined> {
-  const make = item.make?.toLowerCase();
-  const model = item.model?.toLowerCase();
   if (!make || !model) return undefined;
-
-  const key = `${make}|${model}`;
+  const key = `${make.toLowerCase()}|${model.toLowerCase()}`;
   if (cache.has(key)) return cache.get(key);
 
   const rows = await db
@@ -133,8 +146,9 @@ async function getBenchmark(
     .from(listings)
     .where(
       and(
-        sql`${listings.priceEur} is not null`,
-        sql`lower(${listings.title}) like ${"%" + model + "%"}`,
+        isNotNull(listings.priceEur),
+        sql`lower(${listings.make}) = ${make.toLowerCase()}`,
+        sql`lower(${listings.model}) = ${model.toLowerCase()}`,
       ),
     );
 
@@ -145,4 +159,33 @@ async function getBenchmark(
       : undefined;
   cache.set(key, benchmark);
   return benchmark;
+}
+
+/** Latest reviewed dossier for make+model. Unreviewed dossiers never drive claims. */
+export async function getDossier(
+  db: Db,
+  make: string | undefined,
+  model: string | undefined,
+  cache: Map<string, ModelDossier | undefined>,
+): Promise<ModelDossier | undefined> {
+  if (!make || !model) return undefined;
+  const key = `${make.toLowerCase()}|${model.toLowerCase()}`;
+  if (cache.has(key)) return cache.get(key);
+
+  const rows = await db
+    .select({ content: modelDossiers.content })
+    .from(modelDossiers)
+    .where(
+      and(
+        sql`lower(${modelDossiers.make}) = ${make.toLowerCase()}`,
+        sql`lower(${modelDossiers.model}) = ${model.toLowerCase()}`,
+        isNotNull(modelDossiers.reviewedAt),
+      ),
+    )
+    .orderBy(desc(modelDossiers.version))
+    .limit(1);
+
+  const dossier = rows[0]?.content;
+  cache.set(key, dossier);
+  return dossier;
 }

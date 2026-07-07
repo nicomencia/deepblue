@@ -4,9 +4,10 @@ import { and, eq } from "drizzle-orm";
 import { getDb } from "../../../../lib/db";
 
 /**
- * Dev-only stand-in for Cloud Scheduler: enqueue one Wallapop search sweep
- * per vehicle of every active brief. Skips briefs that still have queued jobs.
+ * Dev-only stand-in for Cloud Scheduler: enqueue one search sweep per
+ * platform per vehicle of every active brief. Skips briefs with queued jobs.
  */
+const PLATFORMS = ["wallapop", "autoscout24"] as const;
 export async function POST(): Promise<Response> {
   if (process.env.NODE_ENV === "production") return new Response(null, { status: 404 });
   const db = await getDb();
@@ -23,21 +24,25 @@ export async function POST(): Promise<Response> {
     if (pending) continue;
 
     for (const vehicle of brief.criteria.vehicles) {
-      const payload: JobPayload = {
-        type: "search_sweep",
-        platform: "wallapop",
-        briefId: brief.id,
-        query: {
-          keywords: `${vehicle.make} ${vehicle.model}`,
-          // Asking prices above budget within negotiation headroom still matter.
-          priceMaxEur: Math.round(brief.hardLimits.maxPriceEur * NEGOTIATION_HEADROOM),
-          yearMin: brief.criteria.yearMin,
-          kmMax: brief.criteria.kmMax,
-          location: brief.criteria.location,
-        },
-      };
-      await db.insert(jobs).values({ userId: brief.userId, type: payload.type, payload });
-      created += 1;
+      for (const platform of PLATFORMS) {
+        const payload: JobPayload = {
+          type: "search_sweep",
+          platform,
+          briefId: brief.id,
+          query: {
+            keywords: `${vehicle.make} ${vehicle.model}`,
+            make: vehicle.make,
+            model: vehicle.model,
+            // Asking prices above budget within negotiation headroom still matter.
+            priceMaxEur: Math.round(brief.hardLimits.maxPriceEur * NEGOTIATION_HEADROOM),
+            yearMin: brief.criteria.yearMin,
+            kmMax: brief.criteria.kmMax,
+            location: brief.criteria.location,
+          },
+        };
+        await db.insert(jobs).values({ userId: brief.userId, type: payload.type, payload });
+        created += 1;
+      }
     }
   }
 

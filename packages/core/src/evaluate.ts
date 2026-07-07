@@ -10,6 +10,8 @@ import type {
   ConfidenceGrade,
   ConfidenceVerdict,
   HardLimits,
+  KnownIssue,
+  ModelDossier,
   NormalizedListing,
   VerdictFactor,
 } from "./domain.js";
@@ -52,17 +54,18 @@ export function evaluateListing(
   criteria: BriefCriteria,
   hardLimits: HardLimits,
   benchmark?: PriceBenchmark,
+  dossier?: ModelDossier,
 ): EvaluationResult {
   // --- Hard filters: these kill the lead outright -------------------------
   if (!matchesVehicle(listing, criteria)) {
-    return dead("different_vehicle", listing, benchmark);
+    return dead("different_vehicle", listing, benchmark, dossier);
   }
   if (listing.year !== undefined) {
     if (criteria.yearMin !== undefined && listing.year < criteria.yearMin) {
-      return dead("year_below_minimum", listing, benchmark);
+      return dead("year_below_minimum", listing, benchmark, dossier);
     }
     if (criteria.yearMax !== undefined && listing.year > criteria.yearMax) {
-      return dead("year_above_maximum", listing, benchmark);
+      return dead("year_above_maximum", listing, benchmark, dossier);
     }
   }
   if (
@@ -70,18 +73,18 @@ export function evaluateListing(
     criteria.kmMax !== undefined &&
     listing.km > criteria.kmMax
   ) {
-    return dead("km_over_limit", listing, benchmark);
+    return dead("km_over_limit", listing, benchmark, dossier);
   }
   if (
     listing.priceEur !== undefined &&
     listing.priceEur > hardLimits.maxPriceEur * NEGOTIATION_HEADROOM
   ) {
-    return dead("price_over_budget", listing, benchmark);
+    return dead("price_over_budget", listing, benchmark, dossier);
   }
 
   return {
     outcome: "shortlisted",
-    verdict: buildVerdict(listing, benchmark),
+    verdict: buildVerdict(listing, benchmark, dossier),
   };
 }
 
@@ -89,13 +92,125 @@ function dead(
   reason: string,
   listing: NormalizedListing,
   benchmark?: PriceBenchmark,
+  dossier?: ModelDossier,
 ): EvaluationResult {
-  return { outcome: "dead", deadReason: reason, verdict: buildVerdict(listing, benchmark) };
+  return {
+    outcome: "dead",
+    deadReason: reason,
+    verdict: buildVerdict(listing, benchmark, dossier),
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Model reliability from the dossier (never from LLM memory — see PROJECT.md)
+// ---------------------------------------------------------------------------
+
+/** Issues approaching their mileage window count as applicable from 80% of kmMin. */
+const KM_APPROACH_FACTOR = 0.8;
+
+function fieldMatches(value: string | undefined, token: string): boolean {
+  // Unknown field → can't rule the issue out → applicable.
+  if (value === undefined) return true;
+  const v = value.toLowerCase();
+  if (token === "diesel") return v.includes("diesel") || v.includes("diésel");
+  if (token === "gasoline") return v.includes("gasolin"); // "gasoline" / "gasolina"
+  if (token === "automatic") return v.includes("auto") || v.includes("dsg");
+  if (token === "manual") return v.includes("man");
+  return true;
+}
+
+function issueApplies(listing: NormalizedListing, issue: KnownIssue): boolean {
+  const a = issue.applicability;
+  if (a.fuel && !fieldMatches(listing.fuel, a.fuel)) return false;
+  if (a.gearbox && !fieldMatches(listing.gearbox, a.gearbox)) return false;
+  if (listing.year !== undefined) {
+    if (a.yearMin !== undefined && listing.year < a.yearMin) return false;
+    if (a.yearMax !== undefined && listing.year > a.yearMax) return false;
+  }
+  if (listing.km !== undefined) {
+    if (a.kmMin !== undefined && listing.km < a.kmMin * KM_APPROACH_FACTOR) return false;
+    if (a.kmMax !== undefined && listing.km > a.kmMax) return false;
+  }
+  return true;
+}
+
+const SEVERITY_GRADE: Record<KnownIssue["severity"], ConfidenceGrade> = {
+  minor: "B",
+  moderate: "C",
+  major: "D",
+  critical: "E",
+};
+
+interface ReliabilityAssessment {
+  factor: VerdictFactor;
+  questions: string[];
+  wouldRaise: string[];
+}
+
+function assessModelReliability(
+  listing: NormalizedListing,
+  dossier?: ModelDossier,
+): ReliabilityAssessment {
+  if (!dossier) {
+    return {
+      factor: {
+        grade: "C",
+        known: [],
+        assumed: [],
+        unverified: ["Dossier de fiabilidad del modelo pendiente de construir"],
+      },
+      questions: [],
+      wouldRaise: ["Construir el dossier de fiabilidad del modelo"],
+    };
+  }
+
+  const applicable = dossier.knownIssues.filter((issue) => issueApplies(listing, issue));
+  if (applicable.length === 0) {
+    return {
+      factor: {
+        grade: "B",
+        known: [
+          "Ningún problema conocido del modelo aplica a esta unidad (año/km/motor/cambio)",
+        ],
+        assumed: [],
+        unverified: [],
+      },
+      questions: [],
+      wouldRaise: [],
+    };
+  }
+
+  // The grade reflects the worst applicable *model-level* risk; unit evidence
+  // (invoices, seller answers) is what later rules each issue in or out.
+  const grade = applicable
+    .map((i) => SEVERITY_GRADE[i.severity])
+    .reduce((acc, g) => worstOf(acc, g));
+
+  const known = applicable.map((i) => {
+    const cost = i.typicalRepairCostEur
+      ? ` (~${i.typicalRepairCostEur.min.toLocaleString("es-ES")}–${i.typicalRepairCostEur.max.toLocaleString("es-ES")} €)`
+      : "";
+    return `${i.title}${cost}`;
+  });
+
+  return {
+    factor: {
+      grade,
+      known,
+      assumed: [],
+      unverified: applicable.map((i) => `Sin descartar con evidencia: ${i.title}`),
+    },
+    questions: applicable.flatMap((i) => i.sellerQuestions),
+    wouldRaise: applicable
+      .slice(0, 3)
+      .map((i) => `Evidencia que descartaría «${i.title}»: ${i.evidence.join("; ")}`),
+  };
 }
 
 function buildVerdict(
   listing: NormalizedListing,
   benchmark?: PriceBenchmark,
+  dossier?: ModelDossier,
 ): ConfidenceVerdict {
   const openQuestions: string[] = [];
 
@@ -131,13 +246,10 @@ function buildVerdict(
     unverified,
   };
 
-  // --- Model reliability: dossiers arrive later in Phase 1 ----------------
-  const modelReliability: VerdictFactor = {
-    grade: "C",
-    known: [],
-    assumed: [],
-    unverified: ["Dossier de fiabilidad del modelo pendiente de construir"],
-  };
+  // --- Model reliability: from the reviewed dossier, never from memory ----
+  const reliability = assessModelReliability(listing, dossier);
+  const modelReliability = reliability.factor;
+  openQuestions.push(...reliability.questions);
 
   // --- Price fairness vs own corpus benchmark -----------------------------
   let priceFairness: VerdictFactor;
@@ -192,11 +304,11 @@ function buildVerdict(
     ),
     factors: { modelReliability, unitEvidence, sellerCredibility, priceFairness },
     wouldRaiseGrade: [
-      "Construir el dossier de fiabilidad del modelo",
+      ...reliability.wouldRaise,
       "Respuestas del vendedor sobre mantenimiento, propietarios y accidentes",
       ...(scamSignal ? ["Verificar que el vendedor y el vehículo son reales"] : []),
     ],
-    openQuestions,
+    openQuestions: [...new Set(openQuestions)].slice(0, 10),
     updatedAt: new Date().toISOString(),
   };
 }
