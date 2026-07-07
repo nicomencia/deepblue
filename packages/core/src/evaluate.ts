@@ -49,11 +49,14 @@ const NEUTRAL = 55;
 /**
  * Factor weights by risk tolerance. Gamblers weigh price harder and
  * theoretical (unconfirmed) risk softer; conservative buyers the reverse.
+ * Model weight is deliberately low: the user chose the model knowing its
+ * reputation — this factor differentiates configurations (DSG vs manual,
+ * diesel vs petrol at high km), it must not re-punish the model choice.
  */
 const WEIGHTS: Record<RiskTolerance, { price: number; model: number; unit: number; seller: number }> = {
-  low: { price: 0.25, model: 0.35, unit: 0.25, seller: 0.15 },
-  medium: { price: 0.35, model: 0.25, unit: 0.25, seller: 0.15 },
-  high: { price: 0.45, model: 0.15, unit: 0.25, seller: 0.15 },
+  low: { price: 0.3, model: 0.25, unit: 0.3, seller: 0.15 },
+  medium: { price: 0.4, model: 0.15, unit: 0.3, seller: 0.15 },
+  high: { price: 0.5, model: 0.1, unit: 0.25, seller: 0.15 },
 };
 
 /** Grade bands over the weighted score. */

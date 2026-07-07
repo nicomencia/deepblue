@@ -161,9 +161,11 @@ assumed, and what remains unverified, plus "what would raise this grade". Calibr
 uncertainty *is* the precision: the product never sounds more confident than it is.
 
 **Two axes, never conflated (added 2026-07-07).** The verdict separates *attractiveness*
-from *verification*. Score (0–100) = weighted subscores — price fairness 0.35, model
-reliability 0.25, unit condition 0.25, seller 0.15 at medium risk tolerance (gamblers
-shift weight from theoretical risk to price; conservative buyers the reverse) — banded to
+from *verification*. Score (0–100) = weighted subscores — price fairness 0.40, model
+reliability 0.15, unit condition 0.30, seller 0.15 at medium risk tolerance (gamblers
+shift weight from theoretical risk to price; conservative buyers the reverse). Model
+weight is deliberately low: the user chose the model knowing its reputation, so this
+factor only differentiates configurations, never re-punishes the model choice. Banded to
 grades A≥85/B≥70/C≥55/D≥40/E. Model reliability subtracts likelihood-weighted *expected
 repair cost relative to asking price*, so risk is priced, not binary. confidencePct
 (0–100) tracks how much is verified (fields known, seller reputation fetched, dossier
