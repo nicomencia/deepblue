@@ -1,0 +1,16 @@
+{
+  "name": "deepblue",
+  "version": "0.1.0",
+  "private": true,
+  "packageManager": "pnpm@11.10.0",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "typecheck": "pnpm -r typecheck",
+    "dev:web": "pnpm --filter @deepblue/web dev",
+    "dev:runner": "pnpm --filter @deepblue/runner dev",
+    "db:generate": "pnpm --filter @deepblue/db generate",
+    "db:migrate": "pnpm --filter @deepblue/db migrate"
+  }
+}

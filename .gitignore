@@ -1,0 +1,23 @@
+# dependencies
+node_modules/
+
+# builds
+.next/
+dist/
+out/
+*.tsbuildinfo
+
+# environment — secrets never enter the repo
+.env
+.env.*
+!.env.example
+
+# runner browser profile (contains the logged-in Wallapop session)
+.browser-profile/
+
+# local dev database (PGlite)
+.data/
+
+# misc
+.DS_Store
+*.log
