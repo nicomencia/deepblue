@@ -23,7 +23,10 @@ export interface DigestResult {
 const madridDate = (d: Date) =>
   new Intl.DateTimeFormat("en-CA", { timeZone: "Europe/Madrid" }).format(d);
 
-export async function runDigest(db: Db): Promise<DigestResult> {
+export async function runDigest(
+  db: Db,
+  opts: { force?: boolean } = {},
+): Promise<DigestResult> {
   const owners = await db
     .selectDistinct({ id: users.id, email: users.email })
     .from(users)
@@ -38,8 +41,8 @@ export async function runDigest(db: Db): Promise<DigestResult> {
       .where(and(eq(events.userId, owner.id), eq(events.type, "digest_run")))
       .orderBy(desc(events.createdAt))
       .limit(1);
-    // Once per Madrid calendar day, durable across restarts.
-    if (lastRun && madridDate(lastRun.at) === madridDate(new Date())) continue;
+    // Once per Madrid calendar day, durable across restarts (force = dev only).
+    if (!opts.force && lastRun && madridDate(lastRun.at) === madridDate(new Date())) continue;
     const windowStart = lastRun?.at ?? new Date(Date.now() - 24 * 3600 * 1000);
 
     // Refresh verdicts first so the digest reflects today's knowledge.
