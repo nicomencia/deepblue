@@ -1,0 +1,60 @@
+/**
+ * Sweep enqueueing: one search job per platform per vehicle of every active
+ * brief. Called by the local scheduler, Cloud Scheduler (via /api/cron/sweep),
+ * and the dev endpoint. Skips briefs that still have queued jobs so an
+ * offline runner never causes a pileup.
+ */
+
+import { NEGOTIATION_HEADROOM, PLATFORMS, type JobPayload } from "@deepblue/core";
+import { briefs, events, jobs, type Db } from "@deepblue/db";
+import { and, eq } from "drizzle-orm";
+
+export async function enqueueSweeps(db: Db): Promise<number> {
+  const activeBriefs = await db.select().from(briefs).where(eq(briefs.status, "active"));
+  let created = 0;
+
+  for (const brief of activeBriefs) {
+    const [pending] = await db
+      .select({ id: jobs.id })
+      .from(jobs)
+      .where(and(eq(jobs.userId, brief.userId), eq(jobs.status, "queued")))
+      .limit(1);
+    if (pending) continue;
+
+    let briefJobs = 0;
+    for (const vehicle of brief.criteria.vehicles) {
+      for (const platform of PLATFORMS) {
+        const payload: JobPayload = {
+          type: "search_sweep",
+          platform,
+          briefId: brief.id,
+          query: {
+            keywords: `${vehicle.make} ${vehicle.model}`,
+            make: vehicle.make,
+            model: vehicle.model,
+            // Asking prices above budget within negotiation headroom still matter.
+            priceMaxEur: Math.round(brief.hardLimits.maxPriceEur * NEGOTIATION_HEADROOM),
+            // Floor skips financing/installment posts (329€ "cars") and wrecks.
+            priceMinEur: Math.round(brief.hardLimits.maxPriceEur * 0.3),
+            yearMin: brief.criteria.yearMin,
+            kmMax: brief.criteria.kmMax,
+            fuel: brief.criteria.fuel?.length === 1 ? brief.criteria.fuel[0] : undefined,
+            location: brief.criteria.location,
+          },
+        };
+        await db.insert(jobs).values({ userId: brief.userId, type: payload.type, payload });
+        briefJobs += 1;
+      }
+    }
+    if (briefJobs > 0) {
+      await db.insert(events).values({
+        userId: brief.userId,
+        type: "sweep_enqueued",
+        payload: { briefId: brief.id, jobs: briefJobs },
+      });
+      created += briefJobs;
+    }
+  }
+
+  return created;
+}

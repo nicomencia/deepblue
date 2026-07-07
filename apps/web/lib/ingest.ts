@@ -4,16 +4,27 @@
  */
 
 import {
+  CONFIDENCE_GRADES,
   evaluateListing,
+  type ConfidenceGrade,
+  type EvaluationResult,
   type JobPayload,
   type ModelDossier,
   type NormalizedListing,
   type PriceBenchmark,
 } from "@deepblue/core";
-import { briefs, events, jobs, leads, listings, type Db } from "@deepblue/db";
+import { briefs, events, jobs, leads, listings, users, type Db } from "@deepblue/db";
 import { and, eq } from "drizzle-orm";
+import { sendEmail } from "./email";
 import { getBenchmark, getDossier } from "./lookups";
 import { newEvalCaches, reevaluateLead } from "./reevaluate";
+
+/** Cap instant alerts per ingest batch — the rest land in the daily digest. */
+const MAX_ALERTS_PER_INGEST = 3;
+
+function gradeAtMost(grade: ConfidenceGrade, threshold: ConfidenceGrade): boolean {
+  return CONFIDENCE_GRADES.indexOf(grade) <= CONFIDENCE_GRADES.indexOf(threshold);
+}
 
 export interface IngestStats {
   received: number;
@@ -31,9 +42,11 @@ export async function ingestSearchResults(
 
   const [brief] = await db.select().from(briefs).where(eq(briefs.id, briefId)).limit(1);
   if (!brief) throw new Error(`brief ${briefId} not found`);
+  const [owner] = await db.select().from(users).where(eq(users.id, brief.userId)).limit(1);
 
   const benchmarkCache = new Map<string, PriceBenchmark | undefined>();
   const dossierCache = new Map<string, ModelDossier | undefined>();
+  let alertsSent = 0;
 
   for (const item of items) {
     // Upsert into the global corpus; price/mileage/title refresh on re-sighting.
@@ -131,6 +144,23 @@ export async function ingestSearchResults(
       await db.insert(jobs).values({ userId: brief.userId, type: payload.type, payload });
     }
 
+    // Instant alert for top-grade finds. Fires only on first evaluation —
+    // re-evaluations (digest, enrichment) never alert, so no spam.
+    const alertThreshold = (process.env.ALERT_MAX_GRADE ?? "B") as ConfidenceGrade;
+    if (
+      evaluation.outcome === "shortlisted" &&
+      owner &&
+      alertsSent < MAX_ALERTS_PER_INGEST &&
+      gradeAtMost(evaluation.verdict.overall, alertThreshold)
+    ) {
+      alertsSent += 1;
+      await sendEmail({
+        to: owner.email,
+        subject: `deepblue · candidato ${evaluation.verdict.overall}: ${item.title}`,
+        text: composeAlert(item, evaluation),
+      });
+    }
+
     await db.insert(events).values({
       userId: brief.userId,
       leadId: lead?.id,
@@ -146,6 +176,36 @@ export async function ingestSearchResults(
   }
 
   return stats;
+}
+
+function composeAlert(item: NormalizedListing, evaluation: EvaluationResult): string {
+  const v = evaluation.verdict;
+  const specs = [
+    item.priceEur !== undefined ? `${item.priceEur.toLocaleString("es-ES")} €` : undefined,
+    item.year,
+    item.km !== undefined ? `${item.km.toLocaleString("es-ES")} km` : undefined,
+    item.locationText,
+  ]
+    .filter(Boolean)
+    .join(" · ");
+  const lines = [
+    `${item.title}`,
+    specs,
+    "",
+    `Confianza global: ${v.overall}`,
+    ...(v.repairExposureEur
+      ? [
+          `Exposición en reparaciones sin verificar: ~${v.repairExposureEur.min.toLocaleString("es-ES")}–${v.repairExposureEur.max.toLocaleString("es-ES")} €`,
+        ]
+      : []),
+    ...(v.budgetNote ? [v.budgetNote] : []),
+    "",
+    "Preguntas clave para el vendedor:",
+    ...v.openQuestions.slice(0, 3).map((q) => `- ${q}`),
+    "",
+    item.url,
+  ];
+  return lines.join("\n");
 }
 
 /**

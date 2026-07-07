@@ -30,6 +30,17 @@ under `apps/web/.data` — zero setup. Set `DATABASE_URL` to use real Postgres.
 The web server needs `RUNNER_TOKEN` set (any string in dev); the runner needs the
 same token plus `CORE_API_URL=http://localhost:3000`.
 
+### Autonomous mode
+
+With `ENABLE_LOCAL_SCHEDULER=1`, the web server sweeps every brief every
+`SWEEP_INTERVAL_MINUTES` (jittered, only 08–23h Madrid) and sends a daily email
+digest each morning (Resend; without `RESEND_API_KEY` emails print to the log).
+Top-grade finds trigger instant alert emails at ingest. Keep `pnpm dev:runner`
+running and deepblue scouts by itself.
+
+In cloud deployments, leave the local scheduler off and point Cloud Scheduler at
+`POST /api/cron/sweep` and `POST /api/cron/digest` with `Authorization: Bearer $CRON_SECRET`.
+
 ### Try the Scout loop end to end
 
 ```
