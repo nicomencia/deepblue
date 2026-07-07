@@ -23,6 +23,7 @@ export async function GET(req: Request): Promise<Response> {
     .filter((r) => !platform || r.listing.platform === platform)
     .slice(0, limit)
     .map(({ lead, listing }) => ({
+      id: lead.id,
       platform: listing.platform,
       title: listing.title,
       priceEur: listing.priceEur,
