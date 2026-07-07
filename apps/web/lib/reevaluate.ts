@@ -51,6 +51,7 @@ export function listingRowToNormalized(
     gearbox: listing.gearbox ?? undefined,
     powerCv: listing.powerCv ?? undefined,
     ecoLabel: listing.ecoLabel ?? undefined,
+    countryCode: listing.countryCode ?? undefined,
     sellerType: listing.sellerType ?? undefined,
     sellerName: listing.sellerName ?? undefined,
     sellerRating: listing.sellerRating ?? undefined,
@@ -71,7 +72,7 @@ export async function reevaluateLead(
   caches: EvalCaches,
 ): Promise<{ overall: string; outcome: string }> {
   const nl = listingRowToNormalized(listing, brief);
-  const benchmark = await getBenchmark(db, nl.make, nl.model, caches.benchmark);
+  const benchmark = await getBenchmark(db, nl.make, nl.model, nl.countryCode, caches.benchmark);
   const dossier = await getDossier(db, nl.make, nl.model, caches.dossier);
   const evaluation = evaluateListing(nl, brief.criteria, brief.hardLimits, benchmark, dossier);
 

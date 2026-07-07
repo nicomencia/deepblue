@@ -122,6 +122,8 @@ function normalize(item: RawListing): NormalizedListing | null {
     fuel: v.fuel,
     gearbox: v.transmission,
     powerCv: parsePowerCv(item.vehicleDetails),
+    // AutoScout24 is pan-European: the listing's country defines its market.
+    countryCode: item.location?.countryCode ?? "ES",
     sellerType: item.seller?.type?.toLowerCase() === "dealer" ? "dealer" : "private",
     sellerName: item.seller?.companyName,
     locationText: item.location?.city

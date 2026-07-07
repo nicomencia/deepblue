@@ -58,6 +58,7 @@ export async function ingestSearchResults(
         sellerType: item.sellerType,
         sellerName: item.sellerName,
         locationText: item.locationText,
+        countryCode: item.countryCode,
         lat: item.lat,
         lon: item.lon,
         raw: item.raw,
@@ -71,6 +72,7 @@ export async function ingestSearchResults(
           model: item.model,
           version: item.version,
           km: item.km,
+          countryCode: item.countryCode,
           active: true,
           lastSeenAt: new Date(),
         },
@@ -85,7 +87,13 @@ export async function ingestSearchResults(
       .limit(1);
     if (existingLead) continue;
 
-    const benchmark = await getBenchmark(db, item.make, item.model, benchmarkCache);
+    const benchmark = await getBenchmark(
+      db,
+      item.make,
+      item.model,
+      item.countryCode,
+      benchmarkCache,
+    );
     const dossier = await getDossier(db, item.make, item.model, dossierCache);
     const evaluation = evaluateListing(
       item,
@@ -170,6 +178,7 @@ export async function ingestListingDetail(
       sellerRating: item.sellerRating,
       sellerReviewCount: item.sellerReviewCount,
       sellerSoldCount: item.sellerSoldCount,
+      countryCode: item.countryCode,
       raw: item.raw,
       detailFetchedAt: new Date(),
       lastSeenAt: new Date(),

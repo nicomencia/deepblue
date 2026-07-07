@@ -13,10 +13,15 @@ export async function getBenchmark(
   db: Db,
   make: string | undefined,
   model: string | undefined,
+  market: string | undefined,
   cache: Map<string, PriceBenchmark | undefined>,
 ): Promise<PriceBenchmark | undefined> {
   if (!make || !model) return undefined;
-  const key = `${make.toLowerCase()}|${model.toLowerCase()}`;
+  // Markets aren't comparable (a Spanish Golf ≠ a German Golf in price and
+  // condition); benchmark strictly within the listing's market. Legacy rows
+  // without country_code are treated as ES (both current platforms are .es).
+  const mkt = (market ?? "ES").toUpperCase();
+  const key = `${make.toLowerCase()}|${model.toLowerCase()}|${mkt}`;
   if (cache.has(key)) return cache.get(key);
 
   const rows = await db
@@ -30,13 +35,14 @@ export async function getBenchmark(
         isNotNull(listings.priceEur),
         sql`lower(${listings.make}) = ${make.toLowerCase()}`,
         sql`lower(${listings.model}) = ${model.toLowerCase()}`,
+        sql`upper(coalesce(${listings.countryCode}, 'ES')) = ${mkt}`,
       ),
     );
 
   const row = rows[0];
   const benchmark =
     row && row.median !== null && row.count > 0
-      ? { medianEur: Number(row.median), sampleSize: row.count }
+      ? { medianEur: Number(row.median), sampleSize: row.count, market: mkt }
       : undefined;
   cache.set(key, benchmark);
   return benchmark;

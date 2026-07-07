@@ -160,6 +160,20 @@ evidence, (3) seller credibility, (4) price fairness — each stating what is kn
 assumed, and what remains unverified, plus "what would raise this grade". Calibrated
 uncertainty *is* the precision: the product never sounds more confident than it is.
 
+**Theory never kills a lead.** Dossier issues are *verification work*, not verdicts. Each
+applicable issue carries a per-unit status (unconfirmed → confirmed / ruled_out via seller
+answers) and an estimated likelihood for this unit. Unconfirmed theory caps model
+reliability at C — only confirmed issues (or hard data like scam pricing) grade worse. The
+verdict quantifies the gamble instead of forbidding it: summed repair exposure and a plain
+budget note ("price + worst case still inside your budget"), because low-budget buyers
+knowingly betting on an unverified unit is a valid strategy — the user always makes the
+final call. Briefs carry a riskTolerance (low/medium/high) for ranking and phrasing.
+
+**Markets are not comparable.** A Spanish Golf and a German Golf differ in price and
+condition; price benchmarks are computed strictly within the listing's market
+(countryCode), never across countries. Cross-market data may later inform *import*
+analysis — explicitly framed as such, never mixed into fairness grades.
+
 **Visit handoff pack.** At handoff the user gets a personalized inspection sheet for that
 unit: what to look at, listen for, and test-drive, and which documents to demand — the
 known weak points of that engine at that mileage, not a generic used-car checklist.

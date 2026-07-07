@@ -209,6 +209,7 @@ function normalizeDetail(
     gearbox: ta.gear_box?.text ?? ta.gear_box?.value,
     powerCv: attrNum(ta.horsepower),
     ecoLabel: ta.eco_label?.value,
+    countryCode: "ES", // Wallapop is Spain-only
     sellerType: user?.type && user.type !== "normal" ? "dealer" : "private",
     sellerName: user?.micro_name,
     sellerRating: stats?.rating_average,
@@ -253,6 +254,7 @@ function normalize(item: RawItem): NormalizedListing | null {
     fuel: ta.engine,
     gearbox: ta.gearbox,
     powerCv: typeof ta.horsepower === "number" ? ta.horsepower : undefined,
+    countryCode: "ES", // Wallapop is Spain-only
     sellerType: "unknown",
     locationText: item.location?.city
       ? [item.location.city, item.location.region].filter(Boolean).join(", ")

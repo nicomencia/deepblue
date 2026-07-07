@@ -81,6 +81,8 @@ export const listings = pgTable(
     /** Set when the detail-enrichment pass (fetch_listing) has run. */
     detailFetchedAt: timestamp("detail_fetched_at", { withTimezone: true }),
     locationText: text("location_text"),
+    /** Market scoping: prices are only comparable within one country. */
+    countryCode: text("country_code"),
     lat: real("lat"),
     lon: real("lon"),
     raw: jsonb("raw"),

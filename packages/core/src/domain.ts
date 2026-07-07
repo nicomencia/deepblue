@@ -79,6 +79,12 @@ export interface BriefCriteria {
   targetPriceEur?: number;
   /** Search center + radius, e.g. { lat, lon, radiusKm } */
   location?: { lat: number; lon: number; radiusKm: number };
+  /**
+   * How much unit risk the user accepts. Low budgets often mean gambling
+   * knowingly on unverified issues — that's a valid strategy, and the agent
+   * ranks and phrases recommendations accordingly. Default: "medium".
+   */
+  riskTolerance?: "low" | "medium" | "high";
   /** Free-form conditions the agent must honor ("no repainted panels", "one owner preferred") */
   notes?: string[];
 }
@@ -109,6 +115,8 @@ export const normalizedListingSchema = z.object({
   powerCv: z.number().optional(),
   /** DGT environmental badge (0, ECO, C, B...) — matters for Spanish city access. */
   ecoLabel: z.string().optional(),
+  /** ISO country of the listing's market. Prices are only comparable within one market. */
+  countryCode: z.string().optional(),
   sellerType: z.enum(["private", "dealer", "unknown"]).optional(),
   sellerName: z.string().optional(),
   /** Platform profile reputation, filled by detail enrichment. */
@@ -138,6 +146,23 @@ export interface VerdictFactor {
   unverified: string[];
 }
 
+/**
+ * A dossier issue projected onto one specific unit. Theory never kills a
+ * lead: unconfirmed issues are verification work, not verdicts. Seller
+ * answers (Phase 2) move status to confirmed/ruled_out; the user makes
+ * the final call with the exposure numbers in front of them.
+ */
+export interface IssueAssessment {
+  title: string;
+  severity: "minor" | "moderate" | "major" | "critical";
+  status: "unconfirmed" | "confirmed" | "ruled_out";
+  /** Estimated chance this issue affects THIS unit, from age/km depth into the risk window. */
+  likelihood: "low" | "medium" | "high";
+  typicalRepairCostEur?: { min: number; max: number };
+  /** What settles it: seller evidence or in-person checks. */
+  verifyBy: string[];
+}
+
 export interface ConfidenceVerdict {
   overall: ConfidenceGrade;
   factors: {
@@ -146,6 +171,12 @@ export interface ConfidenceVerdict {
     sellerCredibility: VerdictFactor;
     priceFairness: VerdictFactor;
   };
+  /** Dossier issues applicable to this unit, each with status and likelihood. */
+  issues: IssueAssessment[];
+  /** Sum of typical repair costs over non-ruled-out issues: the gamble, quantified. */
+  repairExposureEur?: { min: number; max: number };
+  /** Price + worst-case exposure vs the user's budget, stated plainly. */
+  budgetNote?: string;
   /** Concrete, actionable: "invoice for timing belt change would raise unitEvidence to B". */
   wouldRaiseGrade: string[];
   /** Open questions for the seller, generated from the unit checklist. */

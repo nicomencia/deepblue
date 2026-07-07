@@ -31,6 +31,7 @@ export async function POST(): Promise<Response> {
     kmMax: 140_000,
     targetPriceEur: 13_500,
     location: { lat: 40.4168, lon: -3.7038, radiusKm: 100 },
+    riskTolerance: "medium",
     notes: ["Sin accidentes graves", "Preferible pocos propietarios"],
   };
   const hardLimits: HardLimits = {

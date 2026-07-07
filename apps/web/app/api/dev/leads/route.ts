@@ -8,7 +8,7 @@ export async function GET(req: Request): Promise<Response> {
   const db = await getDb();
 
   const url = new URL(req.url);
-  const limit = Math.min(Number(url.searchParams.get("limit") ?? 10), 50);
+  const limit = Math.min(Number(url.searchParams.get("limit") ?? 10), 200);
   const platform = url.searchParams.get("platform");
 
   const rows = await db
@@ -17,7 +17,7 @@ export async function GET(req: Request): Promise<Response> {
     .innerJoin(listings, eq(leads.listingId, listings.id))
     .where(eq(leads.state, "shortlisted"))
     .orderBy(asc(sql`${leads.verdict}->>'overall'`), asc(listings.priceEur))
-    .limit(50);
+    .limit(200);
 
   const result = rows
     .filter((r) => !platform || r.listing.platform === platform)
