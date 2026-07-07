@@ -56,7 +56,7 @@ export const golf7Dossier: ModelDossier = {
       title: "Desgaste de balancines en 1.4 TSI con desconexión de cilindros (ACT, 140/150 CV)",
       description:
         "Las versiones 140/150 CV con Active Cylinder Technology pueden desgastar los balancines del sistema ACT con el tiempo, obligando a sustituir árbol de admisión y taqués. Talleres especializados citan 1.500–3.500 € con correa incluida.",
-      applicability: { fuel: "gasoline", kmMin: 80_000 },
+      applicability: { fuel: "gasoline", kmMin: 80_000, powerCvMin: 138, powerCvMax: 152 },
       typicalRepairCostEur: { min: 1_500, max: 3_500 },
       evidence: [
         "Confirmar si la versión monta ACT (140/150 CV)",

@@ -26,6 +26,18 @@ jittered pacing), just via HTTP instead of a browser.
 - Filters worth mapping later: `category_ids=100`, price min/max, `order_by`
   (`newest` vs `closest`). Discover exact param names from the web app's network tab
   when building the adapter.
+- `GET https://api.wallapop.com/api/v3/items/{item_id}` — **HTTP 200**, same headers.
+  Detail `type_attributes` come wrapped as `{value, text}` and add what search omits:
+  **`gear_box`**, `horsepower`, `doors`, `seats`, **`eco_label`** (DGT badge), `body_type`.
+  Also `description.original` (full text), `counters` (views/favorites/**conversations** —
+  demand signals), `user.id`.
+- `GET /api/v3/users/{user_id}` — **HTTP 200**: `micro_name`, `type`
+  (`normal` = private; anything else = professional), `register_date`, `is_top_profile`.
+- `GET /api/v3/users/{user_id}/stats` — **HTTP 200**: `rating_average` (0–5),
+  counters: `reviews`, `sold`, `sells`, `publish`, `buys`, **`reports_received`**.
+  Feeds the sellerCredibility factor; fresh 0-review/0-sale profiles selling cars are
+  a classic scam pattern. Note: high `sells` with ~0 reviews = high-volume pro
+  (compraventa) posing as private — worth its own signal later.
 - **Open questions (Phase 2 recon, needs authed session):** chat transport (historically
   XMPP; verify), login/session persistence in a Playwright profile, rate-limit thresholds.
 

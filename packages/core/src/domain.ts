@@ -106,8 +106,15 @@ export const normalizedListingSchema = z.object({
   km: z.number().optional(),
   fuel: z.string().optional(),
   gearbox: z.string().optional(),
+  powerCv: z.number().optional(),
+  /** DGT environmental badge (0, ECO, C, B...) — matters for Spanish city access. */
+  ecoLabel: z.string().optional(),
   sellerType: z.enum(["private", "dealer", "unknown"]).optional(),
   sellerName: z.string().optional(),
+  /** Platform profile reputation, filled by detail enrichment. */
+  sellerRating: z.number().optional(),
+  sellerReviewCount: z.number().optional(),
+  sellerSoldCount: z.number().optional(),
   locationText: z.string().optional(),
   lat: z.number().optional(),
   lon: z.number().optional(),
@@ -165,6 +172,8 @@ export interface KnownIssue {
     yearMax?: number;
     fuel?: "diesel" | "gasoline";
     gearbox?: "automatic" | "manual";
+    powerCvMin?: number;
+    powerCvMax?: number;
   };
   typicalRepairCostEur?: { min: number; max: number };
   /** What evidence rules it in or out for a specific unit. */

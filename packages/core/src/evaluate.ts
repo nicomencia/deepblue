@@ -131,7 +131,53 @@ function issueApplies(listing: NormalizedListing, issue: KnownIssue): boolean {
     if (a.kmMin !== undefined && listing.km < a.kmMin * KM_APPROACH_FACTOR) return false;
     if (a.kmMax !== undefined && listing.km > a.kmMax) return false;
   }
+  if (listing.powerCv !== undefined) {
+    if (a.powerCvMin !== undefined && listing.powerCv < a.powerCvMin) return false;
+    if (a.powerCvMax !== undefined && listing.powerCv > a.powerCvMax) return false;
+  }
   return true;
+}
+
+/**
+ * Seller credibility from platform profile reputation (filled by detail
+ * enrichment). Fresh zero-history profiles selling cars are a classic
+ * scam pattern — graded cautiously, not accusatorially.
+ */
+function assessSeller(listing: NormalizedListing): VerdictFactor {
+  const rating = listing.sellerRating;
+  const reviews = listing.sellerReviewCount;
+  if (rating === undefined || reviews === undefined) {
+    return {
+      grade: "C",
+      known: [],
+      assumed: [],
+      unverified: ["Reputación del vendedor sin analizar todavía"],
+    };
+  }
+
+  const sold = listing.sellerSoldCount;
+  const profile = `${reviews} valoraciones${sold !== undefined ? `, ${sold} ventas` : ""}, media ${rating.toFixed(1)}/5`;
+
+  if (reviews === 0 && (sold ?? 0) === 0) {
+    return {
+      grade: "D",
+      known: ["Perfil sin historial: 0 valoraciones y 0 ventas"],
+      assumed: [],
+      unverified: ["Identidad del vendedor (perfil nuevo o inactivo)"],
+    };
+  }
+  if (reviews >= 5 && rating >= 4.5) {
+    return { grade: "B", known: [`Buen historial en la plataforma (${profile})`], assumed: [], unverified: [] };
+  }
+  if (reviews >= 5 && rating < 3.5) {
+    return { grade: "D", known: [`Valoraciones bajas (${profile})`], assumed: [], unverified: [] };
+  }
+  return {
+    grade: "C",
+    known: [`Historial limitado en la plataforma (${profile})`],
+    assumed: [],
+    unverified: ["Reputación aún poco concluyente"],
+  };
 }
 
 const SEVERITY_GRADE: Record<KnownIssue["severity"], ConfidenceGrade> = {
@@ -222,6 +268,11 @@ function buildVerdict(
     unverified.push("Año no indicado en el anuncio");
     openQuestions.push("¿De qué año es exactamente el coche?");
   }
+  if (listing.gearbox !== undefined) known.push(`Cambio: ${listing.gearbox}`);
+  else openQuestions.push("¿Es cambio manual o automático?");
+  if (listing.powerCv !== undefined) known.push(`Potencia: ${listing.powerCv} CV`);
+  if (listing.ecoLabel !== undefined)
+    known.push(`Etiqueta ambiental: ${listing.ecoLabel.toUpperCase()}`);
   if (listing.km !== undefined) known.push(`Kilometraje declarado: ${listing.km.toLocaleString("es-ES")} km`);
   else {
     unverified.push("Kilometraje no indicado");
@@ -288,12 +339,7 @@ function buildVerdict(
         assumed: [],
         unverified: ["Identidad y reputación del vendedor"],
       }
-    : {
-        grade: "C",
-        known: [],
-        assumed: [],
-        unverified: ["Reputación del vendedor sin analizar todavía"],
-      };
+    : assessSeller(listing);
 
   return {
     overall: worstOf(

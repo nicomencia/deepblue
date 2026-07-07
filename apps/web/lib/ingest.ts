@@ -5,12 +5,15 @@
 
 import {
   evaluateListing,
+  type JobPayload,
   type ModelDossier,
   type NormalizedListing,
   type PriceBenchmark,
 } from "@deepblue/core";
-import { briefs, events, leads, listings, modelDossiers, type Db } from "@deepblue/db";
-import { and, desc, eq, isNotNull, sql } from "drizzle-orm";
+import { briefs, events, jobs, leads, listings, type Db } from "@deepblue/db";
+import { and, eq } from "drizzle-orm";
+import { getBenchmark, getDossier } from "./lookups";
+import { newEvalCaches, reevaluateLead } from "./reevaluate";
 
 export interface IngestStats {
   received: number;
@@ -50,6 +53,8 @@ export async function ingestSearchResults(
         km: item.km,
         fuel: item.fuel,
         gearbox: item.gearbox,
+        powerCv: item.powerCv,
+        ecoLabel: item.ecoLabel,
         sellerType: item.sellerType,
         sellerName: item.sellerName,
         locationText: item.locationText,
@@ -106,6 +111,18 @@ export async function ingestSearchResults(
     if (evaluation.outcome === "shortlisted") stats.shortlisted += 1;
     else stats.dead += 1;
 
+    // Shortlisted → enqueue detail enrichment (gearbox, power, eco label,
+    // seller reputation). Wallapop only for now; AutoScout24 detail later.
+    if (evaluation.outcome === "shortlisted" && item.platform === "wallapop") {
+      const payload: JobPayload = {
+        type: "fetch_listing",
+        platform: item.platform,
+        platformListingId: item.platformListingId,
+        url: item.url,
+      };
+      await db.insert(jobs).values({ userId: brief.userId, type: payload.type, payload });
+    }
+
     await db.insert(events).values({
       userId: brief.userId,
       leadId: lead?.id,
@@ -124,68 +141,58 @@ export async function ingestSearchResults(
 }
 
 /**
- * Price benchmark = median over the corpus for the same make+model.
- * Grows more meaningful with every sweep; evaluateListing ignores it
- * below its minimum sample size.
+ * Detail enrichment result: update the listing with what the item page
+ * revealed (gearbox, power, eco label, seller reputation, full description),
+ * then re-evaluate every shortlisted lead on it — the new facts may answer
+ * open questions or change grades in either direction.
  */
-export async function getBenchmark(
+export async function ingestListingDetail(
   db: Db,
-  make: string | undefined,
-  model: string | undefined,
-  cache: Map<string, PriceBenchmark | undefined>,
-): Promise<PriceBenchmark | undefined> {
-  if (!make || !model) return undefined;
-  const key = `${make.toLowerCase()}|${model.toLowerCase()}`;
-  if (cache.has(key)) return cache.get(key);
-
-  const rows = await db
-    .select({
-      median: sql<number | null>`percentile_cont(0.5) within group (order by ${listings.priceEur})`,
-      count: sql<number>`count(*)::int`,
+  item: NormalizedListing,
+): Promise<{ updated: boolean; reevaluated: number }> {
+  const [updated] = await db
+    .update(listings)
+    .set({
+      title: item.title || undefined,
+      description: item.description,
+      priceEur: item.priceEur,
+      make: item.make,
+      model: item.model,
+      version: item.version,
+      year: item.year,
+      km: item.km,
+      fuel: item.fuel,
+      gearbox: item.gearbox,
+      powerCv: item.powerCv,
+      ecoLabel: item.ecoLabel,
+      sellerType: item.sellerType,
+      sellerName: item.sellerName,
+      sellerRating: item.sellerRating,
+      sellerReviewCount: item.sellerReviewCount,
+      sellerSoldCount: item.sellerSoldCount,
+      raw: item.raw,
+      detailFetchedAt: new Date(),
+      lastSeenAt: new Date(),
     })
-    .from(listings)
     .where(
       and(
-        isNotNull(listings.priceEur),
-        sql`lower(${listings.make}) = ${make.toLowerCase()}`,
-        sql`lower(${listings.model}) = ${model.toLowerCase()}`,
-      ),
-    );
-
-  const row = rows[0];
-  const benchmark =
-    row && row.median !== null && row.count > 0
-      ? { medianEur: Number(row.median), sampleSize: row.count }
-      : undefined;
-  cache.set(key, benchmark);
-  return benchmark;
-}
-
-/** Latest reviewed dossier for make+model. Unreviewed dossiers never drive claims. */
-export async function getDossier(
-  db: Db,
-  make: string | undefined,
-  model: string | undefined,
-  cache: Map<string, ModelDossier | undefined>,
-): Promise<ModelDossier | undefined> {
-  if (!make || !model) return undefined;
-  const key = `${make.toLowerCase()}|${model.toLowerCase()}`;
-  if (cache.has(key)) return cache.get(key);
-
-  const rows = await db
-    .select({ content: modelDossiers.content })
-    .from(modelDossiers)
-    .where(
-      and(
-        sql`lower(${modelDossiers.make}) = ${make.toLowerCase()}`,
-        sql`lower(${modelDossiers.model}) = ${model.toLowerCase()}`,
-        isNotNull(modelDossiers.reviewedAt),
+        eq(listings.platform, item.platform),
+        eq(listings.platformListingId, item.platformListingId),
       ),
     )
-    .orderBy(desc(modelDossiers.version))
-    .limit(1);
+    .returning({ id: listings.id });
+  if (!updated) return { updated: false, reevaluated: 0 };
 
-  const dossier = rows[0]?.content;
-  cache.set(key, dossier);
-  return dossier;
+  const rows = await db
+    .select({ lead: leads, listing: listings, brief: briefs })
+    .from(leads)
+    .innerJoin(listings, eq(leads.listingId, listings.id))
+    .innerJoin(briefs, eq(leads.briefId, briefs.id))
+    .where(and(eq(leads.listingId, updated.id), eq(leads.state, "shortlisted")));
+
+  const caches = newEvalCaches();
+  for (const row of rows) {
+    await reevaluateLead(db, row.lead, row.listing, row.brief, caches);
+  }
+  return { updated: true, reevaluated: rows.length };
 }

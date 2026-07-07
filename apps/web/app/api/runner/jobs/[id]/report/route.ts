@@ -3,7 +3,7 @@ import { jobs } from "@deepblue/db";
 import { eq } from "drizzle-orm";
 import { z } from "zod";
 import { getDb } from "../../../../../../lib/db";
-import { ingestSearchResults } from "../../../../../../lib/ingest";
+import { ingestListingDetail, ingestSearchResults } from "../../../../../../lib/ingest";
 import { isAuthorizedRunner } from "../../../../../../lib/runner-auth";
 
 const reportSchema = z.object({
@@ -26,11 +26,14 @@ export async function POST(
 
   const report = reportSchema.parse(await req.json());
 
+  // Trust boundary: validate everything the runner reports before ingesting.
   let ingestStats: unknown;
   if (report.status === "succeeded" && job.payload.type === "search_sweep") {
-    // Trust boundary: validate everything the runner reports before ingesting.
     const items = z.array(normalizedListingSchema).parse(report.result ?? []);
     ingestStats = await ingestSearchResults(db, job.payload.briefId, items);
+  } else if (report.status === "succeeded" && job.payload.type === "fetch_listing") {
+    const item = normalizedListingSchema.parse(report.result);
+    ingestStats = await ingestListingDetail(db, item);
   }
 
   await db

@@ -19,7 +19,14 @@ export async function POST(): Promise<Response> {
       and(eq(modelDossiers.make, golf7Dossier.make), eq(modelDossiers.model, golf7Dossier.model)),
     )
     .limit(1);
-  if (existing) return Response.json({ ok: true, created: false });
+  if (existing) {
+    // Dev-grade: refresh content in place. The real builder will version instead.
+    await db
+      .update(modelDossiers)
+      .set({ content: golf7Dossier, reviewedAt: new Date() })
+      .where(eq(modelDossiers.id, existing.id));
+    return Response.json({ ok: true, created: false, refreshed: true });
+  }
 
   await db.insert(modelDossiers).values({
     make: golf7Dossier.make,

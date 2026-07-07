@@ -97,6 +97,13 @@ function parseYear(details: RawListing["vehicleDetails"]): number | undefined {
   return year ? Number(year) : undefined;
 }
 
+/** vehicleDetails speedometer entry "85 kW (116 CV)" → 116 */
+function parsePowerCv(details: RawListing["vehicleDetails"]): number | undefined {
+  const power = details?.find((d) => d.iconName === "speedometer")?.data;
+  const cv = power?.match(/\((\d+)\s*CV\)/i)?.[1];
+  return cv ? Number(cv) : undefined;
+}
+
 function normalize(item: RawListing): NormalizedListing | null {
   const v = item.vehicle ?? {};
   if (!item.id || !v.make || !v.model) return null;
@@ -114,6 +121,7 @@ function normalize(item: RawListing): NormalizedListing | null {
     km: parseKm(v.mileageInKm),
     fuel: v.fuel,
     gearbox: v.transmission,
+    powerCv: parsePowerCv(item.vehicleDetails),
     sellerType: item.seller?.type?.toLowerCase() === "dealer" ? "dealer" : "private",
     sellerName: item.seller?.companyName,
     locationText: item.location?.city
