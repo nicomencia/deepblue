@@ -47,8 +47,39 @@ jittered pacing), just via HTTP instead of a browser.
   Feeds the sellerCredibility factor; fresh 0-review/0-sale profiles selling cars are
   a classic scam pattern. Note: high `sells` with ~0 reviews = high-volume pro
   (compraventa) posing as private — worth its own signal later.
-- **Open questions (Phase 2 recon, needs authed session):** chat transport (historically
-  XMPP; verify), login/session persistence in a Playwright profile, rate-limit thresholds.
+### Chat transport (Phase 2) — mapped 2026-07-07, unauthenticated probing
+
+The old XMPP/`mucbot` realtime host is **gone** (`mucbot.wallapop.com`, `comet.wallapop.com`
+no longer resolve). Chat is now a plain **OAuth2 Bearer REST API** on `api.wallapop.com/api/v3`,
+which is good news: it fits our poll-based Runner job model with no websocket.
+
+- **Inbox read:** `GET /api/v3/conversations` (params incl. `max_messages`).
+  - Bearer token required. Bogus token → **401** `{"code":"ACCESS_TOKEN_EXPIRED"}` +
+    header `X-Wallapop-Unauthorized: ACCESS_TOKEN_EXPIRED`. **No** `Authorization` header
+    at all → 405 (gateway rejects the verb before auth). So the endpoint is real and
+    token-gated; a valid access token is the only thing standing between us and the inbox.
+- **Open/send:** `POST /api/v3/conversations` — real (403 without auth, not 404). Exact
+  message sub-resource shape (`.../messages` vs. embedded) needs a live token to map.
+- **Login:** `POST /api/v3/access/login` → **400** on empty body (exists; email/password
+  lane). `POST /oauth/token` → **302** (OAuth authorize/redirect lane). Token expiry has a
+  refresh flow (implied by `ACCESS_TOKEN_EXPIRED`).
+- **Request signing is in play.** The CORS preflight (`OPTIONS /api/v3/conversations`)
+  advertises accepted headers: `authorization`, `x-auth-token`, `timestamp`, **`x-signature`**,
+  plus `X-Wallapop-{Session-Token,User-Id,Device-Id,Client-Id}`. `timestamp`+`x-signature`
+  = client-side HMAC request signing. We will **not** reverse-engineer it.
+
+**Transport decision (drives Phase 2 build):** Runner uses a **persistent, logged-in
+Playwright profile** and issues chat calls via `page.evaluate(fetch …)` **inside the
+authenticated page context** — the page's own JS injects `authorization` + `x-signature` +
+device headers for us. Robust to Wallapop updates, indistinguishable from the user, no
+signing algorithm to maintain. Poll `GET /conversations` on a gentle schedule (`fetch_replies`
+job); send via `POST` through the same context; Core's `draft_only` approval gate sits
+before any send.
+
+- **Still needs a live authed session to nail down:** message sub-resource shape, whether
+  `x-signature` is enforced on send, token/refresh lifetime, rate-limit thresholds. Login
+  itself must be **headful on the user's machine — the user types credentials, never pasted
+  to the agent.**
 
 ## AutoScout24 (Spain)
 
