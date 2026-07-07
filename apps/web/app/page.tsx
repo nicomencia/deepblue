@@ -71,14 +71,21 @@ export default async function Home() {
                   <td style={td}>{lead.state}</td>
                   <td style={td}>
                     {lead.verdict ? (
-                      <span
-                        title={lead.verdict.wouldRaiseGrade.join("\n")}
-                        style={{
-                          fontWeight: 700,
-                          color: gradeColors[lead.verdict.overall] ?? "inherit",
-                        }}
-                      >
-                        {lead.verdict.overall}
+                      <span title={lead.verdict.wouldRaiseGrade.join("\n")}>
+                        <span
+                          style={{
+                            fontWeight: 700,
+                            color: gradeColors[lead.verdict.overall] ?? "inherit",
+                          }}
+                        >
+                          {lead.verdict.overall}
+                        </span>
+                        {lead.verdict.score != null && (
+                          <span style={{ opacity: 0.65 }}>
+                            {" "}
+                            {lead.verdict.score} · {lead.verdict.confidencePct}% verif.
+                          </span>
+                        )}
                       </span>
                     ) : (
                       "—"

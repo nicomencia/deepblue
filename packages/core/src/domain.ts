@@ -82,9 +82,9 @@ export interface BriefCriteria {
   /**
    * How much unit risk the user accepts. Low budgets often mean gambling
    * knowingly on unverified issues — that's a valid strategy, and the agent
-   * ranks and phrases recommendations accordingly. Default: "medium".
+   * weighs price vs theoretical risk accordingly. Default: "medium".
    */
-  riskTolerance?: "low" | "medium" | "high";
+  riskTolerance?: RiskTolerance;
   /** Free-form conditions the agent must honor ("no repainted panels", "one owner preferred") */
   notes?: string[];
 }
@@ -138,9 +138,13 @@ export type NormalizedListing = z.infer<typeof normalizedListingSchema>;
 export const CONFIDENCE_GRADES = ["A", "B", "C", "D", "E"] as const;
 export type ConfidenceGrade = (typeof CONFIDENCE_GRADES)[number];
 
+export type RiskTolerance = "low" | "medium" | "high";
+
 /** Every factor separates what is known from what is assumed from what is unverified. */
 export interface VerdictFactor {
   grade: ConfidenceGrade;
+  /** 0–100 subscore feeding the weighted overall (grade is its banded display). */
+  score: number;
   known: string[];
   assumed: string[];
   unverified: string[];
@@ -165,6 +169,17 @@ export interface IssueAssessment {
 
 export interface ConfidenceVerdict {
   overall: ConfidenceGrade;
+  /**
+   * Weighted 0–100 score (attractiveness given current knowledge). The grade
+   * is its banded display: A≥85 B≥70 C≥55 D≥40 E<40. Vetoes (scam signals,
+   * confirmed critical issues) override both — hard limits are code.
+   */
+  score: number;
+  /**
+   * How much of the assessment is verified (0–100): separate axis from the
+   * score. Two B-cars can differ wildly here; seller answers raise it.
+   */
+  confidencePct: number;
   factors: {
     modelReliability: VerdictFactor;
     unitEvidence: VerdictFactor;

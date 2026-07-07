@@ -160,6 +160,17 @@ evidence, (3) seller credibility, (4) price fairness — each stating what is kn
 assumed, and what remains unverified, plus "what would raise this grade". Calibrated
 uncertainty *is* the precision: the product never sounds more confident than it is.
 
+**Two axes, never conflated (added 2026-07-07).** The verdict separates *attractiveness*
+from *verification*. Score (0–100) = weighted subscores — price fairness 0.35, model
+reliability 0.25, unit condition 0.25, seller 0.15 at medium risk tolerance (gamblers
+shift weight from theoretical risk to price; conservative buyers the reverse) — banded to
+grades A≥85/B≥70/C≥55/D≥40/E. Model reliability subtracts likelihood-weighted *expected
+repair cost relative to asking price*, so risk is priced, not binary. confidencePct
+(0–100) tracks how much is verified (fields known, seller reputation fetched, dossier
+issues resolved) and rises with seller answers. Vetoes remain code: scam pricing → E,
+confirmed critical issue → D at best. Never `worstOf` — that pins every unverified unit
+to the same grade and differentiates nothing.
+
 **Theory never kills a lead.** Dossier issues are *verification work*, not verdicts. Each
 applicable issue carries a per-unit status (unconfirmed → confirmed / ruled_out via seller
 answers) and an estimated likelihood for this unit. Unconfirmed theory caps model

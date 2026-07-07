@@ -1,8 +1,14 @@
 /**
- * Rule-based listing evaluation: criteria matching, scam heuristics, price
- * fairness, and an honest confidence verdict. Pure and deterministic — the
- * LLM layer will later *refine* verdicts, but hard filters and scam floors
- * live here, in code (see PROJECT.md: hard limits are code, not prompt).
+ * Listing evaluation: hard filters, weighted scoring, and an honest
+ * confidence verdict. Pure and deterministic — the LLM layer will later
+ * *refine* subscores, but hard filters and vetoes live here, in code
+ * (see PROJECT.md: hard limits are code, not prompt).
+ *
+ * Two separate axes, never conflated:
+ *  - score (0–100): how attractive the unit looks given current knowledge —
+ *    weighted subscores, differentiates units.
+ *  - confidencePct (0–100): how much of that knowledge is verified —
+ *    identical-looking cars can differ wildly here.
  */
 
 import type {
@@ -14,6 +20,7 @@ import type {
   KnownIssue,
   ModelDossier,
   NormalizedListing,
+  RiskTolerance,
   VerdictFactor,
 } from "./domain.js";
 
@@ -36,14 +43,33 @@ export const NEGOTIATION_HEADROOM = 1.15;
 const SCAM_PRICE_RATIO = 0.55;
 /** Benchmarks from fewer comparables than this are noise; don't grade on them. */
 const MIN_BENCHMARK_SAMPLE = 8;
+/** A subscore with nothing known sits here: neither reward nor punishment. */
+const NEUTRAL = 55;
 
-const GRADE_ORDER: readonly ConfidenceGrade[] = ["A", "B", "C", "D", "E"];
+/**
+ * Factor weights by risk tolerance. Gamblers weigh price harder and
+ * theoretical (unconfirmed) risk softer; conservative buyers the reverse.
+ */
+const WEIGHTS: Record<RiskTolerance, { price: number; model: number; unit: number; seller: number }> = {
+  low: { price: 0.25, model: 0.35, unit: 0.25, seller: 0.15 },
+  medium: { price: 0.35, model: 0.25, unit: 0.25, seller: 0.15 },
+  high: { price: 0.45, model: 0.15, unit: 0.25, seller: 0.15 },
+};
 
-function worstOf(...grades: ConfidenceGrade[]): ConfidenceGrade {
-  return grades.reduce((acc, g) =>
-    GRADE_ORDER.indexOf(g) > GRADE_ORDER.indexOf(acc) ? g : acc,
-  );
+/** Grade bands over the weighted score. */
+const GRADE_BANDS: ReadonlyArray<readonly [ConfidenceGrade, number]> = [
+  ["A", 85],
+  ["B", 70],
+  ["C", 55],
+  ["D", 40],
+];
+
+export function scoreToGrade(score: number): ConfidenceGrade {
+  for (const [grade, min] of GRADE_BANDS) if (score >= min) return grade;
+  return "E";
 }
+
+const clamp = (n: number, lo = 0, hi = 100) => Math.min(hi, Math.max(lo, Math.round(n)));
 
 function matchesVehicle(listing: NormalizedListing, criteria: BriefCriteria): boolean {
   const haystack = `${listing.make ?? ""} ${listing.model ?? ""} ${listing.title}`.toLowerCase();
@@ -60,49 +86,32 @@ export function evaluateListing(
   dossier?: ModelDossier,
 ): EvaluationResult {
   // --- Hard filters: these kill the lead outright -------------------------
-  if (!matchesVehicle(listing, criteria)) {
-    return dead("different_vehicle", listing, hardLimits, benchmark, dossier);
-  }
+  const deadReason = hardFilterReason(listing, criteria, hardLimits);
+  const verdict = buildVerdict(listing, criteria, hardLimits, benchmark, dossier);
+  if (deadReason) return { outcome: "dead", deadReason, verdict };
+  return { outcome: "shortlisted", verdict };
+}
+
+function hardFilterReason(
+  listing: NormalizedListing,
+  criteria: BriefCriteria,
+  hardLimits: HardLimits,
+): string | undefined {
+  if (!matchesVehicle(listing, criteria)) return "different_vehicle";
   if (listing.year !== undefined) {
-    if (criteria.yearMin !== undefined && listing.year < criteria.yearMin) {
-      return dead("year_below_minimum", listing, hardLimits, benchmark, dossier);
-    }
-    if (criteria.yearMax !== undefined && listing.year > criteria.yearMax) {
-      return dead("year_above_maximum", listing, hardLimits, benchmark, dossier);
-    }
+    if (criteria.yearMin !== undefined && listing.year < criteria.yearMin) return "year_below_minimum";
+    if (criteria.yearMax !== undefined && listing.year > criteria.yearMax) return "year_above_maximum";
   }
-  if (
-    listing.km !== undefined &&
-    criteria.kmMax !== undefined &&
-    listing.km > criteria.kmMax
-  ) {
-    return dead("km_over_limit", listing, hardLimits, benchmark, dossier);
+  if (listing.km !== undefined && criteria.kmMax !== undefined && listing.km > criteria.kmMax) {
+    return "km_over_limit";
   }
   if (
     listing.priceEur !== undefined &&
     listing.priceEur > hardLimits.maxPriceEur * NEGOTIATION_HEADROOM
   ) {
-    return dead("price_over_budget", listing, hardLimits, benchmark, dossier);
+    return "price_over_budget";
   }
-
-  return {
-    outcome: "shortlisted",
-    verdict: buildVerdict(listing, hardLimits, benchmark, dossier),
-  };
-}
-
-function dead(
-  reason: string,
-  listing: NormalizedListing,
-  hardLimits: HardLimits,
-  benchmark?: PriceBenchmark,
-  dossier?: ModelDossier,
-): EvaluationResult {
-  return {
-    outcome: "dead",
-    deadReason: reason,
-    verdict: buildVerdict(listing, hardLimits, benchmark, dossier),
-  };
+  return undefined;
 }
 
 // ---------------------------------------------------------------------------
@@ -111,6 +120,19 @@ function dead(
 
 /** Issues approaching their mileage window count as applicable from 80% of kmMin. */
 const KM_APPROACH_FACTOR = 0.8;
+
+/** Probability mass per likelihood bucket, for expected-repair-cost math. */
+const LIKELIHOOD_P: Record<IssueAssessment["likelihood"], number> = {
+  low: 0.3,
+  medium: 0.55,
+  high: 0.8,
+};
+
+const LIKELIHOOD_ES: Record<IssueAssessment["likelihood"], string> = {
+  low: "probabilidad baja",
+  medium: "probabilidad media",
+  high: "probabilidad alta",
+};
 
 function fieldMatches(value: string | undefined, token: string): boolean {
   // Unknown field → can't rule the issue out → applicable.
@@ -142,61 +164,6 @@ function issueApplies(listing: NormalizedListing, issue: KnownIssue): boolean {
   return true;
 }
 
-/**
- * Seller credibility from platform profile reputation (filled by detail
- * enrichment). Fresh zero-history profiles selling cars are a classic
- * scam pattern — graded cautiously, not accusatorially.
- */
-function assessSeller(listing: NormalizedListing): VerdictFactor {
-  const rating = listing.sellerRating;
-  const reviews = listing.sellerReviewCount;
-  if (rating === undefined || reviews === undefined) {
-    return {
-      grade: "C",
-      known: [],
-      assumed: [],
-      unverified: ["Reputación del vendedor sin analizar todavía"],
-    };
-  }
-
-  const sold = listing.sellerSoldCount;
-  const profile = `${reviews} valoraciones${sold !== undefined ? `, ${sold} ventas` : ""}, media ${rating.toFixed(1)}/5`;
-
-  if (reviews === 0 && (sold ?? 0) === 0) {
-    return {
-      grade: "D",
-      known: ["Perfil sin historial: 0 valoraciones y 0 ventas"],
-      assumed: [],
-      unverified: ["Identidad del vendedor (perfil nuevo o inactivo)"],
-    };
-  }
-  if (reviews >= 5 && rating >= 4.5) {
-    return { grade: "B", known: [`Buen historial en la plataforma (${profile})`], assumed: [], unverified: [] };
-  }
-  if (reviews >= 5 && rating < 3.5) {
-    return { grade: "D", known: [`Valoraciones bajas (${profile})`], assumed: [], unverified: [] };
-  }
-  return {
-    grade: "C",
-    known: [`Historial limitado en la plataforma (${profile})`],
-    assumed: [],
-    unverified: ["Reputación aún poco concluyente"],
-  };
-}
-
-const SEVERITY_GRADE: Record<KnownIssue["severity"], ConfidenceGrade> = {
-  minor: "B",
-  moderate: "C",
-  major: "D",
-  critical: "E",
-};
-
-const LIKELIHOOD_ES: Record<IssueAssessment["likelihood"], string> = {
-  low: "probabilidad baja",
-  medium: "probabilidad media",
-  high: "probabilidad alta",
-};
-
 /** How likely this issue affects THIS unit, from km depth into the risk window. */
 function likelihoodFor(listing: NormalizedListing, issue: KnownIssue): IssueAssessment["likelihood"] {
   const kmMin = issue.applicability.kmMin;
@@ -213,13 +180,15 @@ interface ReliabilityAssessment {
   issues: IssueAssessment[];
   questions: string[];
   wouldRaise: string[];
+  /** true when a confirmed critical issue must veto the overall grade */
+  criticalConfirmed: boolean;
 }
 
 /**
- * Theory never kills a lead (PROJECT.md). Unconfirmed dossier issues are
- * verification work — they cap this factor at C, never D/E. Only issues
- * *confirmed* against this unit (seller answers, Phase 2) grade by severity;
- * ruling everything out with evidence beats having nothing to check.
+ * Theory never kills a lead (PROJECT.md): unconfirmed issues subtract
+ * likelihood-weighted *expected repair cost* relative to the asking price —
+ * quantified risk, not binary discard. Confirmed issues subtract their full
+ * cost; ruled-out issues subtract nothing (evidence beats theory both ways).
  */
 function assessModelReliability(
   listing: NormalizedListing,
@@ -228,7 +197,8 @@ function assessModelReliability(
   if (!dossier) {
     return {
       factor: {
-        grade: "C",
+        grade: scoreToGrade(NEUTRAL),
+        score: NEUTRAL,
         known: [],
         assumed: [],
         unverified: ["Dossier de fiabilidad del modelo pendiente de construir"],
@@ -236,44 +206,49 @@ function assessModelReliability(
       issues: [],
       questions: [],
       wouldRaise: ["Construir el dossier de fiabilidad del modelo"],
+      criticalConfirmed: false,
     };
   }
 
-  const issues: IssueAssessment[] = dossier.knownIssues
-    .filter((issue) => issueApplies(listing, issue))
-    .map((issue) => ({
-      title: issue.title,
-      severity: issue.severity,
-      status: "unconfirmed", // seller answers move this to confirmed/ruled_out
-      likelihood: likelihoodFor(listing, issue),
-      typicalRepairCostEur: issue.typicalRepairCostEur,
-      verifyBy: issue.evidence,
-    }));
+  const applicableIssues = dossier.knownIssues.filter((issue) => issueApplies(listing, issue));
+  const issues: IssueAssessment[] = applicableIssues.map((issue) => ({
+    title: issue.title,
+    severity: issue.severity,
+    status: "unconfirmed", // seller answers move this to confirmed/ruled_out
+    likelihood: likelihoodFor(listing, issue),
+    typicalRepairCostEur: issue.typicalRepairCostEur,
+    verifyBy: issue.evidence,
+  }));
 
   if (issues.length === 0) {
     return {
       factor: {
-        grade: "B",
-        known: [
-          "Ningún problema conocido del modelo aplica a esta unidad (año/km/motor/cambio)",
-        ],
+        grade: scoreToGrade(90),
+        score: 90,
+        known: ["Ningún problema conocido del modelo aplica a esta unidad (año/km/motor/cambio)"],
         assumed: [],
         unverified: [],
       },
       issues,
       questions: [],
       wouldRaise: [],
+      criticalConfirmed: false,
     };
   }
 
-  const confirmed = issues.filter((i) => i.status === "confirmed");
-  const pending = issues.filter((i) => i.status === "unconfirmed");
-  const grade: ConfidenceGrade =
-    confirmed.length > 0
-      ? confirmed.map((i) => SEVERITY_GRADE[i.severity]).reduce((a, g) => worstOf(a, g))
-      : pending.length > 0
-        ? "C" // theory pending verification — never worse than C
-        : "A"; // everything ruled out with evidence
+  // Expected repair cost: full cost for confirmed issues, likelihood-weighted
+  // midpoint for unconfirmed, zero for ruled_out.
+  const expectedCost = issues.reduce((sum, i) => {
+    if (i.status === "ruled_out" || !i.typicalRepairCostEur) return sum;
+    const { min, max } = i.typicalRepairCostEur;
+    if (i.status === "confirmed") return sum + max;
+    return sum + LIKELIHOOD_P[i.likelihood] * (min + max) / 2;
+  }, 0);
+
+  // Normalize against the asking price: 1.000€ expected on a 10.000€ car
+  // costs 25 points; the same risk on a 5.000€ car costs 50.
+  const priceRef = Math.max(listing.priceEur ?? 8000, 3000);
+  const score = clamp(95 - (expectedCost / priceRef) * 250);
 
   const known = issues.map((i) => {
     const cost = i.typicalRepairCostEur
@@ -282,48 +257,88 @@ function assessModelReliability(
     return `${i.title} (${LIKELIHOOD_ES[i.likelihood]}${cost})`;
   });
 
-  const applicableIssues = dossier.knownIssues.filter((issue) => issueApplies(listing, issue));
   return {
     factor: {
-      grade,
+      grade: scoreToGrade(score),
+      score,
       known,
       assumed: [],
-      unverified: pending.map((i) => `Pendiente de verificar con el vendedor: ${i.title}`),
+      unverified: issues
+        .filter((i) => i.status === "unconfirmed")
+        .map((i) => `Pendiente de verificar con el vendedor: ${i.title}`),
     },
     issues,
     questions: applicableIssues.flatMap((i) => i.sellerQuestions),
     wouldRaise: applicableIssues
       .slice(0, 3)
       .map((i) => `Evidencia que descartaría «${i.title}»: ${i.evidence.join("; ")}`),
+    criticalConfirmed: issues.some((i) => i.status === "confirmed" && i.severity === "critical"),
   };
 }
 
-function buildVerdict(
-  listing: NormalizedListing,
-  hardLimits: HardLimits,
-  benchmark?: PriceBenchmark,
-  dossier?: ModelDossier,
-): ConfidenceVerdict {
-  const openQuestions: string[] = [];
+// ---------------------------------------------------------------------------
+// Unit condition signals — finally a factor that varies per unit
+// ---------------------------------------------------------------------------
 
-  // --- Unit evidence: what the listing states vs what only the seller knows
+function assessUnit(
+  listing: NormalizedListing,
+  criteria: BriefCriteria,
+  openQuestions: string[],
+): VerdictFactor {
   const known: string[] = [];
   const unverified: string[] = [];
+  let score = 50;
+
   if (listing.year !== undefined) known.push(`Año declarado: ${listing.year}`);
   else {
     unverified.push("Año no indicado en el anuncio");
     openQuestions.push("¿De qué año es exactamente el coche?");
   }
-  if (listing.gearbox !== undefined) known.push(`Cambio: ${listing.gearbox}`);
-  else openQuestions.push("¿Es cambio manual o automático?");
-  if (listing.powerCv !== undefined) known.push(`Potencia: ${listing.powerCv} CV`);
-  if (listing.ecoLabel !== undefined)
-    known.push(`Etiqueta ambiental: ${listing.ecoLabel.toUpperCase()}`);
-  if (listing.km !== undefined) known.push(`Kilometraje declarado: ${listing.km.toLocaleString("es-ES")} km`);
-  else {
+  if (listing.km !== undefined) {
+    known.push(`Kilometraje declarado: ${listing.km.toLocaleString("es-ES")} km`);
+  } else {
     unverified.push("Kilometraje no indicado");
     openQuestions.push("¿Cuántos kilómetros tiene?");
   }
+
+  // Usage intensity: km per year vs the ~15.000 km/año Spanish norm.
+  if (listing.year !== undefined && listing.km !== undefined) {
+    const age = Math.max(new Date().getFullYear() - listing.year, 1);
+    const kmPerYear = listing.km / age;
+    if (kmPerYear <= 10_000) {
+      score += 20;
+      known.push(`Uso suave: ~${Math.round(kmPerYear / 1000)}k km/año`);
+    } else if (kmPerYear <= 16_000) {
+      score += 10;
+      known.push(`Uso normal: ~${Math.round(kmPerYear / 1000)}k km/año`);
+    } else if (kmPerYear >= 25_000) {
+      score -= 15;
+      known.push(`Uso intensivo: ~${Math.round(kmPerYear / 1000)}k km/año`);
+    }
+  }
+
+  // Mileage headroom vs the brief's ceiling.
+  if (listing.km !== undefined && criteria.kmMax !== undefined) {
+    const ratio = listing.km / criteria.kmMax;
+    if (ratio <= 0.6) score += 10;
+    else if (ratio >= 0.9) score -= 10;
+  }
+
+  // Data completeness: verified facts earn points; each unknown is a question.
+  if (listing.gearbox !== undefined) {
+    score += 5;
+    known.push(`Cambio: ${listing.gearbox}`);
+  } else openQuestions.push("¿Es cambio manual o automático?");
+  if (listing.powerCv !== undefined) {
+    score += 3;
+    known.push(`Potencia: ${listing.powerCv} CV`);
+  }
+  if (listing.ecoLabel !== undefined) {
+    score += 3;
+    known.push(`Etiqueta ambiental: ${listing.ecoLabel.toUpperCase()}`);
+  }
+  if ((listing.description?.length ?? 0) >= 200) score += 4;
+
   unverified.push(
     "Historial de mantenimiento",
     "Número de propietarios",
@@ -336,59 +351,168 @@ function buildVerdict(
     "¿Ha tenido algún accidente o reparación importante?",
     "¿Hasta cuándo tiene la ITV en vigor?",
   );
-  const unitEvidence: VerdictFactor = {
-    grade: "C",
+
+  const s = clamp(score);
+  return {
+    grade: scoreToGrade(s),
+    score: s,
     known,
     assumed: ["Los datos del anuncio son veraces (sin verificar)"],
     unverified,
   };
+}
 
-  // --- Model reliability: from the reviewed dossier, never from memory ----
-  const reliability = assessModelReliability(listing, dossier);
-  const modelReliability = reliability.factor;
-  openQuestions.push(...reliability.questions);
+// ---------------------------------------------------------------------------
+// Price fairness vs own market-scoped benchmark
+// ---------------------------------------------------------------------------
 
-  // --- Price fairness vs own corpus benchmark -----------------------------
-  let priceFairness: VerdictFactor;
-  let scamSignal = false;
+function assessPrice(
+  listing: NormalizedListing,
+  criteria: BriefCriteria,
+  benchmark?: PriceBenchmark,
+): { factor: VerdictFactor; scamSignal: boolean } {
   if (
-    listing.priceEur !== undefined &&
-    benchmark &&
-    benchmark.sampleSize >= MIN_BENCHMARK_SAMPLE
+    listing.priceEur === undefined ||
+    !benchmark ||
+    benchmark.sampleSize < MIN_BENCHMARK_SAMPLE
   ) {
-    const ratio = listing.priceEur / benchmark.medianEur;
-    const pct = Math.round((1 - ratio) * 100);
-    const marketTag = benchmark.market ? ` en mercado ${benchmark.market.toUpperCase()}` : "";
-    const desc = `Precio ${Math.abs(pct)}% ${pct >= 0 ? "por debajo" : "por encima"} de la mediana de ${benchmark.sampleSize} anuncios comparables${marketTag} (${Math.round(benchmark.medianEur).toLocaleString("es-ES")} €)`;
-    let grade: ConfidenceGrade;
-    if (ratio < SCAM_PRICE_RATIO) {
-      grade = "E";
-      scamSignal = true;
-    } else if (ratio < 0.7) grade = "D"; // suspiciously cheap
-    else if (ratio < 0.9) grade = "A";
-    else if (ratio < 1.05) grade = "B";
-    else grade = "C";
-    priceFairness = { grade, known: [desc], assumed: [], unverified: [] };
-  } else {
-    priceFairness = {
-      grade: "C",
-      known: [],
-      assumed: [],
-      unverified: ["Sin comparables suficientes todavía para valorar el precio"],
+    return {
+      factor: {
+        grade: scoreToGrade(NEUTRAL),
+        score: NEUTRAL,
+        known: [],
+        assumed: [],
+        unverified: ["Sin comparables suficientes todavía para valorar el precio"],
+      },
+      scamSignal: false,
     };
   }
 
-  // --- Seller credibility --------------------------------------------------
-  const sellerCredibility: VerdictFactor = scamSignal
+  const ratio = listing.priceEur / benchmark.medianEur;
+  const pct = Math.round((1 - ratio) * 100);
+  const marketTag = benchmark.market ? ` en mercado ${benchmark.market.toUpperCase()}` : "";
+  const known = [
+    `Precio ${Math.abs(pct)}% ${pct >= 0 ? "por debajo" : "por encima"} de la mediana de ${benchmark.sampleSize} anuncios comparables${marketTag} (${Math.round(benchmark.medianEur).toLocaleString("es-ES")} €)`,
+  ];
+
+  const scamSignal = ratio < SCAM_PRICE_RATIO;
+  // Linear: r=0.75 → 100, r=1.0 → 50, r=1.15 → 20. Suspiciously cheap
+  // (below 0.70) caps at 45 — deep discounts are a flag, not a reward.
+  let score = clamp(100 - (ratio - 0.75) * 200);
+  if (ratio < 0.7) {
+    score = Math.min(score, 45);
+    known.push("Descuento inusualmente profundo: verificar antes de ilusionarse");
+  }
+  if (criteria.targetPriceEur !== undefined && listing.priceEur <= criteria.targetPriceEur) {
+    score = clamp(score + 5);
+    known.push(`Dentro de tu precio objetivo (${criteria.targetPriceEur.toLocaleString("es-ES")} €)`);
+  }
+
+  return {
+    factor: { grade: scoreToGrade(score), score, known, assumed: [], unverified: [] },
+    scamSignal,
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Seller credibility from platform reputation
+// ---------------------------------------------------------------------------
+
+function assessSeller(listing: NormalizedListing): VerdictFactor {
+  const rating = listing.sellerRating;
+  const reviews = listing.sellerReviewCount;
+  if (rating === undefined || reviews === undefined) {
+    return {
+      grade: scoreToGrade(NEUTRAL),
+      score: NEUTRAL,
+      known: [],
+      assumed: [],
+      unverified: ["Reputación del vendedor sin analizar todavía"],
+    };
+  }
+
+  const sold = listing.sellerSoldCount;
+  const profile = `${reviews} valoraciones${sold !== undefined ? `, ${sold} ventas` : ""}, media ${rating.toFixed(1)}/5`;
+
+  let score: number;
+  let note: string;
+  if (reviews === 0 && (sold ?? 0) === 0) {
+    score = 30;
+    note = "Perfil sin historial: 0 valoraciones y 0 ventas (patrón típico de estafa)";
+  } else if (reviews >= 5 && rating >= 4.5) {
+    score = reviews >= 20 ? 85 : 78;
+    note = `Buen historial en la plataforma (${profile})`;
+  } else if (reviews >= 5 && rating < 3.5) {
+    score = 25;
+    note = `Valoraciones bajas (${profile})`;
+  } else {
+    score = 55;
+    note = `Historial limitado en la plataforma (${profile})`;
+  }
+
+  return {
+    grade: scoreToGrade(score),
+    score,
+    known: [note],
+    assumed: [],
+    unverified: reviews < 5 ? ["Reputación aún poco concluyente"] : [],
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Verdict assembly: weighted score + separate confidence axis + vetoes
+// ---------------------------------------------------------------------------
+
+function buildVerdict(
+  listing: NormalizedListing,
+  criteria: BriefCriteria,
+  hardLimits: HardLimits,
+  benchmark?: PriceBenchmark,
+  dossier?: ModelDossier,
+): ConfidenceVerdict {
+  const openQuestions: string[] = [];
+
+  const unitEvidence = assessUnit(listing, criteria, openQuestions);
+  const reliability = assessModelReliability(listing, dossier);
+  openQuestions.push(...reliability.questions);
+  const price = assessPrice(listing, criteria, benchmark);
+  const sellerCredibility = price.scamSignal
     ? {
-        grade: "E",
+        grade: "E" as ConfidenceGrade,
+        score: 10,
         known: ["Precio muy por debajo de mercado: señal clásica de estafa"],
         assumed: [],
         unverified: ["Identidad y reputación del vendedor"],
       }
     : assessSeller(listing);
 
-  // --- The gamble, quantified: repair exposure vs the user's budget --------
+  // --- Weighted overall score ----------------------------------------------
+  const w = WEIGHTS[criteria.riskTolerance ?? "medium"];
+  let score = clamp(
+    price.factor.score * w.price +
+      reliability.factor.score * w.model +
+      unitEvidence.score * w.unit +
+      sellerCredibility.score * w.seller,
+  );
+
+  // --- Vetoes: code, not weights -------------------------------------------
+  if (price.scamSignal) score = Math.min(score, 20); // → E
+  if (reliability.criticalConfirmed) score = Math.min(score, 45); // → D at best
+
+  // --- Confidence axis: how much of this is verified ------------------------
+  const issuesTotal = reliability.issues.length;
+  const issuesResolved = reliability.issues.filter((i) => i.status !== "unconfirmed").length;
+  const confidencePct = clamp(
+    (listing.year !== undefined ? 10 : 0) +
+      (listing.km !== undefined ? 10 : 0) +
+      (listing.gearbox !== undefined ? 10 : 0) +
+      (listing.powerCv !== undefined ? 5 : 0) +
+      (listing.sellerRating !== undefined ? 15 : 0) +
+      (dossier ? 15 : 0) +
+      35 * (issuesTotal === 0 ? (dossier ? 1 : 0) : issuesResolved / issuesTotal),
+  );
+
+  // --- The gamble, quantified: repair exposure vs the user's budget ---------
   const liveIssues = reliability.issues.filter((i) => i.status !== "ruled_out");
   const costed = liveIssues.filter((i) => i.typicalRepairCostEur);
   const repairExposureEur =
@@ -409,20 +533,22 @@ function buildVerdict(
   }
 
   return {
-    overall: worstOf(
-      modelReliability.grade,
-      unitEvidence.grade,
-      sellerCredibility.grade,
-      priceFairness.grade,
-    ),
-    factors: { modelReliability, unitEvidence, sellerCredibility, priceFairness },
+    overall: scoreToGrade(score),
+    score,
+    confidencePct,
+    factors: {
+      modelReliability: reliability.factor,
+      unitEvidence,
+      sellerCredibility,
+      priceFairness: price.factor,
+    },
     issues: reliability.issues,
     repairExposureEur,
     budgetNote,
     wouldRaiseGrade: [
       ...reliability.wouldRaise,
       "Respuestas del vendedor sobre mantenimiento, propietarios y accidentes",
-      ...(scamSignal ? ["Verificar que el vendedor y el vehículo son reales"] : []),
+      ...(price.scamSignal ? ["Verificar que el vendedor y el vehículo son reales"] : []),
     ],
     openQuestions: [...new Set(openQuestions)].slice(0, 10),
     updatedAt: new Date().toISOString(),
