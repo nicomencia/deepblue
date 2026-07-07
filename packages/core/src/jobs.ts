@@ -28,8 +28,10 @@ export const searchSweepPayload = z.object({
     make: z.string().optional(),
     model: z.string().optional(),
     priceMaxEur: z.number().optional(),
+    priceMinEur: z.number().optional(),
     yearMin: z.number().optional(),
     kmMax: z.number().optional(),
+    fuel: z.enum(["gasoline", "diesel", "hybrid", "electric"]).optional(),
     location: z
       .object({ lat: z.number(), lon: z.number(), radiusKm: z.number() })
       .optional(),

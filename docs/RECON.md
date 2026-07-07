@@ -23,9 +23,18 @@ jittered pacing), just via HTTP instead of a browser.
   - Pagination: `meta.next_page` is a JWT-style opaque token (pass as `next_page=` param).
 - `GET api.wallapop.com/api/v3/cars/search` responds 200 but returned 0 items for all
   param styles tried — appears deprecated in favor of general search. Don't use.
-- Filters worth mapping later: `category_ids=100`, price min/max, `order_by`
-  (`newest` vs `closest`). Discover exact param names from the web app's network tab
-  when building the adapter.
+- **Native filters (all verified live 2026-07-07 by checking results respect them):**
+  - `category_id=100` — **singular**. The plural `category_ids` is silently IGNORED,
+    and without the singular one, all car-specific filters below are ignored too.
+  - `min_year`, `max_km`, `max_sale_price`, `min_sale_price` — respected within
+    the category context. `min_sale_price` also skips financing/installment posts
+    (329–421 € "cars" are monthly-quota ads, not prices).
+  - `engine` — values: `gasoline`, `gasoil` (diesel), `hybrid`, `electric`
+    (verified: `engine=gasoil` → all-Diesel results).
+  - `order_by=newest` — respected (verified via created_at ordering). Default is
+    `closest`.
+  - Unverified (assumed to exist, not sent): `max_year`, `min_km`, `gearbox`
+    (can't verify from search payload — no gearbox field in search items).
 - `GET https://api.wallapop.com/api/v3/items/{item_id}` — **HTTP 200**, same headers.
   Detail `type_attributes` come wrapped as `{value, text}` and add what search omits:
   **`gear_box`**, `horsepower`, `doors`, `seats`, **`eco_label`** (DGT badge), `body_type`.

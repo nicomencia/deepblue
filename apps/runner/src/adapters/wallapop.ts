@@ -17,6 +17,14 @@ const API = `${API_BASE}/search`;
 const CARS_CATEGORY_ID = 100;
 const ITEM_URL_PREFIX = "https://es.wallapop.com/item/";
 
+/** Wallapop's engine param vocabulary (verified: gasoil → all-Diesel results). */
+const WALLAPOP_ENGINE: Record<NonNullable<SearchQuery["fuel"]>, string> = {
+  gasoline: "gasoline",
+  diesel: "gasoil",
+  hybrid: "hybrid",
+  electric: "electric",
+};
+
 const HEADERS = {
   accept: "application/json",
   // 403 without X-DeviceOS — the one magic header (RECON.md).
@@ -56,17 +64,35 @@ export const wallapopAdapter: PlatformAdapter = {
   platform: "wallapop",
 
   async search(query: SearchQuery): Promise<NormalizedListing[]> {
-    const params = new URLSearchParams({ source: "search_box" });
+    // All params below verified live 2026-07-07 (docs/RECON.md): car filters
+    // only take effect with category_id (singular) set to the Coches category.
+    const params = new URLSearchParams({
+      source: "search_box",
+      category_id: String(CARS_CATEGORY_ID),
+      order_by: "newest",
+    });
     if (query.keywords) params.set("keywords", query.keywords);
     const loc = query.location ?? { lat: 40.4168, lon: -3.7038, radiusKm: 100 };
     params.set("latitude", String(loc.lat));
     params.set("longitude", String(loc.lon));
+    if (query.priceMaxEur !== undefined) params.set("max_sale_price", String(query.priceMaxEur));
+    if (query.priceMinEur !== undefined) params.set("min_sale_price", String(query.priceMinEur));
+    if (query.yearMin !== undefined) params.set("min_year", String(query.yearMin));
+    if (query.kmMax !== undefined) params.set("max_km", String(query.kmMax));
+    if (query.fuel !== undefined) params.set("engine", WALLAPOP_ENGINE[query.fuel]);
 
-    // order_by=newest is not recon-verified; retry without it if rejected.
-    const withOrder = new URLSearchParams(params);
-    withOrder.set("order_by", "newest");
-    let items = await fetchItems(withOrder);
-    items ??= await fetchItems(params);
+    // Fallback: if the filtered request is ever rejected (param drift), retry
+    // with the minimal verified set rather than failing the sweep.
+    let items = await fetchItems(params);
+    items ??= await fetchItems(
+      new URLSearchParams({
+        source: "search_box",
+        category_id: String(CARS_CATEGORY_ID),
+        keywords: query.keywords ?? "",
+        latitude: String(loc.lat),
+        longitude: String(loc.lon),
+      }),
+    );
     if (items === null) throw new Error("wallapop search request failed");
 
     return items

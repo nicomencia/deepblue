@@ -11,8 +11,12 @@ export interface SearchQuery {
   make?: string;
   model?: string;
   priceMaxEur?: number;
+  /** Floor to skip financing/installment posts and obvious junk. */
+  priceMinEur?: number;
   yearMin?: number;
   kmMax?: number;
+  /** Only set when the brief pins exactly one fuel. */
+  fuel?: "gasoline" | "diesel" | "hybrid" | "electric";
   location?: { lat: number; lon: number; radiusKm: number };
 }
 

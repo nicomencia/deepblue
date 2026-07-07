@@ -35,8 +35,11 @@ export async function POST(): Promise<Response> {
             model: vehicle.model,
             // Asking prices above budget within negotiation headroom still matter.
             priceMaxEur: Math.round(brief.hardLimits.maxPriceEur * NEGOTIATION_HEADROOM),
+            // Floor skips financing/installment posts (329€ "cars") and wrecks.
+            priceMinEur: Math.round(brief.hardLimits.maxPriceEur * 0.3),
             yearMin: brief.criteria.yearMin,
             kmMax: brief.criteria.kmMax,
+            fuel: brief.criteria.fuel?.length === 1 ? brief.criteria.fuel[0] : undefined,
             location: brief.criteria.location,
           },
         };
