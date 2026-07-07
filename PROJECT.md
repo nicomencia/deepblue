@@ -199,6 +199,26 @@ known weak points of that engine at that mileage, not a generic used-car checkli
 - **Phase 3 — Delegate.** Autonomous negotiation in delegated mode within hard guardrails, escalation rules live, handoff = agreed price + proposed visit slots + personalized inspection pack for user confirmation.
 - **Phase 4 — Productize (out of scope for now).** Multi-user auth, billing, runner fleet, motorbikes vertical. The architecture already respects it; don't build it yet.
 
+## Future bets (parked 2026-07-07, not scheduled)
+
+**Model discovery agent (long shot — the mass-market front door).** Conversational
+advisor for non-experts who arrive with needs ("familiar, fiable, ~12.000 €, ciudad +
+escapadas"), not models. Differentiator vs generic LLM advice: grounded in our live
+corpus — real local supply, real medians, real dossiers per candidate model. The
+conversation's output is a Brief; recommended models feed the dossier builder as a side
+effect. Architecturally: LLM + tool-use over existing tables, zero platform risk. Natural
+slot: once the LLM layer exists, before/alongside Phase 3.
+
+**Selling mode (very long shot — the symmetry play).** Reuses the stack with roles
+flipped: price suggestion from the market-scoped benchmark (+ condition/trim
+adjustments), LLM-generated listing from a one-time vehicle sheet, buyer conversations on
+the Phase 2/3 conversational agent with the same autonomy dial and hard guardrails (price
+floor in code, escalate payment/identity, seller-side scam filters). Killer detail: the
+buy-side already generates the due-diligence questions buyers ask — the sell-side preempts
+them in the listing, publishing announcements our own evaluator would grade A on unit
+evidence. Endgame: deepblue buyers matching deepblue sellers. Strictly after buy-side
+conversations are proven.
+
 ## Known risks
 
 1. **Platform automation fragility** — Wallapop can change internals or flag the session at any time. Mitigations: adapter isolation, pacing hygiene, draft-only default, and the email-based AutoScout24 lane as a ban-proof fallback.
