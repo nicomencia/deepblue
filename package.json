@@ -8,6 +8,7 @@
   },
   "scripts": {
     "typecheck": "pnpm -r typecheck",
+    "test": "pnpm -r test",
     "dev:web": "pnpm --filter @deepblue/web dev",
     "dev:runner": "pnpm --filter @deepblue/runner dev",
     "db:generate": "pnpm --filter @deepblue/db generate",

@@ -6,8 +6,8 @@
  * distinguishable by their internal reference number.
  */
 
-/** "Precio al contado: 13.490€ (IVA incluido)" and looser variants. */
-const CASH_PRICE_RE = /(?:precio\s+)?al\s+contado[:\s]*([\d][\d.\s]{2,8})\s*€/i;
+/** "Precio al contado: 13.490€ (IVA incluido)" and looser variants, with or without a decimal tail. */
+const CASH_PRICE_RE = /(?:precio\s+)?al\s+contado[:\s]*([\d][\d.\s]{2,8})(?:,\d{1,2})?\s*€/i;
 
 /** Dealer internal reference, e.g. "REF: 903000000234676". */
 const LISTING_REF_RE = /\bREF[:.\s]*([0-9]{6,20})\b/i;

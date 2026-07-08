@@ -20,6 +20,7 @@ packages/db     Drizzle ORM schema + Postgres client
 ```
 pnpm install
 pnpm typecheck        # typecheck all workspaces
+pnpm test             # unit tests (packages/core: scoring rules, extraction, state machine)
 pnpm dev:web          # dashboard on http://localhost:3000
 pnpm dev:runner       # job-polling worker (needs CORE_API_URL + RUNNER_TOKEN)
 ```
