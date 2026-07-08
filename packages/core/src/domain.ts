@@ -8,6 +8,20 @@ import { z } from "zod";
 export const PLATFORMS = ["wallapop", "autoscout24"] as const;
 export type Platform = (typeof PLATFORMS)[number];
 
+/**
+ * Platforms currently in the loop: swept, evaluated into leads, and kept
+ * fresh. AutoScout24 is paused for now (its adapter, schema and data stay
+ * intact — this is a one-line re-enable). Leads on any non-active platform
+ * are retired to dead(platform_paused) by the maintenance pass, and price
+ * benchmarks only draw comparables from active platforms so a stalled
+ * platform's rotting prices never skew scoring.
+ */
+export const ACTIVE_PLATFORMS: readonly Platform[] = ["wallapop"];
+
+export function isPlatformActive(platform: Platform): boolean {
+  return ACTIVE_PLATFORMS.includes(platform);
+}
+
 // ---------------------------------------------------------------------------
 // Lead lifecycle
 // ---------------------------------------------------------------------------

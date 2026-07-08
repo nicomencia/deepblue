@@ -1,6 +1,7 @@
 /** Shared corpus lookups: price benchmark and reviewed model dossiers. */
 
 import {
+  ACTIVE_PLATFORMS,
   computeBenchmark,
   type BenchmarkTarget,
   type Comparable,
@@ -8,7 +9,7 @@ import {
   type PriceBenchmark,
 } from "@deepblue/core";
 import { listings, modelDossiers, type Db } from "@deepblue/db";
-import { and, desc, isNotNull, sql } from "drizzle-orm";
+import { and, desc, inArray, isNotNull, sql } from "drizzle-orm";
 
 /** One SQL fetch per make+model+market per batch; weighting runs per listing. */
 export type ComparableCache = Map<string, Comparable[]>;
@@ -53,6 +54,9 @@ export async function getBenchmark(
       .where(
         and(
           isNotNull(listings.priceEur),
+          // Only active platforms: a paused platform's prices stop refreshing
+          // and must not skew the benchmark while it's out of the loop.
+          inArray(listings.platform, [...ACTIVE_PLATFORMS]),
           sql`lower(${listings.make}) = ${make.toLowerCase()}`,
           sql`lower(${listings.model}) = ${model.toLowerCase()}`,
           sql`upper(coalesce(${listings.countryCode}, 'ES')) = ${mkt}`,

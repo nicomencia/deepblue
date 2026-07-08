@@ -5,7 +5,7 @@
  * offline runner never causes a pileup.
  */
 
-import { NEGOTIATION_HEADROOM, PLATFORMS, type JobPayload } from "@deepblue/core";
+import { ACTIVE_PLATFORMS, NEGOTIATION_HEADROOM, type JobPayload } from "@deepblue/core";
 import { briefs, events, jobs, type Db } from "@deepblue/db";
 import { and, eq } from "drizzle-orm";
 
@@ -23,7 +23,7 @@ export async function enqueueSweeps(db: Db): Promise<number> {
 
     let briefJobs = 0;
     for (const vehicle of brief.criteria.vehicles) {
-      for (const platform of PLATFORMS) {
+      for (const platform of ACTIVE_PLATFORMS) {
         const payload: JobPayload = {
           type: "search_sweep",
           platform,

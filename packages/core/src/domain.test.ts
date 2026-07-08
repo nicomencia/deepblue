@@ -1,10 +1,25 @@
 import { describe, expect, it } from "vitest";
 import {
+  ACTIVE_PLATFORMS,
   canTransition,
+  isPlatformActive,
   llmEnrichmentPayloadSchema,
   modelDossierSchema,
   normalizedListingSchema,
+  PLATFORMS,
 } from "./domain.js";
+
+describe("active platforms", () => {
+  it("is Wallapop-only right now (AutoScout24 paused)", () => {
+    expect([...ACTIVE_PLATFORMS]).toEqual(["wallapop"]);
+    expect(isPlatformActive("wallapop")).toBe(true);
+    expect(isPlatformActive("autoscout24")).toBe(false);
+  });
+
+  it("only ever contains real platforms", () => {
+    for (const p of ACTIVE_PLATFORMS) expect(PLATFORMS).toContain(p);
+  });
+});
 
 describe("lead state machine", () => {
   it("walks the happy path one stage at a time", () => {

@@ -1,12 +1,13 @@
 /**
  * Corpus maintenance: backfill text-derived columns on rows ingested before
- * extraction existed, and kill duplicate leads (same physical car, several
- * accounts). Ingest handles new arrivals; this pass cleans what's stored.
+ * extraction existed, kill duplicate leads (same physical car, several
+ * accounts), and retire leads on paused platforms. Ingest handles new
+ * arrivals; this pass cleans what's stored.
  */
 
-import { extractCashPriceEur, extractDedupKey } from "@deepblue/core";
+import { ACTIVE_PLATFORMS, extractCashPriceEur, extractDedupKey } from "@deepblue/core";
 import { events, leads, listings, type Db } from "@deepblue/db";
-import { and, asc, eq, isNotNull, isNull, or } from "drizzle-orm";
+import { and, asc, eq, isNotNull, isNull, notInArray, or } from "drizzle-orm";
 
 export async function backfillExtraction(db: Db): Promise<number> {
   const rows = await db
@@ -72,4 +73,37 @@ export async function markDuplicateLeads(db: Db): Promise<number> {
     killed += 1;
   }
   return killed;
+}
+
+/**
+ * Retire every non-terminal lead whose listing is on a paused platform
+ * (AutoScout24 for now). Idempotent: re-running finds nothing once retired.
+ * Re-activating the platform in ACTIVE_PLATFORMS stops the retiring; the
+ * dead leads are not resurrected (a fresh sweep creates new ones).
+ */
+export async function retirePausedPlatformLeads(db: Db): Promise<number> {
+  const rows = await db
+    .select({ id: leads.id, userId: leads.userId })
+    .from(leads)
+    .innerJoin(listings, eq(leads.listingId, listings.id))
+    .where(
+      and(
+        notInArray(leads.state, ["dead", "handed_off"]),
+        notInArray(listings.platform, [...ACTIVE_PLATFORMS]),
+      ),
+    );
+
+  for (const lead of rows) {
+    await db
+      .update(leads)
+      .set({ state: "dead", deadReason: "platform_paused", updatedAt: new Date() })
+      .where(eq(leads.id, lead.id));
+    await db.insert(events).values({
+      userId: lead.userId,
+      leadId: lead.id,
+      type: "lead_retired",
+      payload: { reason: "platform_paused" },
+    });
+  }
+  return rows.length;
 }

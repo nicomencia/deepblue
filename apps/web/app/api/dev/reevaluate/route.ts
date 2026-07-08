@@ -1,19 +1,25 @@
 import { briefs, leads, listings } from "@deepblue/db";
 import { eq } from "drizzle-orm";
 import { getDb } from "../../../../lib/db";
-import { backfillExtraction, markDuplicateLeads } from "../../../../lib/dedup";
+import {
+  backfillExtraction,
+  markDuplicateLeads,
+  retirePausedPlatformLeads,
+} from "../../../../lib/dedup";
 import { newEvalCaches, reevaluateLead } from "../../../../lib/reevaluate";
 
 /**
  * Dev-only: re-run evaluation for all shortlisted leads with the current
  * dossier and price benchmark (both improve over time). First backfills
- * text-derived columns (cash price, dedup key) and kills duplicate leads.
+ * text-derived columns (cash price, dedup key), retires paused-platform
+ * leads, and kills duplicate leads.
  */
 export async function POST(): Promise<Response> {
   if (process.env.NODE_ENV === "production") return new Response(null, { status: 404 });
   const db = await getDb();
 
   const backfilled = await backfillExtraction(db);
+  const retired = await retirePausedPlatformLeads(db);
   const duplicates = await markDuplicateLeads(db);
 
   const rows = await db
@@ -30,5 +36,5 @@ export async function POST(): Promise<Response> {
     if (r.outcome === "dead") died += 1;
   }
 
-  return Response.json({ ok: true, backfilled, duplicates, reevaluated: rows.length, died });
+  return Response.json({ ok: true, backfilled, retired, duplicates, reevaluated: rows.length, died });
 }
