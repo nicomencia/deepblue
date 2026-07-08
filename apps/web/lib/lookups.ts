@@ -24,9 +24,12 @@ export async function getBenchmark(
   const key = `${make.toLowerCase()}|${model.toLowerCase()}|${mkt}`;
   if (cache.has(key)) return cache.get(key);
 
+  // The comparable price is what a buyer would actually pay: the parsed cash
+  // price when the ad buried one, else the headline (financing headlines
+  // otherwise depress the whole median).
   const rows = await db
     .select({
-      median: sql<number | null>`percentile_cont(0.5) within group (order by ${listings.priceEur})`,
+      median: sql<number | null>`percentile_cont(0.5) within group (order by coalesce(${listings.cashPriceEur}, ${listings.priceEur}))`,
       count: sql<number>`count(*)::int`,
     })
     .from(listings)

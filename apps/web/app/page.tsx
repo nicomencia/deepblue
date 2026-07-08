@@ -51,7 +51,18 @@ export default async function Home() {
                       {listing.title}
                     </Link>
                   </td>
-                  <td style={td}>{fmtEur(listing.priceEur)}</td>
+                  <td style={td}>
+                    {listing.cashPriceEur != null && listing.cashPriceEur !== listing.priceEur ? (
+                      <>
+                        {fmtEur(listing.cashPriceEur)}{" "}
+                        <span style={{ color: "var(--ink-muted)", fontSize: "0.8rem" }}>
+                          (anuncio: {fmtEur(listing.priceEur)})
+                        </span>
+                      </>
+                    ) : (
+                      fmtEur(listing.priceEur)
+                    )}
+                  </td>
                   <td style={td}>{listing.year ?? "—"}</td>
                   <td style={td}>{fmtKm(listing.km)}</td>
                   <td style={td}>{listing.locationText ?? "—"}</td>

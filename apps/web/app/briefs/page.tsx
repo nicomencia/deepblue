@@ -102,6 +102,13 @@ export default async function BriefsPage() {
             <option value="high">Alta — prioriza precio</option>
           </select>
         </label>
+        <label style={lbl}>
+          Tipo de vendedor
+          <select name="sellerPreference" defaultValue="prefer_private" style={inp}>
+            <option value="prefer_private">Prefiero particulares / vendedores pequeños</option>
+            <option value="any">Indiferente</option>
+          </select>
+        </label>
         <fieldset style={{ ...lbl, border: "none", padding: 0, margin: 0 }}>
           Combustible (vacío = cualquiera)
           <span style={{ display: "flex", gap: "0.8rem", marginTop: "0.3rem" }}>

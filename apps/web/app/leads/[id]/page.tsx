@@ -61,7 +61,10 @@ export default async function LeadDetail({
       </p>
       <h1 style={{ fontSize: "1.3rem", margin: "0 0 0.25rem" }}>{listing.title}</h1>
       <p style={{ color: "var(--ink-muted)", marginTop: 0 }}>
-        {fmtEur(listing.priceEur)} · {listing.year ?? "año ?"} · {fmtKm(listing.km)} ·{" "}
+        {listing.cashPriceEur != null && listing.cashPriceEur !== listing.priceEur
+          ? `${fmtEur(listing.cashPriceEur)} al contado (anuncio: ${fmtEur(listing.priceEur)})`
+          : fmtEur(listing.priceEur)}{" "}
+        · {listing.year ?? "año ?"} · {fmtKm(listing.km)} ·{" "}
         {listing.fuel ?? "?"} · {listing.gearbox ?? "cambio ?"}
         {listing.powerCv ? ` · ${listing.powerCv} CV` : ""} · {listing.locationText ?? "—"}
         {" · "}

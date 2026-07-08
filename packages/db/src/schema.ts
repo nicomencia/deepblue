@@ -65,6 +65,8 @@ export const listings = pgTable(
     title: text("title").notNull(),
     description: text("description"),
     priceEur: integer("price_eur"),
+    /** Real cash price parsed from the ad text (financing-conditional headlines). */
+    cashPriceEur: integer("cash_price_eur"),
     make: text("make"),
     model: text("model"),
     version: text("version"),
@@ -87,12 +89,15 @@ export const listings = pgTable(
     lat: real("lat"),
     lon: real("lon"),
     raw: jsonb("raw"),
+    /** Physical-car identity across accounts (dealer internal REF), for dedup. */
+    dedupKey: text("dedup_key"),
     active: boolean("active").notNull().default(true),
     firstSeenAt: timestamp("first_seen_at", { withTimezone: true }).notNull().defaultNow(),
     lastSeenAt: timestamp("last_seen_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [
     uniqueIndex("listings_platform_id_idx").on(t.platform, t.platformListingId),
+    index("listings_dedup_key_idx").on(t.dedupKey),
   ],
 );
 

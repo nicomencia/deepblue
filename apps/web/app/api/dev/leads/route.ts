@@ -28,6 +28,7 @@ export async function GET(req: Request): Promise<Response> {
       title: listing.title,
       description: listing.description?.slice(0, 2500) ?? null,
       priceEur: listing.priceEur,
+      cashPriceEur: listing.cashPriceEur,
       year: listing.year,
       km: listing.km,
       fuel: listing.fuel,

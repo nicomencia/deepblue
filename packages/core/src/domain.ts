@@ -85,6 +85,11 @@ export interface BriefCriteria {
    * weighs price vs theoretical risk accordingly. Default: "medium".
    */
   riskTolerance?: RiskTolerance;
+  /**
+   * "prefer_private" penalizes high-volume compraventa chains in the seller
+   * factor: private sellers and small dealers score better. Default: "any".
+   */
+  sellerPreference?: "any" | "prefer_private";
   /** Free-form conditions the agent must honor ("no repainted panels", "one owner preferred") */
   notes?: string[];
 }
@@ -105,6 +110,12 @@ export const normalizedListingSchema = z.object({
   title: z.string(),
   description: z.string().optional(),
   priceEur: z.number().optional(),
+  /**
+   * Real price without financing strings attached, parsed from the ad text
+   * (compraventa chains headline the financing-conditional price). When
+   * present, evaluation and benchmarks use this, never the headline.
+   */
+  cashPriceEur: z.number().optional(),
   make: z.string().optional(),
   model: z.string().optional(),
   version: z.string().optional(),

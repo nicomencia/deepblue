@@ -22,6 +22,13 @@ export async function POST(): Promise<Response> {
     .where(eq(briefs.name, briefName))
     .limit(1);
   if (existing) {
+    // Idempotent upgrade: newer criteria fields land on the existing brief.
+    if (!existing.criteria.sellerPreference) {
+      await db
+        .update(briefs)
+        .set({ criteria: { ...existing.criteria, sellerPreference: "prefer_private" } })
+        .where(eq(briefs.id, existing.id));
+    }
     return Response.json({ ok: true, userId: user.id, briefId: existing.id, created: false });
   }
 
@@ -32,6 +39,7 @@ export async function POST(): Promise<Response> {
     targetPriceEur: 13_500,
     location: { lat: 40.4168, lon: -3.7038, radiusKm: 100 },
     riskTolerance: "medium",
+    sellerPreference: "prefer_private",
     notes: ["Sin accidentes graves", "Preferible pocos propietarios"],
   };
   const hardLimits: HardLimits = {

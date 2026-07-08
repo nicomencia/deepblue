@@ -75,6 +75,13 @@ export function scoreToGrade(score: number): ConfidenceGrade {
 
 const clamp = (n: number, lo = 0, hi = 100) => Math.min(hi, Math.max(lo, Math.round(n)));
 
+/**
+ * The price the buyer would actually pay: the parsed cash price when the ad
+ * buried one (financing-conditional headlines), else the headline itself.
+ */
+const effectivePrice = (listing: NormalizedListing): number | undefined =>
+  listing.cashPriceEur ?? listing.priceEur;
+
 function matchesVehicle(listing: NormalizedListing, criteria: BriefCriteria): boolean {
   const haystack = `${listing.make ?? ""} ${listing.model ?? ""} ${listing.title}`.toLowerCase();
   return criteria.vehicles.some(
@@ -109,10 +116,8 @@ function hardFilterReason(
   if (listing.km !== undefined && criteria.kmMax !== undefined && listing.km > criteria.kmMax) {
     return "km_over_limit";
   }
-  if (
-    listing.priceEur !== undefined &&
-    listing.priceEur > hardLimits.maxPriceEur * NEGOTIATION_HEADROOM
-  ) {
+  const price = effectivePrice(listing);
+  if (price !== undefined && price > hardLimits.maxPriceEur * NEGOTIATION_HEADROOM) {
     return "price_over_budget";
   }
   return undefined;
@@ -251,7 +256,7 @@ function assessModelReliability(
 
   // Normalize against the asking price: 1.000€ expected on a 10.000€ car
   // costs 25 points; the same risk on a 5.000€ car costs 50.
-  const priceRef = Math.max(listing.priceEur ?? 8000, 3000);
+  const priceRef = Math.max(effectivePrice(listing) ?? 8000, 3000);
   const score = clamp(95 - (expectedCost / priceRef) * 250);
 
   const known = issues.map((i) => {
@@ -375,11 +380,8 @@ function assessPrice(
   criteria: BriefCriteria,
   benchmark?: PriceBenchmark,
 ): { factor: VerdictFactor; scamSignal: boolean } {
-  if (
-    listing.priceEur === undefined ||
-    !benchmark ||
-    benchmark.sampleSize < MIN_BENCHMARK_SAMPLE
-  ) {
+  const price = effectivePrice(listing);
+  if (price === undefined || !benchmark || benchmark.sampleSize < MIN_BENCHMARK_SAMPLE) {
     return {
       factor: {
         grade: scoreToGrade(NEUTRAL),
@@ -392,12 +394,17 @@ function assessPrice(
     };
   }
 
-  const ratio = listing.priceEur / benchmark.medianEur;
+  const ratio = price / benchmark.medianEur;
   const pct = Math.round((1 - ratio) * 100);
   const marketTag = benchmark.market ? ` en mercado ${benchmark.market.toUpperCase()}` : "";
   const known = [
     `Precio ${Math.abs(pct)}% ${pct >= 0 ? "por debajo" : "por encima"} de la mediana de ${benchmark.sampleSize} anuncios comparables${marketTag} (${Math.round(benchmark.medianEur).toLocaleString("es-ES")} €)`,
   ];
+  if (listing.cashPriceEur !== undefined && listing.priceEur !== undefined && listing.cashPriceEur !== listing.priceEur) {
+    known.push(
+      `Precio real al contado ${listing.cashPriceEur.toLocaleString("es-ES")} €: el anuncio lista ${listing.priceEur.toLocaleString("es-ES")} € condicionado a financiación`,
+    );
+  }
 
   const scamSignal = ratio < SCAM_PRICE_RATIO;
   // Linear: r=0.75 → 100, r=1.0 → 50, r=1.15 → 20. Suspiciously cheap
@@ -407,7 +414,7 @@ function assessPrice(
     score = Math.min(score, 45);
     known.push("Descuento inusualmente profundo: verificar antes de ilusionarse");
   }
-  if (criteria.targetPriceEur !== undefined && listing.priceEur <= criteria.targetPriceEur) {
+  if (criteria.targetPriceEur !== undefined && price <= criteria.targetPriceEur) {
     score = clamp(score + 5);
     known.push(`Dentro de tu precio objetivo (${criteria.targetPriceEur.toLocaleString("es-ES")} €)`);
   }
@@ -422,9 +429,14 @@ function assessPrice(
 // Seller credibility from platform reputation
 // ---------------------------------------------------------------------------
 
-function assessSeller(listing: NormalizedListing): VerdictFactor {
+/** Above this many platform sales a dealer reads as a compraventa chain. */
+const CHAIN_SOLD_THRESHOLD = 1000;
+
+function assessSeller(listing: NormalizedListing, criteria: BriefCriteria): VerdictFactor {
   const rating = listing.sellerRating;
   const reviews = listing.sellerReviewCount;
+  const preferPrivate = criteria.sellerPreference === "prefer_private";
+
   if (rating === undefined || reviews === undefined) {
     return {
       grade: scoreToGrade(NEUTRAL),
@@ -453,11 +465,26 @@ function assessSeller(listing: NormalizedListing): VerdictFactor {
     score = 55;
     note = `Historial limitado en la plataforma (${profile})`;
   }
+  const known = [note];
+
+  // Seller-type preference: encoded brief criteria, not prompt vibes.
+  const isChain = listing.sellerType === "dealer" && (sold ?? 0) >= CHAIN_SOLD_THRESHOLD;
+  if (isChain) {
+    known.push(`Compraventa de gran volumen (${(sold ?? 0).toLocaleString("es-ES")} ventas en la plataforma)`);
+    if (preferPrivate) {
+      score -= 20;
+      known.push("Penalizado: prefieres particulares o vendedores pequeños");
+    }
+  } else if (preferPrivate && listing.sellerType === "private") {
+    score += 5;
+    known.push("Vendedor particular, como prefieres");
+  }
+  score = clamp(score);
 
   return {
     grade: scoreToGrade(score),
     score,
-    known: [note],
+    known,
     assumed: [],
     unverified: reviews < 5 ? ["Reputación aún poco concluyente"] : [],
   };
@@ -488,7 +515,7 @@ function buildVerdict(
         assumed: [],
         unverified: ["Identidad y reputación del vendedor"],
       }
-    : assessSeller(listing);
+    : assessSeller(listing, criteria);
 
   // --- Weighted overall score ----------------------------------------------
   const w = WEIGHTS[criteria.riskTolerance ?? "medium"];
@@ -532,8 +559,9 @@ function buildVerdict(
       : undefined;
 
   let budgetNote: string | undefined;
-  if (listing.priceEur !== undefined && repairExposureEur) {
-    const worstTotal = listing.priceEur + repairExposureEur.max;
+  const paidPrice = effectivePrice(listing);
+  if (paidPrice !== undefined && repairExposureEur) {
+    const worstTotal = paidPrice + repairExposureEur.max;
     budgetNote =
       worstTotal <= hardLimits.maxPriceEur
         ? `Incluso asumiendo el peor caso de reparaciones (~${repairExposureEur.max.toLocaleString("es-ES")} €), el total (~${worstTotal.toLocaleString("es-ES")} €) queda dentro de tu presupuesto de ${hardLimits.maxPriceEur.toLocaleString("es-ES")} €`

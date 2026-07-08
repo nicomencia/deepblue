@@ -6,6 +6,8 @@
 import {
   CONFIDENCE_GRADES,
   evaluateListing,
+  extractCashPriceEur,
+  extractDedupKey,
   type ConfidenceGrade,
   type EvaluationResult,
   type JobPayload,
@@ -14,7 +16,7 @@ import {
   type PriceBenchmark,
 } from "@deepblue/core";
 import { briefs, events, jobs, leads, listings, users, type Db } from "@deepblue/db";
-import { and, eq } from "drizzle-orm";
+import { and, eq, ne } from "drizzle-orm";
 import { sendEmail } from "./email";
 import { getBenchmark, getDossier } from "./lookups";
 import { newEvalCaches, reevaluateLead } from "./reevaluate";
@@ -49,6 +51,11 @@ export async function ingestSearchResults(
   let alertsSent = 0;
 
   for (const item of items) {
+    // Text-derived facts: the real cash price behind financing-conditional
+    // headlines, and the dealer's internal REF identifying the physical car.
+    const cashPriceEur = item.cashPriceEur ?? extractCashPriceEur(item.description, item.priceEur);
+    const dedupKey = extractDedupKey(item.platform, item.description);
+
     // Upsert into the global corpus; price/mileage/title refresh on re-sighting.
     const [listing] = await db
       .insert(listings)
@@ -59,6 +66,8 @@ export async function ingestSearchResults(
         title: item.title,
         description: item.description,
         priceEur: item.priceEur,
+        cashPriceEur,
+        dedupKey,
         make: item.make,
         model: item.model,
         version: item.version,
@@ -81,6 +90,8 @@ export async function ingestSearchResults(
         set: {
           title: item.title,
           priceEur: item.priceEur,
+          cashPriceEur,
+          dedupKey,
           make: item.make,
           model: item.model,
           version: item.version,
@@ -100,6 +111,26 @@ export async function ingestSearchResults(
       .limit(1);
     if (existingLead) continue;
 
+    // Same physical car already leading this brief under another account
+    // (same dealer REF) → the newcomer is born dead, not a second chance.
+    let duplicateOf: string | undefined;
+    if (dedupKey) {
+      const [dup] = await db
+        .select({ id: leads.id })
+        .from(leads)
+        .innerJoin(listings, eq(leads.listingId, listings.id))
+        .where(
+          and(
+            eq(leads.briefId, briefId),
+            eq(listings.dedupKey, dedupKey),
+            ne(listings.id, listing.id),
+            ne(leads.state, "dead"),
+          ),
+        )
+        .limit(1);
+      duplicateOf = dup?.id;
+    }
+
     const benchmark = await getBenchmark(
       db,
       item.make,
@@ -116,25 +147,27 @@ export async function ingestSearchResults(
       dossier,
     );
 
+    const outcome = duplicateOf ? ("dead" as const) : evaluation.outcome;
+    const deadReason = duplicateOf ? "duplicate_listing" : evaluation.deadReason;
     const [lead] = await db
       .insert(leads)
       .values({
         userId: brief.userId,
         briefId,
         listingId: listing.id,
-        state: evaluation.outcome,
+        state: outcome,
         verdict: evaluation.verdict,
-        deadReason: evaluation.deadReason,
+        deadReason,
       })
       .returning({ id: leads.id });
 
     stats.newLeads += 1;
-    if (evaluation.outcome === "shortlisted") stats.shortlisted += 1;
+    if (outcome === "shortlisted") stats.shortlisted += 1;
     else stats.dead += 1;
 
     // Shortlisted → enqueue detail enrichment (gearbox, power, eco label,
     // seller reputation). Wallapop only for now; AutoScout24 detail later.
-    if (evaluation.outcome === "shortlisted" && item.platform === "wallapop") {
+    if (outcome === "shortlisted" && item.platform === "wallapop") {
       const payload: JobPayload = {
         type: "fetch_listing",
         platform: item.platform,
@@ -148,7 +181,7 @@ export async function ingestSearchResults(
     // re-evaluations (digest, enrichment) never alert, so no spam.
     const alertThreshold = (process.env.ALERT_MAX_GRADE ?? "B") as ConfidenceGrade;
     if (
-      evaluation.outcome === "shortlisted" &&
+      outcome === "shortlisted" &&
       owner &&
       alertsSent < MAX_ALERTS_PER_INGEST &&
       gradeAtMost(evaluation.verdict.overall, alertThreshold)
@@ -166,8 +199,8 @@ export async function ingestSearchResults(
       leadId: lead?.id,
       type: "lead_evaluated",
       payload: {
-        outcome: evaluation.outcome,
-        deadReason: evaluation.deadReason,
+        outcome,
+        deadReason,
         overall: evaluation.verdict.overall,
         title: item.title,
         priceEur: item.priceEur,
@@ -224,6 +257,8 @@ export async function ingestListingDetail(
       title: item.title || undefined,
       description: item.description,
       priceEur: item.priceEur,
+      cashPriceEur: item.cashPriceEur ?? extractCashPriceEur(item.description, item.priceEur),
+      dedupKey: extractDedupKey(item.platform, item.description),
       make: item.make,
       model: item.model,
       version: item.version,

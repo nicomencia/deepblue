@@ -21,6 +21,7 @@ const lines = (v: FormDataEntryValue | null): string[] =>
 const fuelSchema = z.array(z.enum(["gasoline", "diesel", "hybrid", "electric"]));
 const gearboxSchema = z.array(z.enum(["manual", "automatic"]));
 const riskSchema = z.enum(["low", "medium", "high"]).catch("medium");
+const sellerPrefSchema = z.enum(["any", "prefer_private"]).catch("any");
 
 export async function createBrief(formData: FormData): Promise<void> {
   const db = await getDb();
@@ -56,6 +57,7 @@ export async function createBrief(formData: FormData): Promise<void> {
       radiusKm: num(formData.get("radiusKm")) ?? 100,
     },
     riskTolerance: riskSchema.parse(String(formData.get("riskTolerance") ?? "medium")),
+    sellerPreference: sellerPrefSchema.parse(String(formData.get("sellerPreference") ?? "any")),
     notes: lines(formData.get("notes")),
   };
   if (criteria.fuel?.length === 0) delete criteria.fuel;

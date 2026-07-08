@@ -43,6 +43,7 @@ export function listingRowToNormalized(
     title: listing.title,
     description: listing.description ?? undefined,
     priceEur: listing.priceEur ?? undefined,
+    cashPriceEur: listing.cashPriceEur ?? undefined,
     make: listing.make ?? matched?.make,
     model: listing.model ?? matched?.model,
     version: listing.version ?? undefined,
