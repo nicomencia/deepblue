@@ -13,7 +13,6 @@ import {
   type JobPayload,
   type ModelDossier,
   type NormalizedListing,
-  type PriceBenchmark,
 } from "@deepblue/core";
 import { briefs, events, jobs, leads, listings, users, type Db } from "@deepblue/db";
 import { and, eq, ne } from "drizzle-orm";
@@ -46,8 +45,8 @@ export async function ingestSearchResults(
   if (!brief) throw new Error(`brief ${briefId} not found`);
   const [owner] = await db.select().from(users).where(eq(users.id, brief.userId)).limit(1);
 
-  const benchmarkCache = new Map<string, PriceBenchmark | undefined>();
-  const dossierCache = new Map<string, ModelDossier | undefined>();
+  const caches = newEvalCaches();
+  const dossierCache = caches.dossier;
   let alertsSent = 0;
 
   for (const item of items) {
@@ -136,7 +135,8 @@ export async function ingestSearchResults(
       item.make,
       item.model,
       item.countryCode,
-      benchmarkCache,
+      { version: item.version, year: item.year, powerCv: item.powerCv },
+      caches.benchmark,
     );
     const dossier = await getDossier(db, item.make, item.model, dossierCache);
     const evaluation = evaluateListing(

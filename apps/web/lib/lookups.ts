@@ -1,20 +1,34 @@
 /** Shared corpus lookups: price benchmark and reviewed model dossiers. */
 
-import type { ModelDossier, PriceBenchmark } from "@deepblue/core";
+import {
+  computeBenchmark,
+  type BenchmarkTarget,
+  type Comparable,
+  type ModelDossier,
+  type PriceBenchmark,
+} from "@deepblue/core";
 import { listings, modelDossiers, type Db } from "@deepblue/db";
 import { and, desc, isNotNull, sql } from "drizzle-orm";
 
+/** One SQL fetch per make+model+market per batch; weighting runs per listing. */
+export type ComparableCache = Map<string, Comparable[]>;
+
+/** Freshest slice of the corpus that still gives the median room to be robust. */
+const MAX_COMPARABLES = 500;
+
 /**
- * Price benchmark = median over the corpus for the same make+model.
- * Grows more meaningful with every sweep; evaluateListing ignores it
- * below its minimum sample size.
+ * Price benchmark for one specific unit: weighted median over the model's
+ * corpus where trim dominates and year proximity refines (computeBenchmark).
+ * Grows more meaningful with every sweep; evaluateListing ignores it below
+ * its minimum effective sample size.
  */
 export async function getBenchmark(
   db: Db,
   make: string | undefined,
   model: string | undefined,
   market: string | undefined,
-  cache: Map<string, PriceBenchmark | undefined>,
+  target: BenchmarkTarget,
+  cache: ComparableCache,
 ): Promise<PriceBenchmark | undefined> {
   if (!make || !model) return undefined;
   // Markets aren't comparable (a Spanish Golf ≠ a German Golf in price and
@@ -22,33 +36,41 @@ export async function getBenchmark(
   // without country_code are treated as ES (both current platforms are .es).
   const mkt = (market ?? "ES").toUpperCase();
   const key = `${make.toLowerCase()}|${model.toLowerCase()}|${mkt}`;
-  if (cache.has(key)) return cache.get(key);
 
-  // The comparable price is what a buyer would actually pay: the parsed cash
-  // price when the ad buried one, else the headline (financing headlines
-  // otherwise depress the whole median).
-  const rows = await db
-    .select({
-      median: sql<number | null>`percentile_cont(0.5) within group (order by coalesce(${listings.cashPriceEur}, ${listings.priceEur}))`,
-      count: sql<number>`count(*)::int`,
-    })
-    .from(listings)
-    .where(
-      and(
-        isNotNull(listings.priceEur),
-        sql`lower(${listings.make}) = ${make.toLowerCase()}`,
-        sql`lower(${listings.model}) = ${model.toLowerCase()}`,
-        sql`upper(coalesce(${listings.countryCode}, 'ES')) = ${mkt}`,
-      ),
-    );
+  let comparables = cache.get(key);
+  if (!comparables) {
+    // The comparable price is what a buyer would actually pay: the parsed
+    // cash price when the ad buried one, else the headline (financing
+    // headlines otherwise depress the whole median).
+    const rows = await db
+      .select({
+        priceEur: sql<number>`coalesce(${listings.cashPriceEur}, ${listings.priceEur})`,
+        year: listings.year,
+        version: listings.version,
+        powerCv: listings.powerCv,
+      })
+      .from(listings)
+      .where(
+        and(
+          isNotNull(listings.priceEur),
+          sql`lower(${listings.make}) = ${make.toLowerCase()}`,
+          sql`lower(${listings.model}) = ${model.toLowerCase()}`,
+          sql`upper(coalesce(${listings.countryCode}, 'ES')) = ${mkt}`,
+        ),
+      )
+      .orderBy(desc(listings.lastSeenAt))
+      .limit(MAX_COMPARABLES);
 
-  const row = rows[0];
-  const benchmark =
-    row && row.median !== null && row.count > 0
-      ? { medianEur: Number(row.median), sampleSize: row.count, market: mkt }
-      : undefined;
-  cache.set(key, benchmark);
-  return benchmark;
+    comparables = rows.map((r) => ({
+      priceEur: Number(r.priceEur),
+      year: r.year ?? undefined,
+      version: r.version ?? undefined,
+      powerCv: r.powerCv ?? undefined,
+    }));
+    cache.set(key, comparables);
+  }
+
+  return computeBenchmark(target, comparables, mkt);
 }
 
 /** Latest reviewed dossier for make+model. Unreviewed dossiers never drive claims. */

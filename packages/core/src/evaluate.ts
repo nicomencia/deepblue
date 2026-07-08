@@ -11,6 +11,7 @@
  *    identical-looking cars can differ wildly here.
  */
 
+import { MIN_BENCHMARK_SAMPLE, type PriceBenchmark } from "./benchmark.js";
 import type {
   BriefCriteria,
   ConfidenceGrade,
@@ -25,13 +26,6 @@ import type {
   VerdictFactor,
 } from "./domain.js";
 
-export interface PriceBenchmark {
-  medianEur: number;
-  sampleSize: number;
-  /** Market the comparables come from — never compare ES prices to DE prices. */
-  market?: string;
-}
-
 export interface EvaluationResult {
   outcome: "shortlisted" | "dead";
   deadReason?: string;
@@ -42,8 +36,6 @@ export interface EvaluationResult {
 export const NEGOTIATION_HEADROOM = 1.15;
 /** Below this fraction of the market median, "bargain" reads as "scam" until proven otherwise. */
 const SCAM_PRICE_RATIO = 0.55;
-/** Benchmarks from fewer comparables than this are noise; don't grade on them. */
-const MIN_BENCHMARK_SAMPLE = 8;
 /** A subscore with nothing known sits here: neither reward nor punishment. */
 const NEUTRAL = 55;
 
@@ -398,7 +390,7 @@ function assessPrice(
   const pct = Math.round((1 - ratio) * 100);
   const marketTag = benchmark.market ? ` en mercado ${benchmark.market.toUpperCase()}` : "";
   const known = [
-    `Precio ${Math.abs(pct)}% ${pct >= 0 ? "por debajo" : "por encima"} de la mediana de ${benchmark.sampleSize} anuncios comparables${marketTag} (${Math.round(benchmark.medianEur).toLocaleString("es-ES")} €)`,
+    `Precio ${Math.abs(pct)}% ${pct >= 0 ? "por debajo" : "por encima"} de la mediana de ${benchmark.sampleSize} anuncios comparables${marketTag} (${Math.round(benchmark.medianEur).toLocaleString("es-ES")} €)${benchmark.basis ? ` — ${benchmark.basis}` : ""}`,
   ];
   if (listing.cashPriceEur !== undefined && listing.priceEur !== undefined && listing.cashPriceEur !== listing.priceEur) {
     known.push(

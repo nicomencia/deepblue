@@ -6,13 +6,13 @@ import type {
   ModelDossier,
   NormalizedListing,
 } from "./domain.js";
+import type { PriceBenchmark } from "./benchmark.js";
 import {
   applyEnrichment,
   evaluateListing,
   MAX_ENRICHMENT_DELTA,
   NEGOTIATION_HEADROOM,
   scoreToGrade,
-  type PriceBenchmark,
 } from "./evaluate.js";
 
 // --- Fixtures ---------------------------------------------------------------

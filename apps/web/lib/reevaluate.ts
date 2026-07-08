@@ -6,18 +6,17 @@ import {
   evaluateListing,
   type ModelDossier,
   type NormalizedListing,
-  type PriceBenchmark,
 } from "@deepblue/core";
 import { briefs, events, leads, listings, type Db } from "@deepblue/db";
 import { eq } from "drizzle-orm";
-import { getBenchmark, getDossier } from "./lookups";
+import { getBenchmark, getDossier, type ComparableCache } from "./lookups";
 
 type ListingRow = typeof listings.$inferSelect;
 type BriefRow = typeof briefs.$inferSelect;
 type LeadRow = typeof leads.$inferSelect;
 
 export interface EvalCaches {
-  benchmark: Map<string, PriceBenchmark | undefined>;
+  benchmark: ComparableCache;
   dossier: Map<string, ModelDossier | undefined>;
 }
 
@@ -74,7 +73,14 @@ export async function reevaluateLead(
   caches: EvalCaches,
 ): Promise<{ overall: string; outcome: string }> {
   const nl = listingRowToNormalized(listing, brief);
-  const benchmark = await getBenchmark(db, nl.make, nl.model, nl.countryCode, caches.benchmark);
+  const benchmark = await getBenchmark(
+    db,
+    nl.make,
+    nl.model,
+    nl.countryCode,
+    { version: nl.version, year: nl.year, powerCv: nl.powerCv },
+    caches.benchmark,
+  );
   const dossier = await getDossier(db, nl.make, nl.model, caches.dossier);
   const evaluation = evaluateListing(nl, brief.criteria, brief.hardLimits, benchmark, dossier);
 
