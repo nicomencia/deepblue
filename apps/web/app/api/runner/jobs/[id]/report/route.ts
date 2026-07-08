@@ -1,9 +1,10 @@
-import { normalizedListingSchema } from "@deepblue/core";
+import { listingCheckResultSchema, normalizedListingSchema } from "@deepblue/core";
 import { jobs } from "@deepblue/db";
 import { eq } from "drizzle-orm";
 import { z } from "zod";
 import { getDb } from "../../../../../../lib/db";
 import { ingestListingDetail, ingestSearchResults } from "../../../../../../lib/ingest";
+import { applyListingCheck } from "../../../../../../lib/reaper";
 import { isAuthorizedRunner } from "../../../../../../lib/runner-auth";
 
 const reportSchema = z.object({
@@ -34,6 +35,9 @@ export async function POST(
   } else if (report.status === "succeeded" && job.payload.type === "fetch_listing") {
     const item = normalizedListingSchema.parse(report.result);
     ingestStats = await ingestListingDetail(db, item);
+  } else if (report.status === "succeeded" && job.payload.type === "check_listing") {
+    const check = listingCheckResultSchema.parse(report.result);
+    ingestStats = await applyListingCheck(db, check);
   }
 
   await db

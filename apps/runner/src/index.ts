@@ -53,6 +53,12 @@ async function executeJob(job: LeasedJob): Promise<unknown> {
         platformListingId: job.payload.platformListingId,
         url: job.payload.url,
       });
+    case "check_listing":
+      return adapter.checkListing({
+        platform: job.payload.platform,
+        platformListingId: job.payload.platformListingId,
+        url: job.payload.url,
+      });
     case "send_message":
     case "fetch_replies":
       throw new Error(`'${job.payload.type}' arrives in Phase 2`);

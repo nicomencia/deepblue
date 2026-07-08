@@ -9,6 +9,7 @@ import { z } from "zod";
 export const JOB_TYPES = [
   "search_sweep",
   "fetch_listing",
+  "check_listing",
   "send_message",
   "fetch_replies",
 ] as const;
@@ -45,6 +46,25 @@ export const fetchListingPayload = z.object({
   url: z.string().optional(),
 });
 
+/** Liveness probe: is this specific listing still on sale, reserved, or gone? */
+export const checkListingPayload = z.object({
+  type: z.literal("check_listing"),
+  platform: platformSchema,
+  platformListingId: z.string(),
+  url: z.string().optional(),
+});
+
+export const LISTING_CHECK_STATUSES = ["active", "reserved", "gone"] as const;
+export type ListingCheckStatus = (typeof LISTING_CHECK_STATUSES)[number];
+
+/** What the Runner reports back from a check_listing probe (a trust boundary). */
+export const listingCheckResultSchema = z.object({
+  platform: platformSchema,
+  platformListingId: z.string(),
+  status: z.enum(LISTING_CHECK_STATUSES),
+});
+export type ListingCheckResult = z.infer<typeof listingCheckResultSchema>;
+
 export const sendMessagePayload = z.object({
   type: z.literal("send_message"),
   platform: platformSchema,
@@ -67,6 +87,7 @@ export const fetchRepliesPayload = z.object({
 export const jobPayloadSchema = z.discriminatedUnion("type", [
   searchSweepPayload,
   fetchListingPayload,
+  checkListingPayload,
   sendMessagePayload,
   fetchRepliesPayload,
 ]);

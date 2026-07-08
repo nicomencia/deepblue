@@ -4,6 +4,7 @@
  * of the system must not be able to tell the difference.
  */
 
+import type { ListingCheckStatus } from "./jobs.js";
 import type { NormalizedListing, Platform } from "./domain.js";
 
 export interface SearchQuery {
@@ -45,10 +46,19 @@ export interface SendResult {
   sentAt: string;
 }
 
+/** Liveness of one listing, reported by the Runner from the platform itself. */
+export interface ListingCheck {
+  platform: Platform;
+  platformListingId: string;
+  status: ListingCheckStatus;
+}
+
 export interface PlatformAdapter {
   readonly platform: Platform;
   search(query: SearchQuery): Promise<NormalizedListing[]>;
   fetchListing(ref: ListingRef): Promise<NormalizedListing>;
+  /** Cheap probe of a single listing: still on sale, reserved, or gone. */
+  checkListing(ref: ListingRef): Promise<ListingCheck>;
   sendMessage(ref: ConversationRef, body: string): Promise<SendResult>;
   fetchReplies(ref: ConversationRef, sinceExternalId?: string): Promise<InboundMessage[]>;
 }

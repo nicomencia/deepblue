@@ -68,6 +68,10 @@ async function tick(): Promise<void> {
     console.log("[scheduler]", await trigger("/api/cron/digest"));
   }
 
+  // Liveness probes for stale shortlisted listings — bounded per tick, no-op
+  // when nothing is due. Runs alongside sweeps so probes ride the same runner.
+  console.log("[scheduler]", await trigger("/api/cron/reap"));
+
   // LLM verdict enrichment: bounded batch per tick, no-op when nothing is
   // pending — a post-sweep backlog drains steadily without a cost spike.
   if (process.env.ANTHROPIC_API_KEY) {

@@ -6,6 +6,7 @@
 
 import { setTimeout as sleep } from "node:timers/promises";
 import type {
+  ListingCheck,
   ListingRef,
   NormalizedListing,
   PlatformAdapter,
@@ -120,6 +121,22 @@ export const wallapopAdapter: PlatformAdapter = {
 
     return normalizeDetail(detail, user, stats);
   },
+
+  async checkListing(ref: ListingRef): Promise<ListingCheck> {
+    // The item's own endpoint is the ground truth: a 404 means genuinely
+    // gone (sold/removed), which aging off the newest-first search page does
+    // not. One request, no user/stats calls — deliberately lighter than
+    // fetchListing so liveness sweeps stay within pacing hygiene.
+    const res = await fetch(`${API_BASE}/items/${ref.platformListingId}`, { headers: HEADERS });
+    if (res.status === 404 || res.status === 410) {
+      return { platform: "wallapop", platformListingId: ref.platformListingId, status: "gone" };
+    }
+    if (!res.ok) throw new Error(`wallapop check failed: HTTP ${res.status}`);
+    const detail = (await res.json()) as ItemDetail;
+    const status = detailFlagsStatus(detail);
+    return { platform: "wallapop", platformListingId: ref.platformListingId, status };
+  },
+
   async sendMessage() {
     throw new Error("wallapop messaging arrives in Phase 2");
   },
@@ -157,7 +174,21 @@ interface ItemDetail {
   location?: { latitude?: number; longitude?: number; city?: string; region?: string };
   type_attributes?: Record<string, DetailAttr | undefined>;
   counters?: { views?: number; favorites?: number; conversations?: number };
+  /** Item state flags — best-effort; the reliable "gone" signal is the 404. */
+  flags?: { reserved?: boolean; sold?: boolean; expired?: boolean; banned?: boolean };
+  reserved?: boolean | { flag?: boolean };
   user?: { id?: string };
+}
+
+/** Reads item flags: sold/expired ⇒ gone, reserved ⇒ reserved, else active. */
+function detailFlagsStatus(detail: ItemDetail): ListingCheck["status"] {
+  const f = detail.flags ?? {};
+  if (f.sold === true || f.expired === true || f.banned === true) return "gone";
+  if (f.reserved === true) return "reserved";
+  if (typeof detail.reserved === "boolean" ? detail.reserved : detail.reserved?.flag === true) {
+    return "reserved";
+  }
+  return "active";
 }
 
 interface UserProfile {

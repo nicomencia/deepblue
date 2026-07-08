@@ -5,7 +5,13 @@
  * mostly dealers; contact flows via email in Phase 2 (the Core's lane).
  */
 
-import type { NormalizedListing, PlatformAdapter, SearchQuery } from "@deepblue/core";
+import type {
+  ListingCheck,
+  ListingRef,
+  NormalizedListing,
+  PlatformAdapter,
+  SearchQuery,
+} from "@deepblue/core";
 
 const BASE = "https://www.autoscout24.es";
 
@@ -70,6 +76,10 @@ export const autoscout24Adapter: PlatformAdapter = {
 
   async fetchListing() {
     throw new Error("autoscout24 fetchListing not implemented yet");
+  },
+  async checkListing(_ref: ListingRef): Promise<ListingCheck> {
+    // AS24 detail parsing (and thus liveness) lands with detail enrichment.
+    throw new Error("autoscout24 checkListing not implemented yet");
   },
   async sendMessage() {
     throw new Error("autoscout24 contact arrives in Phase 2 (email lane)");

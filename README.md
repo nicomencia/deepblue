@@ -40,8 +40,13 @@ Top-grade finds trigger instant alert emails at ingest. Keep `pnpm dev:runner`
 running and deepblue scouts by itself.
 
 In cloud deployments, leave the local scheduler off and point Cloud Scheduler at
-`POST /api/cron/sweep`, `POST /api/cron/digest` and `POST /api/cron/enrich` with
-`Authorization: Bearer $CRON_SECRET`.
+`POST /api/cron/sweep`, `POST /api/cron/digest`, `POST /api/cron/enrich` and
+`POST /api/cron/reap` with `Authorization: Bearer $CRON_SECRET`.
+
+The reaper keeps the shortlist honest: stale listings are re-probed via the
+runner (`check_listing` jobs), and only cars the platform confirms gone (404 /
+sold) are killed — a listing merely aged off Wallapop's newest-first search
+page is re-sighted, not reaped. Tune with `LISTING_RECHECK_HOURS` (default 36).
 
 ### LLM layer (dossier builder + verdict enrichment)
 

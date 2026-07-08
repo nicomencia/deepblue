@@ -4,3 +4,4 @@ export * from "./jobs.js";
 export * from "./benchmark.js";
 export * from "./evaluate.js";
 export * from "./extract.js";
+export * from "./lifecycle.js";
