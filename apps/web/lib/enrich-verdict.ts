@@ -7,15 +7,16 @@
  */
 
 import {
-  applyEnrichment,
   llmEnrichmentPayloadSchema,
   MAX_ENRICHMENT_DELTA,
   type LlmEnrichment,
+  type LlmEnrichmentPayload,
 } from "@deepblue/core";
 import { briefs, events, leads, listings, type Db } from "@deepblue/db";
 import { zodOutputFormat } from "@anthropic-ai/sdk/helpers/zod";
 import { and, desc, eq, isNull, sql } from "drizzle-orm";
 import { ENRICH_MODEL, getAnthropic, isLlmConfigured, messageText } from "./llm";
+import { newEvalCaches, reevaluateLead, type EvalCaches } from "./reevaluate";
 
 type LeadRow = typeof leads.$inferSelect;
 type ListingRow = typeof listings.$inferSelect;
@@ -75,11 +76,56 @@ Instrucciones:
   destaca (bueno y malo) del anuncio.`;
 }
 
+/**
+ * Persist an enrichment (from the Claude API or imported from a Claude Code
+ * session) and refresh the verdict. The verdict is rebuilt from rules and the
+ * enrichment merged on top — never applied over an already-enriched verdict,
+ * so re-enriching a lead can't compound deltas.
+ */
+export async function saveEnrichment(
+  db: Db,
+  lead: LeadRow,
+  listing: ListingRow,
+  brief: BriefRow,
+  payload: LlmEnrichmentPayload,
+  modelId: string,
+  caches: EvalCaches = newEvalCaches(),
+): Promise<{ before: string; after: string }> {
+  if (!lead.verdict) throw new Error(`lead ${lead.id} has no verdict to enrich`);
+
+  const enrichment: LlmEnrichment = {
+    ...payload,
+    model: modelId,
+    at: new Date().toISOString(),
+  };
+  await db
+    .update(leads)
+    .set({ enrichment, enrichedAt: new Date(), updatedAt: new Date() })
+    .where(eq(leads.id, lead.id));
+
+  const result = await reevaluateLead(db, { ...lead, enrichment }, listing, brief, caches);
+
+  await db.insert(events).values({
+    userId: lead.userId,
+    leadId: lead.id,
+    type: "lead_enriched",
+    payload: {
+      before: lead.verdict.overall,
+      after: result.overall,
+      scamSuspicion: payload.scamSuspicion,
+      model_id: modelId,
+    },
+  });
+
+  return { before: lead.verdict.overall, after: result.overall };
+}
+
 export async function enrichLead(
   db: Db,
   lead: LeadRow,
   listing: ListingRow,
   brief: BriefRow,
+  caches?: EvalCaches,
 ): Promise<{ before: string; after: string }> {
   if (!lead.verdict) throw new Error(`lead ${lead.id} has no verdict to enrich`);
   const client = getAnthropic();
@@ -93,36 +139,7 @@ export async function enrichLead(
 
   // Trust boundary: validate before it touches the verdict or the DB.
   const payload = llmEnrichmentPayloadSchema.parse(JSON.parse(messageText(msg)));
-  const enrichment: LlmEnrichment = {
-    ...payload,
-    model: ENRICH_MODEL,
-    at: new Date().toISOString(),
-  };
-
-  const verdict = applyEnrichment(
-    lead.verdict,
-    enrichment,
-    brief.criteria.riskTolerance ?? "medium",
-  );
-
-  await db
-    .update(leads)
-    .set({ enrichment, enrichedAt: new Date(), verdict, updatedAt: new Date() })
-    .where(eq(leads.id, lead.id));
-
-  await db.insert(events).values({
-    userId: lead.userId,
-    leadId: lead.id,
-    type: "lead_enriched",
-    payload: {
-      before: lead.verdict.overall,
-      after: verdict.overall,
-      scamSuspicion: payload.scamSuspicion,
-      model_id: ENRICH_MODEL,
-    },
-  });
-
-  return { before: lead.verdict.overall, after: verdict.overall };
+  return saveEnrichment(db, lead, listing, brief, payload, ENRICH_MODEL, caches);
 }
 
 export interface EnrichBatchStats {
@@ -149,9 +166,10 @@ export async function enrichPendingLeads(db: Db, limit = 6): Promise<EnrichBatch
     .limit(limit);
 
   const stats: EnrichBatchStats = { candidates: rows.length, enriched: 0, failed: 0 };
+  const caches = newEvalCaches();
   for (const row of rows) {
     try {
-      await enrichLead(db, row.lead, row.listing, row.brief);
+      await enrichLead(db, row.lead, row.listing, row.brief, caches);
       stats.enriched += 1;
     } catch (err) {
       stats.failed += 1;

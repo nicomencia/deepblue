@@ -92,28 +92,32 @@ export interface BuiltDossier {
   dossier: ModelDossier;
 }
 
-export async function buildDossier(
+/**
+ * Store a validated dossier as an unreviewed draft. Shared by the API
+ * builder and the manual import lane (a Claude Code session drafting
+ * dossiers on the user's subscription instead of per-token billing).
+ */
+export async function insertDraftDossier(
   db: Db,
-  req: DossierRequest,
+  dossier: ModelDossier,
   userId: string,
+  source: string,
 ): Promise<BuiltDossier> {
-  const dossier = await draftWithResearch(req);
-
   // Version scoped to make+model: "latest reviewed wins" stays unambiguous
   // even across generations/engine codes.
   const [row] = await db
     .select({ max: sql<number | null>`max(${modelDossiers.version})` })
     .from(modelDossiers)
     .where(
-      sql`lower(${modelDossiers.make}) = ${req.make.toLowerCase()} and lower(${modelDossiers.model}) = ${req.model.toLowerCase()}`,
+      sql`lower(${modelDossiers.make}) = ${dossier.make.toLowerCase()} and lower(${modelDossiers.model}) = ${dossier.model.toLowerCase()}`,
     );
   const version = (row?.max ?? 0) + 1;
 
   const [inserted] = await db
     .insert(modelDossiers)
     .values({
-      make: req.make,
-      model: req.model,
+      make: dossier.make,
+      model: dossier.model,
       generation: dossier.generation,
       version,
       content: dossier,
@@ -127,14 +131,25 @@ export async function buildDossier(
     type: "dossier_drafted",
     payload: {
       dossierId: inserted.id,
-      make: req.make,
-      model: req.model,
+      make: dossier.make,
+      model: dossier.model,
       version,
       issues: dossier.knownIssues.length,
       sources: dossier.sources.length,
-      model_id: DOSSIER_MODEL,
+      source,
     },
   });
 
   return { id: inserted.id, version, dossier };
+}
+
+export async function buildDossier(
+  db: Db,
+  req: DossierRequest,
+  userId: string,
+): Promise<BuiltDossier> {
+  const drafted = await draftWithResearch(req);
+  // Canonical identity comes from the request, whatever the model echoed.
+  const dossier: ModelDossier = { ...drafted, make: req.make, model: req.model };
+  return insertDraftDossier(db, dossier, userId, DOSSIER_MODEL);
 }

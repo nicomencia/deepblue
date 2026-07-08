@@ -57,6 +57,14 @@ Set `ANTHROPIC_API_KEY` in `apps/web/.env.local` to enable:
 Models default to `claude-opus-4-8`; override with `DEEPBLUE_DOSSIER_MODEL` /
 `DEEPBLUE_ENRICH_MODEL`. Without the key both features stay off and say so.
 
+**No API key? Subscription mode.** A Claude Code session can play the LLM role on
+the flat subscription instead of per-token billing: ask it to research a dossier or
+read the shortlisted ads, and it imports the results through the same zod trust
+boundary via `POST /api/dev/import-dossier` (draft → approve in `/dossiers`) and
+`POST /api/dev/import-enrichment` (`{leadId, source, enrichment}` — same clamps and
+veto caps as the API path, safe to re-import). The API lane stays dormant until a
+key appears; nothing else changes.
+
 ### Try the Scout loop end to end
 
 ```
