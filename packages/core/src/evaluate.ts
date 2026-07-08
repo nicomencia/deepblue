@@ -18,6 +18,7 @@ import type {
   HardLimits,
   IssueAssessment,
   KnownIssue,
+  LlmEnrichment,
   ModelDossier,
   NormalizedListing,
   RiskTolerance,
@@ -499,8 +500,12 @@ function buildVerdict(
   );
 
   // --- Vetoes: code, not weights -------------------------------------------
-  if (price.scamSignal) score = Math.min(score, 20); // → E
-  if (reliability.criticalConfirmed) score = Math.min(score, 45); // → D at best
+  // Tagged on the verdict so applyEnrichment can reapply the caps after any
+  // LLM refinement — the model can color inside these lines, never repaint them.
+  const vetoes: string[] = [];
+  if (price.scamSignal) vetoes.push("scam_price");
+  if (reliability.criticalConfirmed) vetoes.push("critical_issue_confirmed");
+  score = applyVetoCaps(score, vetoes);
 
   // --- Confidence axis: how much of this is verified ------------------------
   const issuesTotal = reliability.issues.length;
@@ -548,12 +553,113 @@ function buildVerdict(
     issues: reliability.issues,
     repairExposureEur,
     budgetNote,
+    vetoes,
     wouldRaiseGrade: [
       ...reliability.wouldRaise,
       "Respuestas del vendedor sobre mantenimiento, propietarios y accidentes",
       ...(price.scamSignal ? ["Verificar que el vendedor y el vehículo son reales"] : []),
     ],
     openQuestions: [...new Set(openQuestions)].slice(0, 10),
+    updatedAt: new Date().toISOString(),
+  };
+}
+
+// ---------------------------------------------------------------------------
+// LLM enrichment merge — refinement, never authority
+// ---------------------------------------------------------------------------
+
+/** An LLM refinement moves a subscore at most this far, in either direction. */
+export const MAX_ENRICHMENT_DELTA = 15;
+
+/** Score ceilings per veto tag. llm_scam_suspicion only ever lowers — the safe direction. */
+const VETO_CAPS: Record<string, number> = {
+  scam_price: 20, // → E
+  critical_issue_confirmed: 45, // → D at best
+  llm_scam_suspicion: 45, // → D at best
+};
+
+function applyVetoCaps(score: number, vetoes: string[]): number {
+  for (const veto of vetoes) {
+    const cap = VETO_CAPS[veto];
+    if (cap !== undefined) score = Math.min(score, cap);
+  }
+  return score;
+}
+
+const FACTOR_KEYS = [
+  "priceFairness",
+  "modelReliability",
+  "unitEvidence",
+  "sellerCredibility",
+] as const;
+
+/**
+ * Merge an LLM enrichment into a rule-based verdict. The model refines:
+ * bounded subscore deltas with quoted ad evidence, red/green flags, extra
+ * seller questions, a plain-Spanish summary. Code keeps authority: deltas
+ * are clamped, weights and grade bands recomputed here, and veto caps
+ * reapplied no matter what the model said. confidencePct is deliberately
+ * untouched — reading the same unverified ad harder verifies nothing.
+ * Deterministic, so it can be reapplied over every rule re-evaluation.
+ */
+export function applyEnrichment(
+  verdict: ConfidenceVerdict,
+  enrichment: LlmEnrichment,
+  riskTolerance: RiskTolerance = "medium",
+): ConfidenceVerdict {
+  const factors = { ...verdict.factors };
+  for (const key of FACTOR_KEYS) {
+    const adjustment = enrichment.factorAdjustments[key];
+    if (!adjustment || adjustment.delta === 0) continue;
+    const delta = Math.max(
+      -MAX_ENRICHMENT_DELTA,
+      Math.min(MAX_ENRICHMENT_DELTA, adjustment.delta),
+    );
+    const score = clamp(factors[key].score + delta);
+    factors[key] = {
+      ...factors[key],
+      score,
+      grade: scoreToGrade(score),
+      known: [...factors[key].known, ...adjustment.reasons],
+    };
+  }
+
+  const w = WEIGHTS[riskTolerance];
+  const vetoes = [...(verdict.vetoes ?? [])];
+  if (enrichment.scamSuspicion && !vetoes.includes("llm_scam_suspicion")) {
+    vetoes.push("llm_scam_suspicion");
+  }
+  const score = applyVetoCaps(
+    clamp(
+      factors.priceFairness.score * w.price +
+        factors.modelReliability.score * w.model +
+        factors.unitEvidence.score * w.unit +
+        factors.sellerCredibility.score * w.seller,
+    ),
+    vetoes,
+  );
+
+  const scamFlag =
+    enrichment.scamSuspicion && enrichment.scamReason
+      ? [`Sospecha de estafa (IA): ${enrichment.scamReason}`]
+      : [];
+
+  return {
+    ...verdict,
+    overall: scoreToGrade(score),
+    score,
+    factors,
+    vetoes,
+    openQuestions: [
+      ...new Set([...verdict.openQuestions, ...enrichment.extraOpenQuestions]),
+    ].slice(0, 12),
+    llm: {
+      summary: enrichment.summary,
+      redFlags: [...scamFlag, ...enrichment.redFlags],
+      greenFlags: enrichment.greenFlags,
+      model: enrichment.model,
+      at: enrichment.at,
+    },
     updatedAt: new Date().toISOString(),
   };
 }

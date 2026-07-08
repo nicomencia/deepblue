@@ -1,6 +1,7 @@
 /** Shared re-evaluation: one lead, current data, dossier and benchmark. */
 
 import {
+  applyEnrichment,
   canTransition,
   evaluateListing,
   type ModelDossier,
@@ -76,6 +77,12 @@ export async function reevaluateLead(
   const dossier = await getDossier(db, nl.make, nl.model, caches.dossier);
   const evaluation = evaluateListing(nl, brief.criteria, brief.hardLimits, benchmark, dossier);
 
+  // Rules rebuild the verdict from scratch; a stored LLM enrichment is
+  // re-merged on top (bounded deltas, vetoes reapplied inside).
+  const verdict = lead.enrichment
+    ? applyEnrichment(evaluation.verdict, lead.enrichment, brief.criteria.riskTolerance ?? "medium")
+    : evaluation.verdict;
+
   const nextState =
     evaluation.outcome === "dead" && canTransition(lead.state, "dead")
       ? ("dead" as const)
@@ -84,7 +91,7 @@ export async function reevaluateLead(
   await db
     .update(leads)
     .set({
-      verdict: evaluation.verdict,
+      verdict,
       state: nextState,
       deadReason: evaluation.deadReason,
       updatedAt: new Date(),
@@ -95,8 +102,8 @@ export async function reevaluateLead(
     userId: lead.userId,
     leadId: lead.id,
     type: "lead_reevaluated",
-    payload: { overall: evaluation.verdict.overall, outcome: evaluation.outcome },
+    payload: { overall: verdict.overall, outcome: evaluation.outcome },
   });
 
-  return { overall: evaluation.verdict.overall, outcome: evaluation.outcome };
+  return { overall: verdict.overall, outcome: evaluation.outcome };
 }

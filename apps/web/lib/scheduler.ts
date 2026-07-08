@@ -67,4 +67,10 @@ async function tick(): Promise<void> {
     // runDigest has its own durable once-per-day guard.
     console.log("[scheduler]", await trigger("/api/cron/digest"));
   }
+
+  // LLM verdict enrichment: bounded batch per tick, no-op when nothing is
+  // pending — a post-sweep backlog drains steadily without a cost spike.
+  if (process.env.ANTHROPIC_API_KEY) {
+    console.log("[scheduler]", await trigger("/api/cron/enrich"));
+  }
 }

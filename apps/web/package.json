@@ -9,6 +9,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.110.0",
     "@deepblue/core": "workspace:*",
     "@deepblue/db": "workspace:*",
     "@electric-sql/pglite": "^0.3.0",

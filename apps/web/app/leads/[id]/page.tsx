@@ -104,6 +104,29 @@ export default async function LeadDetail({
             {v.budgetNote && <p style={{ marginBottom: 0 }}>{v.budgetNote}</p>}
           </section>
 
+          {/* LLM read of the ad — refinement over the rule verdict */}
+          {v.llm && (
+            <section style={card}>
+              <strong>Lectura del anuncio (IA)</strong>
+              <p style={{ margin: "0.4rem 0" }}>{v.llm.summary}</p>
+              {v.llm.redFlags.length > 0 && (
+                <p style={{ margin: "0.35rem 0", fontSize: "0.87rem" }}>
+                  <span style={{ color: "var(--grade-e)", fontWeight: 600 }}>Alertas:</span>{" "}
+                  {v.llm.redFlags.join(" · ")}
+                </p>
+              )}
+              {v.llm.greenFlags.length > 0 && (
+                <p style={{ margin: "0.35rem 0", fontSize: "0.87rem" }}>
+                  <span style={{ color: "var(--grade-a)", fontWeight: 600 }}>A favor:</span>{" "}
+                  {v.llm.greenFlags.join(" · ")}
+                </p>
+              )}
+              <p style={{ margin: "0.4rem 0 0", fontSize: "0.78rem", color: "var(--ink-muted)" }}>
+                {v.llm.model} · {fmtDate(v.llm.at)}
+              </p>
+            </section>
+          )}
+
           {/* Factors */}
           <h2 style={h2}>Factores</h2>
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(340px, 1fr))", gap: "0.75rem" }}>

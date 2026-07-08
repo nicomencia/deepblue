@@ -39,7 +39,23 @@ Top-grade finds trigger instant alert emails at ingest. Keep `pnpm dev:runner`
 running and deepblue scouts by itself.
 
 In cloud deployments, leave the local scheduler off and point Cloud Scheduler at
-`POST /api/cron/sweep` and `POST /api/cron/digest` with `Authorization: Bearer $CRON_SECRET`.
+`POST /api/cron/sweep`, `POST /api/cron/digest` and `POST /api/cron/enrich` with
+`Authorization: Bearer $CRON_SECRET`.
+
+### LLM layer (dossier builder + verdict enrichment)
+
+Set `ANTHROPIC_API_KEY` in `apps/web/.env.local` to enable:
+
+- **Dossier builder** — from `/dossiers` (or `POST /api/dev/build-dossier`), Claude
+  researches a model on the web and drafts a source-cited reliability dossier.
+  Drafts never drive verdicts: you review and approve them in `/dossiers` first;
+  approval re-evaluates every shortlisted lead on that model.
+- **Verdict enrichment** — the scheduler (or `POST /api/cron/enrich`) has Claude read
+  each shortlisted ad's free text and refine the rule-based verdict within hard
+  bounds (±15 per factor, vetoes stay code). Runs once per lead, best-scored first.
+
+Models default to `claude-opus-4-8`; override with `DEEPBLUE_DOSSIER_MODEL` /
+`DEEPBLUE_ENRICH_MODEL`. Without the key both features stay off and say so.
 
 ### Try the Scout loop end to end
 
@@ -51,6 +67,11 @@ pnpm dev:runner                                          # leases jobs, searches
 curl http://localhost:3000/api/dev/state                 # counts: jobs, listings, leads
 curl -X POST http://localhost:3000/api/dev/reevaluate    # refresh verdicts (dossier + benchmark)
 curl "http://localhost:3000/api/dev/leads?limit=5"       # top leads with full verdicts
+
+# With ANTHROPIC_API_KEY set:
+curl -X POST http://localhost:3000/api/dev/build-dossier \
+  -H 'content-type: application/json' -d '{"make":"Seat","model":"Leon"}'
+curl -X POST http://localhost:3000/api/cron/enrich       # LLM-refine pending verdicts
 ```
 
 Then open http://localhost:3000 — shortlisted leads with confidence grades.

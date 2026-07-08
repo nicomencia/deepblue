@@ -24,6 +24,7 @@ import type {
   JobPayload,
   JobStatus,
   LeadState,
+  LlmEnrichment,
   MessageChannel,
   MessageDirection,
   MessageStatus,
@@ -107,6 +108,9 @@ export const leads = pgTable(
       .notNull()
       .default("draft_only"),
     verdict: jsonb("verdict").$type<ConfidenceVerdict>(),
+    /** LLM read of the ad, stored raw so re-evaluations can re-merge it. */
+    enrichment: jsonb("enrichment").$type<LlmEnrichment>(),
+    enrichedAt: timestamp("enriched_at", { withTimezone: true }),
     deadReason: text("dead_reason"),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),

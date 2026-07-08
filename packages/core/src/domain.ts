@@ -196,6 +196,22 @@ export interface ConfidenceVerdict {
   wouldRaiseGrade: string[];
   /** Open questions for the seller, generated from the unit checklist. */
   openQuestions: string[];
+  /**
+   * Code-set veto tags ("scam_price", "critical_issue_confirmed", ...).
+   * Kept on the verdict so caps can be reapplied deterministically after
+   * any LLM refinement — vetoes are code, never negotiable by the model.
+   */
+  vetoes?: string[];
+  /** LLM read of the ad text: refinement and color, never authority. */
+  llm?: {
+    /** 2–3 frases en español: qué es esta unidad y qué destaca del anuncio. */
+    summary: string;
+    redFlags: string[];
+    greenFlags: string[];
+    /** Model id + timestamp: every AI claim is attributable. */
+    model: string;
+    at: string;
+  };
   updatedAt: string;
 }
 
@@ -203,43 +219,90 @@ export interface ConfidenceVerdict {
 // Model dossiers — reliability knowledge with receipts
 // ---------------------------------------------------------------------------
 
-export interface KnownIssue {
-  title: string;
-  description: string;
+/**
+ * Zod schemas (not plain interfaces) because dossiers cross an untrusted
+ * boundary: the automated builder drafts them with an LLM, and nothing
+ * unvalidated may reach the database — same rule as normalizedListingSchema.
+ */
+export const knownIssueSchema = z.object({
+  title: z.string(),
+  description: z.string(),
   /**
    * When it typically bites. fuel/gearbox use canonical tokens matched
    * loosely against listing values: "diesel" | "gasoline", "automatic" | "manual".
    * A listing with the field missing counts as applicable (can't rule it out).
    */
-  applicability: {
-    kmMin?: number;
-    kmMax?: number;
-    yearMin?: number;
-    yearMax?: number;
-    fuel?: "diesel" | "gasoline";
-    gearbox?: "automatic" | "manual";
-    powerCvMin?: number;
-    powerCvMax?: number;
-  };
-  typicalRepairCostEur?: { min: number; max: number };
+  applicability: z.object({
+    kmMin: z.number().optional(),
+    kmMax: z.number().optional(),
+    yearMin: z.number().optional(),
+    yearMax: z.number().optional(),
+    fuel: z.enum(["diesel", "gasoline"]).optional(),
+    gearbox: z.enum(["automatic", "manual"]).optional(),
+    powerCvMin: z.number().optional(),
+    powerCvMax: z.number().optional(),
+  }),
+  typicalRepairCostEur: z.object({ min: z.number(), max: z.number() }).optional(),
   /** What evidence rules it in or out for a specific unit. */
-  evidence: string[];
+  evidence: z.array(z.string()),
   /** Questions to put to the seller for this issue. */
-  sellerQuestions: string[];
-  severity: "minor" | "moderate" | "major" | "critical";
-  sources: string[];
-}
+  sellerQuestions: z.array(z.string()),
+  severity: z.enum(["minor", "moderate", "major", "critical"]),
+  sources: z.array(z.string()),
+});
+export type KnownIssue = z.infer<typeof knownIssueSchema>;
 
-export interface ModelDossier {
-  make: string;
-  model: string;
-  generation?: string;
-  engineCode?: string;
-  knownIssues: KnownIssue[];
-  recalls: Array<{ title: string; year?: number; source: string }>;
-  generalNotes: string[];
-  sources: string[];
-}
+export const modelDossierSchema = z.object({
+  make: z.string(),
+  model: z.string(),
+  generation: z.string().optional(),
+  engineCode: z.string().optional(),
+  knownIssues: z.array(knownIssueSchema),
+  recalls: z.array(
+    z.object({ title: z.string(), year: z.number().optional(), source: z.string() }),
+  ),
+  generalNotes: z.array(z.string()),
+  sources: z.array(z.string()),
+});
+export type ModelDossier = z.infer<typeof modelDossierSchema>;
+
+// ---------------------------------------------------------------------------
+// LLM verdict enrichment — refinement, never authority
+// ---------------------------------------------------------------------------
+
+/** One bounded subscore refinement. Deltas are clamped in code (±MAX_ENRICHMENT_DELTA). */
+export const factorAdjustmentSchema = z.object({
+  delta: z.number(),
+  /** Concrete evidence from the ad text, en español, justifying the delta. */
+  reasons: z.array(z.string()),
+});
+
+/**
+ * What the enrichment pass may contribute. Validated at the LLM trust
+ * boundary; applyEnrichment() clamps deltas and reapplies vetoes after
+ * merging — hard limits stay code, never prompt.
+ */
+export const llmEnrichmentPayloadSchema = z.object({
+  /** 2–3 frases en español: qué es esta unidad y qué destaca del anuncio. */
+  summary: z.string(),
+  factorAdjustments: z.object({
+    priceFairness: factorAdjustmentSchema.optional(),
+    modelReliability: factorAdjustmentSchema.optional(),
+    unitEvidence: factorAdjustmentSchema.optional(),
+    sellerCredibility: factorAdjustmentSchema.optional(),
+  }),
+  redFlags: z.array(z.string()),
+  greenFlags: z.array(z.string()),
+  /** The ad smells like a scam (urgency, shipping, off-platform, impossible specs). */
+  scamSuspicion: z.boolean(),
+  scamReason: z.string().optional(),
+  /** Only questions NOT already in the verdict, specific to this ad. */
+  extraOpenQuestions: z.array(z.string()),
+});
+export type LlmEnrichmentPayload = z.infer<typeof llmEnrichmentPayloadSchema>;
+
+/** Stored on the lead: the validated payload plus provenance set by code. */
+export type LlmEnrichment = LlmEnrichmentPayload & { model: string; at: string };
 
 // ---------------------------------------------------------------------------
 // Messaging
