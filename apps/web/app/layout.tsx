@@ -58,6 +58,9 @@ export default function RootLayout({ children }: { children: ReactNode }) {
             <Link href="/dossiers" style={{ textDecoration: "none", opacity: 0.85 }}>
               Dossiers
             </Link>
+            <Link href="/activity" style={{ textDecoration: "none", opacity: 0.85 }}>
+              Actividad
+            </Link>
           </nav>
         </header>
         {children}
