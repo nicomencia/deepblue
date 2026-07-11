@@ -7,17 +7,26 @@
 
 import { ACTIVE_PLATFORMS, NEGOTIATION_HEADROOM, type JobPayload } from "@deepblue/core";
 import { briefs, events, jobs, type Db } from "@deepblue/db";
-import { and, eq } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 
 export async function enqueueSweeps(db: Db): Promise<number> {
   const activeBriefs = await db.select().from(briefs).where(eq(briefs.status, "active"));
   let created = 0;
 
   for (const brief of activeBriefs) {
+    // Per-brief, per-type: an unswept search for THIS brief is what would pile
+    // up. A user-wide check would let brief 1's fresh job starve brief 2
+    // forever, and queued fetch_listing jobs would block sweeps entirely.
     const [pending] = await db
       .select({ id: jobs.id })
       .from(jobs)
-      .where(and(eq(jobs.userId, brief.userId), eq(jobs.status, "queued")))
+      .where(
+        and(
+          eq(jobs.type, "search_sweep"),
+          eq(jobs.status, "queued"),
+          sql`${jobs.payload}->>'briefId' = ${brief.id}`,
+        ),
+      )
       .limit(1);
     if (pending) continue;
 
