@@ -43,6 +43,13 @@
       "when": 1783534344216,
       "tag": "0005_fluffy_reavers",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1783731143297,
+      "tag": "0006_daffy_starhawk",
+      "breakpoints": true
     }
   ]
 }

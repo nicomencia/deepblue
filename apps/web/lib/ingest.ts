@@ -4,10 +4,10 @@
  */
 
 import {
-  CONFIDENCE_GRADES,
   evaluateListing,
   extractCashPriceEur,
   extractDedupKey,
+  gradeAtMost,
   type ConfidenceGrade,
   type EvaluationResult,
   type JobPayload,
@@ -22,10 +22,6 @@ import { newEvalCaches, reevaluateLead } from "./reevaluate";
 
 /** Cap instant alerts per ingest batch — the rest land in the daily digest. */
 const MAX_ALERTS_PER_INGEST = 3;
-
-function gradeAtMost(grade: ConfidenceGrade, threshold: ConfidenceGrade): boolean {
-  return CONFIDENCE_GRADES.indexOf(grade) <= CONFIDENCE_GRADES.indexOf(threshold);
-}
 
 export interface IngestStats {
   received: number;
@@ -192,6 +188,10 @@ export async function ingestSearchResults(
         subject: `deepblue · candidato ${evaluation.verdict.overall}: ${item.title}`,
         text: composeAlert(item, evaluation),
       });
+      // Stamp so tomorrow's digest skips it — the user already saw this car.
+      if (lead) {
+        await db.update(leads).set({ alertedAt: new Date() }).where(eq(leads.id, lead.id));
+      }
     }
 
     await db.insert(events).values({

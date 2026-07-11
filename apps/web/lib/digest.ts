@@ -5,12 +5,15 @@
  * events log — safe across restarts and double-firing schedulers.
  */
 
+import { gradeAtMost, type ConfidenceGrade } from "@deepblue/core";
 import { briefs, events, leads, listings, users, type Db } from "@deepblue/db";
 import { and, asc, desc, eq, gte, sql } from "drizzle-orm";
 import { sendEmail } from "./email";
 import { newEvalCaches, reevaluateLead } from "./reevaluate";
 
 const MAX_LISTED = 25;
+/** Worst grade the digest bothers emailing; D/E stay on the dashboard only. */
+const DIGEST_FLOOR = (process.env.DIGEST_MAX_GRADE ?? "C") as ConfidenceGrade;
 
 type LeadRow = typeof leads.$inferSelect;
 type ListingRow = typeof listings.$inferSelect;
@@ -71,14 +74,27 @@ export async function runDigest(
       )
       .orderBy(asc(sql`${leads.verdict}->>'overall'`), asc(listings.priceEur));
 
+    // Email-worthy only: at least DIGEST_FLOOR, and not already sent as an
+    // instant alert. Everything else stays visible on the dashboard.
+    const mailable = fresh.filter(
+      (r) =>
+        r.lead.alertedAt == null &&
+        r.lead.verdict != null &&
+        gradeAtMost(r.lead.verdict.overall, DIGEST_FLOOR),
+    );
+
     await db.insert(events).values({
       userId: owner.id,
       type: "digest_run",
-      payload: { newLeads: fresh.length, windowStart: windowStart.toISOString() },
+      payload: {
+        newLeads: mailable.length,
+        skipped: fresh.length - mailable.length,
+        windowStart: windowStart.toISOString(),
+      },
     });
-    if (fresh.length === 0) continue;
+    if (mailable.length === 0) continue;
 
-    const { text, html } = composeDigest(fresh);
+    const { text, html } = composeDigest(mailable);
     const dateEs = new Intl.DateTimeFormat("es-ES", {
       timeZone: "Europe/Madrid",
       day: "numeric",
@@ -86,7 +102,7 @@ export async function runDigest(
     }).format(new Date());
     await sendEmail({
       to: owner.email,
-      subject: `deepblue · ${fresh.length} candidato${fresh.length === 1 ? "" : "s"} nuevo${fresh.length === 1 ? "" : "s"} — ${dateEs}`,
+      subject: `deepblue · ${mailable.length} candidato${mailable.length === 1 ? "" : "s"} nuevo${mailable.length === 1 ? "" : "s"} — ${dateEs}`,
       text,
       html,
     });

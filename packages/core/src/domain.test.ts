@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   ACTIVE_PLATFORMS,
   canTransition,
+  gradeAtMost,
   isPlatformActive,
   llmEnrichmentPayloadSchema,
   modelDossierSchema,
@@ -18,6 +19,20 @@ describe("active platforms", () => {
 
   it("only ever contains real platforms", () => {
     for (const p of ACTIVE_PLATFORMS) expect(PLATFORMS).toContain(p);
+  });
+});
+
+describe("gradeAtMost", () => {
+  it("accepts grades at or above the threshold (A is best)", () => {
+    expect(gradeAtMost("A", "C")).toBe(true);
+    expect(gradeAtMost("C", "C")).toBe(true);
+    expect(gradeAtMost("D", "C")).toBe(false);
+    expect(gradeAtMost("E", "C")).toBe(false);
+  });
+
+  it("a strict threshold only lets the top grade through", () => {
+    expect(gradeAtMost("A", "A")).toBe(true);
+    expect(gradeAtMost("B", "A")).toBe(false);
   });
 });
 

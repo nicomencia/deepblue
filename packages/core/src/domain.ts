@@ -163,6 +163,11 @@ export type NormalizedListing = z.infer<typeof normalizedListingSchema>;
 export const CONFIDENCE_GRADES = ["A", "B", "C", "D", "E"] as const;
 export type ConfidenceGrade = (typeof CONFIDENCE_GRADES)[number];
 
+/** Is `grade` at least as good as `threshold`? (A-best ordinal scale.) */
+export function gradeAtMost(grade: ConfidenceGrade, threshold: ConfidenceGrade): boolean {
+  return CONFIDENCE_GRADES.indexOf(grade) <= CONFIDENCE_GRADES.indexOf(threshold);
+}
+
 export type RiskTolerance = "low" | "medium" | "high";
 
 /** Every factor separates what is known from what is assumed from what is unverified. */
