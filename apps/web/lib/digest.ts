@@ -74,13 +74,11 @@ export async function runDigest(
       )
       .orderBy(asc(sql`${leads.verdict}->>'overall'`), asc(listings.priceEur));
 
-    // Email-worthy only: at least DIGEST_FLOOR, and not already sent as an
-    // instant alert. Everything else stays visible on the dashboard.
+    // Email-worthy only: at least DIGEST_FLOOR. Already-alerted leads stay in
+    // as a labeled recap — the digest is the complete daily picture even for
+    // users who ignore instant alerts. Below-floor stays dashboard-only.
     const mailable = fresh.filter(
-      (r) =>
-        r.lead.alertedAt == null &&
-        r.lead.verdict != null &&
-        gradeAtMost(r.lead.verdict.overall, DIGEST_FLOOR),
+      (r) => r.lead.verdict != null && gradeAtMost(r.lead.verdict.overall, DIGEST_FLOOR),
     );
 
     await db.insert(events).values({
@@ -88,7 +86,7 @@ export async function runDigest(
       type: "digest_run",
       payload: {
         newLeads: mailable.length,
-        skipped: fresh.length - mailable.length,
+        belowFloor: fresh.length - mailable.length,
         windowStart: windowStart.toISOString(),
       },
     });
@@ -124,6 +122,16 @@ function leadSummary({ lead, listing }: { lead: LeadRow; listing: ListingRow }):
     .join(" · ");
 
   const lines = [`[${v?.overall ?? "?"}] ${listing.title} — ${specs}`];
+  if (lead.alertedAt) {
+    const when = new Intl.DateTimeFormat("es-ES", {
+      timeZone: "Europe/Madrid",
+      day: "numeric",
+      month: "short",
+      hour: "2-digit",
+      minute: "2-digit",
+    }).format(lead.alertedAt);
+    lines.push(`    Ya avisado por alerta (${when})`);
+  }
   if (v?.repairExposureEur) {
     lines.push(
       `    Riesgos sin verificar: ~${v.repairExposureEur.min.toLocaleString("es-ES")}–${v.repairExposureEur.max.toLocaleString("es-ES")} € de exposición en reparaciones`,

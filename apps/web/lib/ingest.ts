@@ -188,7 +188,7 @@ export async function ingestSearchResults(
         subject: `deepblue · candidato ${evaluation.verdict.overall}: ${item.title}`,
         text: composeAlert(item, evaluation),
       });
-      // Stamp so tomorrow's digest skips it — the user already saw this car.
+      // Stamp so tomorrow's digest shows it as "ya avisado", not as news.
       if (lead) {
         await db.update(leads).set({ alertedAt: new Date() }).where(eq(leads.id, lead.id));
       }

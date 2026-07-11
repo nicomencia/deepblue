@@ -116,7 +116,7 @@ export const leads = pgTable(
     /** LLM read of the ad, stored raw so re-evaluations can re-merge it. */
     enrichment: jsonb("enrichment").$type<LlmEnrichment>(),
     enrichedAt: timestamp("enriched_at", { withTimezone: true }),
-    /** Set when an instant alert email fired — the digest skips these (no duplicates). */
+    /** Set when an instant alert email fired — the digest labels these as recap. */
     alertedAt: timestamp("alerted_at", { withTimezone: true }),
     deadReason: text("dead_reason"),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
