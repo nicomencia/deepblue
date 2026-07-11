@@ -1,33 +1,72 @@
 import { briefs, leads, listings } from "@deepblue/db";
-import { desc, eq, ne, sql } from "drizzle-orm";
+import { and, asc, count, desc, eq, ne, sql } from "drizzle-orm";
 import Link from "next/link";
 import { getDb } from "../lib/db";
 import { fmtEur, fmtKm, gradeVar } from "../lib/ui";
 
 export const dynamic = "force-dynamic";
 
-export default async function Home() {
+export default async function Home({
+  searchParams,
+}: {
+  searchParams: Promise<{ brief?: string }>;
+}) {
   const db = await getDb();
+  const { brief: briefParam } = await searchParams;
+
+  const allBriefs = await db
+    .select({ id: briefs.id, name: briefs.name })
+    .from(briefs)
+    .orderBy(asc(briefs.createdAt));
+  // Unknown/stale ids fall back to the all-briefs view rather than a dead page.
+  const activeBrief = allBriefs.find((b) => b.id === briefParam);
+
+  const countRows = await db
+    .select({ briefId: leads.briefId, n: count() })
+    .from(leads)
+    .where(ne(leads.state, "dead"))
+    .groupBy(leads.briefId);
+  const countByBrief = new Map(countRows.map((r) => [r.briefId, Number(r.n)]));
+  const totalActive = [...countByBrief.values()].reduce((a, b) => a + b, 0);
 
   const rows = await db
     .select({ lead: leads, listing: listings, briefName: briefs.name })
     .from(leads)
     .innerJoin(listings, eq(leads.listingId, listings.id))
     .innerJoin(briefs, eq(leads.briefId, briefs.id))
-    .where(ne(leads.state, "dead"))
+    .where(
+      activeBrief
+        ? and(ne(leads.state, "dead"), eq(leads.briefId, activeBrief.id))
+        : ne(leads.state, "dead"),
+    )
     .orderBy(desc(sql`(${leads.verdict}->>'score')::int`), desc(leads.createdAt))
     .limit(200);
 
   return (
     <main style={{ maxWidth: 1080, margin: "0 auto", padding: "2rem 1.5rem" }}>
+      {allBriefs.length > 1 && (
+        <nav style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap", marginBottom: "1rem" }}>
+          <Link href="/" style={tab(!activeBrief)}>
+            Todas <span style={tabCount}>{totalActive}</span>
+          </Link>
+          {allBriefs.map((b) => (
+            <Link key={b.id} href={`/?brief=${b.id}`} style={tab(activeBrief?.id === b.id)}>
+              {b.name} <span style={tabCount}>{countByBrief.get(b.id) ?? 0}</span>
+            </Link>
+          ))}
+        </nav>
+      )}
+
       <p style={{ color: "var(--ink-muted)", marginTop: 0 }}>
-        {rows.length} lead{rows.length === 1 ? "" : "s"} activos, ordenados por puntuación
+        {rows.length} lead{rows.length === 1 ? "" : "s"} activos
+        {activeBrief ? ` en «${activeBrief.name}»` : ""}, ordenados por puntuación
       </p>
 
       {rows.length === 0 ? (
         <p style={{ color: "var(--ink-muted)" }}>
-          Sin leads todavía. Crea una búsqueda en <Link href="/briefs">Búsquedas</Link> y
-          arranca el runner (<code>pnpm dev:runner</code>).
+          Sin leads todavía{activeBrief ? " en esta búsqueda" : ""}. Crea una búsqueda en{" "}
+          <Link href="/briefs">Búsquedas</Link> y arranca el runner (
+          <code>pnpm dev:runner</code>).
         </p>
       ) : (
         <div style={{ overflowX: "auto" }}>
@@ -96,3 +135,16 @@ export default async function Home() {
 
 const th: React.CSSProperties = { padding: "0.5rem 0.75rem" };
 const td: React.CSSProperties = { padding: "0.5rem 0.75rem" };
+
+const tab = (active: boolean): React.CSSProperties => ({
+  padding: "0.3rem 0.85rem",
+  borderRadius: 999,
+  textDecoration: "none",
+  fontSize: "0.85rem",
+  fontWeight: active ? 700 : 400,
+  color: "inherit",
+  background: active ? "var(--card)" : "transparent",
+  border: `1px solid ${active ? "var(--ink-muted)" : "var(--border)"}`,
+});
+
+const tabCount: React.CSSProperties = { color: "var(--ink-muted)", fontWeight: 400 };
