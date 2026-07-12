@@ -1,3 +1,4 @@
+import { dossierCoversModel } from "@deepblue/core";
 import { briefs, modelDossiers } from "@deepblue/db";
 import { desc, eq } from "drizzle-orm";
 import { getDb } from "../../lib/db";
@@ -24,12 +25,17 @@ export default async function DossiersPage() {
     .orderBy(modelDossiers.make, modelDossiers.model, desc(modelDossiers.version));
 
   const activeBriefs = await db.select().from(briefs).where(eq(briefs.status, "active"));
-  const covered = new Set(rows.map((d) => `${d.make.toLowerCase()}|${d.model.toLowerCase()}`));
+  // Same tolerant semantics as the verdict lookup: a dossier keyed "207"
+  // covers a brief hunting "207 RC".
+  const isCovered = (make: string, model: string) =>
+    rows.some(
+      (d) => d.make.toLowerCase() === make.toLowerCase() && dossierCoversModel(d.model, model),
+    );
   const missing = new Map<string, { make: string; model: string; generation?: string }>();
   for (const brief of activeBriefs) {
     for (const vehicle of brief.criteria.vehicles) {
       const key = `${vehicle.make.toLowerCase()}|${vehicle.model.toLowerCase()}`;
-      if (!covered.has(key) && !missing.has(key)) {
+      if (!isCovered(vehicle.make, vehicle.model) && !missing.has(key)) {
         missing.set(key, {
           make: vehicle.make,
           model: vehicle.model,

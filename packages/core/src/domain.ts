@@ -282,6 +282,17 @@ export const knownIssueSchema = z.object({
 });
 export type KnownIssue = z.infer<typeof knownIssueSchema>;
 
+/**
+ * Does a dossier keyed on `dossierModel` cover `model`? Exact match or word
+ * prefix ("207" covers "207 rc") — listing/brief model fields carry seller
+ * free text. Must stay in sync with getDossier's SQL (apps/web/lib/lookups).
+ */
+export function dossierCoversModel(dossierModel: string, model: string): boolean {
+  const d = dossierModel.toLowerCase();
+  const m = model.toLowerCase();
+  return m === d || m.startsWith(`${d} `);
+}
+
 export const modelDossierSchema = z.object({
   make: z.string(),
   model: z.string(),

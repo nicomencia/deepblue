@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   ACTIVE_PLATFORMS,
   canTransition,
+  dossierCoversModel,
   gradeAtMost,
   isPlatformActive,
   llmEnrichmentPayloadSchema,
@@ -19,6 +20,16 @@ describe("active platforms", () => {
 
   it("only ever contains real platforms", () => {
     for (const p of ACTIVE_PLATFORMS) expect(PLATFORMS).toContain(p);
+  });
+});
+
+describe("dossierCoversModel", () => {
+  it("matches exact and word-prefix models, case-insensitively", () => {
+    expect(dossierCoversModel("207", "207")).toBe(true);
+    expect(dossierCoversModel("207", "207 rc")).toBe(true);
+    expect(dossierCoversModel("Golf", "golf GTI")).toBe(true);
+    expect(dossierCoversModel("207", "2072")).toBe(false); // no partial-token match
+    expect(dossierCoversModel("207 rc", "207")).toBe(false); // prefix is one-way
   });
 });
 
