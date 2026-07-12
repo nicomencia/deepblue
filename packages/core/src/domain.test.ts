@@ -9,6 +9,7 @@ import {
   modelDossierSchema,
   normalizedListingSchema,
   PLATFORMS,
+  sameModelFamily,
 } from "./domain.js";
 
 describe("active platforms", () => {
@@ -30,6 +31,16 @@ describe("dossierCoversModel", () => {
     expect(dossierCoversModel("Golf", "golf GTI")).toBe(true);
     expect(dossierCoversModel("207", "2072")).toBe(false); // no partial-token match
     expect(dossierCoversModel("207 rc", "207")).toBe(false); // prefix is one-way
+  });
+});
+
+describe("sameModelFamily", () => {
+  it("is symmetric where dossier coverage is one-way", () => {
+    expect(sameModelFamily("207", "207 rc")).toBe(true);
+    expect(sameModelFamily("207 rc", "207")).toBe(true);
+    expect(sameModelFamily("golf", "golf")).toBe(true);
+    expect(sameModelFamily("207", "208")).toBe(false);
+    expect(sameModelFamily("serie 3", "serie 5")).toBe(false);
   });
 });
 

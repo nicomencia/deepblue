@@ -308,6 +308,16 @@ export function dossierCoversModel(dossierModel: string, model: string): boolean
   return m === d || m.startsWith(`${d} `);
 }
 
+/**
+ * Are two model strings the same family for price benchmarking? Symmetric
+ * word-prefix ("207" ↔ "207 rc"): variants must share comparables or seller
+ * free text fragments the sample. Trim/power weighting inside computeBenchmark
+ * keeps the variants honestly separated. Mirrored in SQL by getBenchmark.
+ */
+export function sameModelFamily(a: string, b: string): boolean {
+  return dossierCoversModel(a, b) || dossierCoversModel(b, a);
+}
+
 export const modelDossierSchema = z.object({
   make: z.string(),
   model: z.string(),

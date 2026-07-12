@@ -58,7 +58,11 @@ export async function getBenchmark(
           // and must not skew the benchmark while it's out of the loop.
           inArray(listings.platform, [...ACTIVE_PLATFORMS]),
           sql`lower(${listings.make}) = ${make.toLowerCase()}`,
-          sql`lower(${listings.model}) = ${model.toLowerCase()}`,
+          // Same family, both directions ("207" ↔ "207 rc") — seller free text
+          // must not fragment the sample. SQL mirror of core sameModelFamily().
+          sql`(lower(${listings.model}) = ${model.toLowerCase()}
+            or lower(${listings.model}) like ${`${model.toLowerCase()} %`}
+            or ${model.toLowerCase()} like lower(${listings.model}) || ' %')`,
           sql`upper(coalesce(${listings.countryCode}, 'ES')) = ${mkt}`,
         ),
       )
