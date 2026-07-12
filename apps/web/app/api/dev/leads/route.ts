@@ -26,6 +26,8 @@ export async function GET(req: Request): Promise<Response> {
       id: lead.id,
       platform: listing.platform,
       title: listing.title,
+      make: listing.make,
+      model: listing.model,
       description: listing.description?.slice(0, 2500) ?? null,
       priceEur: listing.priceEur,
       cashPriceEur: listing.cashPriceEur,

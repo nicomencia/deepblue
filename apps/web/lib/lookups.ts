@@ -88,17 +88,21 @@ export async function getDossier(
   const key = `${make.toLowerCase()}|${model.toLowerCase()}`;
   if (cache.has(key)) return cache.get(key);
 
+  // Listing model fields carry seller free text ("207 rc", "Golf GTI"); a
+  // dossier keyed on the base model must still match, so fall back to a
+  // word-prefix match. Exact match wins over prefix, then latest version.
+  const m = model.toLowerCase();
   const rows = await db
     .select({ content: modelDossiers.content })
     .from(modelDossiers)
     .where(
       and(
         sql`lower(${modelDossiers.make}) = ${make.toLowerCase()}`,
-        sql`lower(${modelDossiers.model}) = ${model.toLowerCase()}`,
+        sql`(lower(${modelDossiers.model}) = ${m} or ${m} like lower(${modelDossiers.model}) || ' %')`,
         isNotNull(modelDossiers.reviewedAt),
       ),
     )
-    .orderBy(desc(modelDossiers.version))
+    .orderBy(desc(sql`lower(${modelDossiers.model}) = ${m}`), desc(modelDossiers.version))
     .limit(1);
 
   const dossier = rows[0]?.content;
