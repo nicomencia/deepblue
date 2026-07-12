@@ -21,7 +21,11 @@ export async function POST(req: Request): Promise<Response> {
   if (!user) {
     return Response.json({ ok: false, error: "no user yet — POST /api/dev/seed first" }, { status: 409 });
   }
-  const result = await adoptListing(db, user.id, body);
+  const result = await adoptListing(db, user.id, {
+    url: body.url,
+    maxPriceEur: body.maxPriceEur,
+    briefId: body.briefId,
+  });
   return result.ok
     ? Response.json(result)
     : Response.json(result, { status: 400 });

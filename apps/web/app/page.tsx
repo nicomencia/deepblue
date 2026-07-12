@@ -4,16 +4,17 @@ import Link from "next/link";
 import { getDb } from "../lib/db";
 import { fmtEur, fmtKm, gradeVar } from "../lib/ui";
 import { adoptAd } from "./actions";
+import { AdoptSubmit } from "./adopt-submit";
 
 export const dynamic = "force-dynamic";
 
 export default async function Home({
   searchParams,
 }: {
-  searchParams: Promise<{ brief?: string }>;
+  searchParams: Promise<{ brief?: string; adopted?: string }>;
 }) {
   const db = await getDb();
-  const { brief: briefParam } = await searchParams;
+  const { brief: briefParam, adopted } = await searchParams;
 
   const allBriefs = await db
     .select({ id: briefs.id, name: briefs.name })
@@ -63,6 +64,19 @@ export default async function Home({
         {activeBrief ? ` en «${activeBrief.name}»` : ""}, ordenados por puntuación
       </p>
 
+      {adopted === "queued" && (
+        <p style={{ ...banner, borderColor: "var(--grade-a)", color: "var(--grade-a)" }}>
+          Anuncio en cola ✓ — el runner lo analizará en ~1 minuto y aparecerá aquí como lead.
+          Puedes seguir el progreso en <Link href="/activity">Actividad</Link>.
+        </p>
+      )}
+      {adopted === "invalid" && (
+        <p style={{ ...banner, borderColor: "var(--grade-e)", color: "var(--grade-e)" }}>
+          URL no reconocida — pega el enlace completo de un anuncio de Wallapop
+          (es.wallapop.com/item/…).
+        </p>
+      )}
+
       {/* Adopt a hand-found ad: analyzed, tracked and questioned like any lead */}
       <details
         style={{
@@ -99,9 +113,7 @@ export default async function Home({
               </option>
             ))}
           </select>
-          <button type="submit" style={adoptBtn}>
-            Adoptar
-          </button>
+          <AdoptSubmit style={adoptBtn} />
         </form>
         <p style={{ color: "var(--ink-muted)", fontSize: "0.8rem", margin: "0.4rem 0 0" }}>
           El runner analizará el anuncio en su siguiente ciclo (~1 min); aparecerá como lead
@@ -196,6 +208,13 @@ const tab = (active: boolean): React.CSSProperties => ({
 
 const tabCount: React.CSSProperties = { color: "var(--ink-muted)", fontWeight: 400 };
 
+const banner: React.CSSProperties = {
+  border: "1px solid",
+  borderRadius: 8,
+  padding: "0.5rem 0.8rem",
+  fontSize: "0.85rem",
+  margin: "0 0 1rem",
+};
 const adoptInput: React.CSSProperties = {
   padding: "0.4rem 0.6rem",
   borderRadius: 6,

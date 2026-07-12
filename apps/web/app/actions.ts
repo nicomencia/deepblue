@@ -2,6 +2,7 @@
 
 import { users } from "@deepblue/db";
 import { revalidatePath } from "next/cache";
+import { redirect } from "next/navigation";
 import { getDb } from "../lib/db";
 import { adoptListing } from "../lib/adopt";
 
@@ -19,7 +20,8 @@ export async function adoptAd(formData: FormData): Promise<void> {
     maxPriceEur: Number.isFinite(maxRaw) && maxRaw > 0 ? maxRaw : undefined,
     briefId: briefId && briefId !== "auto" ? briefId : undefined,
   });
-  if (!result.ok) throw new Error(result.error);
   revalidatePath("/");
   revalidatePath("/activity");
+  // Feedback banner on the dashboard (redirect must stay outside try/catch).
+  redirect(result.ok ? "/?adopted=queued" : "/?adopted=invalid");
 }
