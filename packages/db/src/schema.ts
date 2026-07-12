@@ -21,6 +21,7 @@ import type {
   BriefCriteria,
   ConfidenceVerdict,
   HardLimits,
+  IssueFinding,
   JobPayload,
   JobStatus,
   LeadState,
@@ -116,6 +117,8 @@ export const leads = pgTable(
     /** LLM read of the ad, stored raw so re-evaluations can re-merge it. */
     enrichment: jsonb("enrichment").$type<LlmEnrichment>(),
     enrichedAt: timestamp("enriched_at", { withTimezone: true }),
+    /** Human-verified issue outcomes (seller evidence); reapplied on every re-evaluation. */
+    issueFindings: jsonb("issue_findings").$type<IssueFinding[]>(),
     /** Set when an instant alert email fired — the digest labels these as recap. */
     alertedAt: timestamp("alerted_at", { withTimezone: true }),
     deadReason: text("dead_reason"),

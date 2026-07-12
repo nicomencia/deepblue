@@ -283,6 +283,21 @@ export const knownIssueSchema = z.object({
 export type KnownIssue = z.infer<typeof knownIssueSchema>;
 
 /**
+ * A human-verified outcome for one known issue on one lead: the seller showed
+ * evidence (or admitted the fault). Stored on the lead and applied on every
+ * re-evaluation — evidence beats theory in both directions.
+ */
+export const issueFindingSchema = z.object({
+  /** Identity: the dossier issue title this refers to. */
+  title: z.string(),
+  status: z.enum(["confirmed", "ruled_out"]),
+  /** What evidence decided it (factura, vídeo del arranque, diagnosis…). */
+  note: z.string().optional(),
+  at: z.string(),
+});
+export type IssueFinding = z.infer<typeof issueFindingSchema>;
+
+/**
  * Does a dossier keyed on `dossierModel` cover `model`? Exact match or word
  * prefix ("207" covers "207 rc") — listing/brief model fields carry seller
  * free text. Must stay in sync with getDossier's SQL (apps/web/lib/lookups).

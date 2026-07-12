@@ -1,10 +1,11 @@
-import type { VerdictFactor } from "@deepblue/core";
+import type { IssueAssessment, IssueFinding, VerdictFactor } from "@deepblue/core";
 import { briefs, events, leads, listings } from "@deepblue/db";
 import { desc, eq } from "drizzle-orm";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getDb } from "../../../lib/db";
 import { fmtDate, fmtEur, fmtKm, gradeVar } from "../../../lib/ui";
+import { setIssueFinding } from "./actions";
 
 export const dynamic = "force-dynamic";
 
@@ -175,6 +176,11 @@ export default async function LeadDetail({
                   <p style={{ margin: "0.4rem 0 0", fontSize: "0.85rem", color: "var(--ink-muted)" }}>
                     Se descarta con: {issue.verifyBy.join("; ")}
                   </p>
+                  <IssueControls
+                    leadId={lead.id}
+                    issue={issue}
+                    finding={lead.issueFindings?.find((f) => f.title === issue.title)}
+                  />
                 </div>
               ))}
             </>
@@ -253,6 +259,66 @@ function FactorCard({ name, factor }: { name: string; factor: VerdictFactor }) {
   );
 }
 
+/**
+ * The manual seller-verification loop: record what the seller proved (or
+ * admitted) and the verdict re-evaluates on the spot. Phase 2 chat will feed
+ * the same action automatically.
+ */
+function IssueControls({
+  leadId,
+  issue,
+  finding,
+}: {
+  leadId: string;
+  issue: IssueAssessment;
+  finding?: IssueFinding;
+}) {
+  return (
+    <form
+      action={setIssueFinding}
+      style={{ display: "flex", gap: "0.5rem", alignItems: "center", flexWrap: "wrap", marginTop: "0.6rem" }}
+    >
+      <input type="hidden" name="leadId" value={leadId} />
+      <input type="hidden" name="title" value={issue.title} />
+      {issue.status === "unconfirmed" ? (
+        <>
+          <input
+            name="note"
+            placeholder="Evidencia (factura, vídeo, diagnosis…)"
+            style={{
+              flex: "1 1 220px",
+              padding: "0.35rem 0.6rem",
+              borderRadius: 6,
+              border: "1px solid var(--border)",
+              background: "transparent",
+              color: "inherit",
+              fontSize: "0.85rem",
+            }}
+          />
+          <button type="submit" name="status" value="ruled_out" style={{ ...btn, color: "var(--grade-a)" }}>
+            Descartar
+          </button>
+          <button type="submit" name="status" value="confirmed" style={{ ...btn, color: "var(--grade-e)" }}>
+            Confirmar
+          </button>
+        </>
+      ) : (
+        <>
+          {(finding?.note || finding?.at) && (
+            <span style={{ color: "var(--ink-muted)", fontSize: "0.8rem" }}>
+              {finding.note ? `Evidencia: ${finding.note}` : "Sin nota"}
+              {finding.at ? ` · ${fmtDate(finding.at)}` : ""}
+            </span>
+          )}
+          <button type="submit" name="status" value="unconfirmed" style={btn}>
+            Reabrir
+          </button>
+        </>
+      )}
+    </form>
+  );
+}
+
 function FactList({ label, items }: { label: string; items: string[] }) {
   if (!items?.length) return null;
   return (
@@ -276,3 +342,13 @@ const card: React.CSSProperties = {
   margin: "0.75rem 0",
 };
 const h2: React.CSSProperties = { fontSize: "1rem", margin: "1.5rem 0 0.5rem" };
+const btn: React.CSSProperties = {
+  padding: "0.3rem 0.8rem",
+  borderRadius: 6,
+  border: "1px solid var(--border)",
+  background: "transparent",
+  color: "inherit",
+  fontSize: "0.85rem",
+  fontWeight: 600,
+  cursor: "pointer",
+};

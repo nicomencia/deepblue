@@ -65,6 +65,71 @@ const dsgIssue = {
   sources: ["https://example.com"],
 };
 
+// --- Issue findings: seller evidence beats theory ------------------------------
+
+describe("issue findings", () => {
+  const auto = { gearbox: "Automático", km: 70_000, priceEur: 10_000 };
+  const evalWith = (findings?: Parameters<typeof evaluateListing>[5]) =>
+    evaluateListing(listing(auto), criteria(), hardLimits, benchmark, dossier([dsgIssue]), findings);
+
+  it("ruled_out removes the expected cost and stops asking about it", () => {
+    const base = evalWith().verdict;
+    const cleared = evalWith([
+      { title: dsgIssue.title, status: "ruled_out", note: "factura", at: "2026-07-12" },
+    ]).verdict;
+    expect(cleared.factors.modelReliability.score).toBe(95); // no cost left
+    expect(cleared.factors.modelReliability.score).toBeGreaterThan(
+      base.factors.modelReliability.score,
+    );
+    expect(cleared.issues[0]?.status).toBe("ruled_out");
+    expect(cleared.openQuestions.join(" ")).not.toContain("¿Da tirones?");
+    expect(base.openQuestions.join(" ")).toContain("¿Da tirones?");
+  });
+
+  it("confirmed bills the full worst-case cost", () => {
+    const confirmed = evalWith([
+      { title: dsgIssue.title, status: "confirmed", at: "2026-07-12" },
+    ]).verdict;
+    // full 2.000 € on a 10.000 € car → 95 − 50 = 45
+    expect(confirmed.factors.modelReliability.score).toBe(45);
+  });
+
+  it("a confirmed critical issue vetoes the overall grade", () => {
+    const critical = { ...dsgIssue, title: "Rotura de motor", severity: "critical" as const };
+    const v = evaluateListing(
+      listing(auto),
+      criteria(),
+      hardLimits,
+      benchmark,
+      dossier([critical]),
+      [{ title: "Rotura de motor", status: "confirmed", at: "2026-07-12" }],
+    ).verdict;
+    expect(v.vetoes).toContain("critical_issue_confirmed");
+    expect(v.score).toBeLessThanOrEqual(45);
+  });
+
+  it("resolving issues raises the confidence axis", () => {
+    const base = evalWith().verdict;
+    const cleared = evalWith([
+      { title: dsgIssue.title, status: "ruled_out", at: "2026-07-12" },
+    ]).verdict;
+    expect(cleared.confidencePct).toBeGreaterThan(base.confidencePct);
+  });
+
+  it("a finding for an issue that no longer applies is ignored harmlessly", () => {
+    const v = evaluateListing(
+      listing({ gearbox: "Manual", km: 100_000 }),
+      criteria(),
+      hardLimits,
+      benchmark,
+      dossier([dsgIssue]),
+      [{ title: dsgIssue.title, status: "confirmed", at: "2026-07-12" }],
+    ).verdict;
+    expect(v.issues).toHaveLength(0);
+    expect(v.factors.modelReliability.score).toBe(90);
+  });
+});
+
 // --- Grade bands --------------------------------------------------------------
 
 describe("scoreToGrade", () => {

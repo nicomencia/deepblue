@@ -18,6 +18,7 @@ import type {
   ConfidenceVerdict,
   HardLimits,
   IssueAssessment,
+  IssueFinding,
   KnownIssue,
   LlmEnrichment,
   ModelDossier,
@@ -87,10 +88,11 @@ export function evaluateListing(
   hardLimits: HardLimits,
   benchmark?: PriceBenchmark,
   dossier?: ModelDossier,
+  findings?: IssueFinding[],
 ): EvaluationResult {
   // --- Hard filters: these kill the lead outright -------------------------
   const deadReason = hardFilterReason(listing, criteria, hardLimits);
-  const verdict = buildVerdict(listing, criteria, hardLimits, benchmark, dossier);
+  const verdict = buildVerdict(listing, criteria, hardLimits, benchmark, dossier, findings);
   if (deadReason) return { outcome: "dead", deadReason, verdict };
   return { outcome: "shortlisted", verdict };
 }
@@ -188,6 +190,7 @@ interface ReliabilityAssessment {
 function assessModelReliability(
   listing: NormalizedListing,
   dossier?: ModelDossier,
+  findings?: IssueFinding[],
 ): ReliabilityAssessment {
   if (!dossier) {
     return {
@@ -206,10 +209,13 @@ function assessModelReliability(
   }
 
   const applicableIssues = dossier.knownIssues.filter((issue) => issueApplies(listing, issue));
+  // Human-verified findings (seller evidence) override the default status;
+  // the cost math below already prices each status correctly.
+  const findingByTitle = new Map((findings ?? []).map((f) => [f.title, f.status]));
   const issues: IssueAssessment[] = applicableIssues.map((issue) => ({
     title: issue.title,
     severity: issue.severity,
-    status: "unconfirmed", // seller answers move this to confirmed/ruled_out
+    status: findingByTitle.get(issue.title) ?? "unconfirmed",
     likelihood: likelihoodFor(listing, issue),
     typicalRepairCostEur: issue.typicalRepairCostEur,
     verifyBy: issue.evidence,
@@ -265,8 +271,12 @@ function assessModelReliability(
       unverified: [],
     },
     issues,
-    questions: applicableIssues.flatMap((i) => i.sellerQuestions),
+    // Only unresolved issues still generate seller questions and evidence asks.
+    questions: applicableIssues
+      .filter((_, idx) => issues[idx]?.status === "unconfirmed")
+      .flatMap((i) => i.sellerQuestions),
     wouldRaise: applicableIssues
+      .filter((_, idx) => issues[idx]?.status === "unconfirmed")
       .slice(0, 3)
       .map((i) => `Evidencia que descartaría «${i.title}»: ${i.evidence.join("; ")}`),
     criticalConfirmed: issues.some((i) => i.status === "confirmed" && i.severity === "critical"),
@@ -488,11 +498,12 @@ function buildVerdict(
   hardLimits: HardLimits,
   benchmark?: PriceBenchmark,
   dossier?: ModelDossier,
+  findings?: IssueFinding[],
 ): ConfidenceVerdict {
   const openQuestions: string[] = [];
 
   const unitEvidence = assessUnit(listing, criteria, openQuestions);
-  const reliability = assessModelReliability(listing, dossier);
+  const reliability = assessModelReliability(listing, dossier, findings);
   openQuestions.push(...reliability.questions);
   const price = assessPrice(listing, criteria, benchmark);
   const sellerCredibility = price.scamSignal

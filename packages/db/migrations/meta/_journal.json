@@ -50,6 +50,13 @@
       "when": 1783731143297,
       "tag": "0006_daffy_starhawk",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1783816773966,
+      "tag": "0007_loud_psylocke",
+      "breakpoints": true
     }
   ]
 }

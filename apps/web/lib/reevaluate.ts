@@ -82,7 +82,14 @@ export async function reevaluateLead(
     caches.benchmark,
   );
   const dossier = await getDossier(db, nl.make, nl.model, caches.dossier);
-  const evaluation = evaluateListing(nl, brief.criteria, brief.hardLimits, benchmark, dossier);
+  const evaluation = evaluateListing(
+    nl,
+    brief.criteria,
+    brief.hardLimits,
+    benchmark,
+    dossier,
+    lead.issueFindings ?? undefined,
+  );
 
   // Rules rebuild the verdict from scratch; a stored LLM enrichment is
   // re-merged on top (bounded deltas, vetoes reapplied inside).
