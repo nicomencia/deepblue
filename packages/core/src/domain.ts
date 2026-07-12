@@ -333,6 +333,57 @@ export const modelDossierSchema = z.object({
 export type ModelDossier = z.infer<typeof modelDossierSchema>;
 
 // ---------------------------------------------------------------------------
+// Discovery — help the user find the right model(s) before any brief exists
+// ---------------------------------------------------------------------------
+
+/** The intake: what the user actually needs, structured but in their words. */
+export const discoveryProfileSchema = z.object({
+  budgetEur: z.number(),
+  /** Free text: "diario ciudad + viajes", "juguete de findes"… */
+  usage: z.string(),
+  kmPerYear: z.number().optional(),
+  seatsMin: z.number().optional(),
+  fuelPreference: z.array(z.enum(["gasoline", "diesel", "hybrid", "electric"])).optional(),
+  gearbox: z.enum(["manual", "automatic", "any"]).optional(),
+  /** Ranked what-matters: "fiabilidad", "diversión", "coste de uso"… */
+  priorities: z.array(z.string()),
+  mustHaves: z.array(z.string()),
+  dealBreakers: z.array(z.string()),
+  notes: z.string().optional(),
+});
+export type DiscoveryProfile = z.infer<typeof discoveryProfileSchema>;
+
+/** One concrete hunt proposal: specific enough to become a brief in one click. */
+export const modelRecommendationSchema = z.object({
+  make: z.string(),
+  model: z.string(),
+  /** Trims/engines worth hunting ("1.6 THP 175", "GTI Performance DSG"). */
+  versions: z.array(z.string()),
+  /** Trims/engines to avoid, each with the reason inline. */
+  avoidVersions: z.array(z.string()),
+  yearMin: z.number().optional(),
+  yearMax: z.number().optional(),
+  /** Realistic Spanish second-hand band for the recommended config. */
+  priceBandEur: z.object({ min: z.number(), max: z.number() }),
+  whyFits: z.array(z.string()),
+  /** Known weak points, one line each — the dossier deepens them later. */
+  watchouts: z.array(z.string()),
+  sources: z.array(z.string()),
+});
+export type ModelRecommendation = z.infer<typeof modelRecommendationSchema>;
+
+/** Validated at the LLM trust boundary, whichever lane produced it. */
+export const discoveryReportSchema = z.object({
+  /** 2–3 frases: la lectura del perfil y el criterio del corte. */
+  headline: z.string(),
+  recommendations: z.array(modelRecommendationSchema).min(1).max(5),
+  /** Models a user like this would expect to see, and why they lost. */
+  discarded: z.array(z.object({ model: z.string(), reason: z.string() })),
+  sources: z.array(z.string()),
+});
+export type DiscoveryReport = z.infer<typeof discoveryReportSchema>;
+
+// ---------------------------------------------------------------------------
 // LLM verdict enrichment — refinement, never authority
 // ---------------------------------------------------------------------------
 

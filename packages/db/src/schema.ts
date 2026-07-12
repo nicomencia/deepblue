@@ -20,6 +20,8 @@ import type {
   AutonomyMode,
   BriefCriteria,
   ConfidenceVerdict,
+  DiscoveryProfile,
+  DiscoveryReport,
   HardLimits,
   IssueFinding,
   JobPayload,
@@ -211,6 +213,29 @@ export const runners = pgTable("runners", {
   lastSeenAt: timestamp("last_seen_at", { withTimezone: true }),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
+
+/**
+ * Discovery sessions: the "which car should I even hunt?" advisor. The intake
+ * profile is filled by the user; the report arrives via the LLM lane (API key)
+ * or a Claude Code session import, and its recommendations become briefs.
+ */
+export const discoveries = pgTable(
+  "discoveries",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    userId: uuid("user_id").notNull().references(() => users.id),
+    profile: jsonb("profile").$type<DiscoveryProfile>().notNull(),
+    report: jsonb("report").$type<DiscoveryReport>(),
+    /** Which lane produced the report: model id or "claude-code-session". */
+    reportSource: text("report_source"),
+    status: text("status").$type<"pending" | "ready" | "archived">()
+      .notNull()
+      .default("pending"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    reportAt: timestamp("report_at", { withTimezone: true }),
+  },
+  (t) => [index("discoveries_user_idx").on(t.userId)],
+);
 
 /** Global reliability knowledge base — source-cited, versioned, reviewed before use. */
 export const modelDossiers = pgTable(

@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   ACTIVE_PLATFORMS,
   canTransition,
+  discoveryReportSchema,
   dossierCoversModel,
   gradeAtMost,
   isPlatformActive,
@@ -122,6 +123,24 @@ describe("LLM trust-boundary schemas", () => {
     expect(modelDossierSchema.safeParse({
       make: "VW", model: "Golf", knownIssues: [noSources], recalls: [], generalNotes: [], sources: [],
     }).success).toBe(false);
+  });
+
+  it("discoveryReportSchema demands 1–5 concrete recommendations", () => {
+    const rec = {
+      make: "Toyota",
+      model: "GT86",
+      versions: ["2.0 200 CV"],
+      avoidVersions: [],
+      priceBandEur: { min: 14_000, max: 19_000 },
+      whyFits: ["Atmosférico fiable y divertido"],
+      watchouts: ["Muelles de válvula (recall 2019)"],
+      sources: ["https://example.com"],
+    };
+    const report = { headline: "Perfil de findes.", recommendations: [rec], discarded: [], sources: [] };
+    expect(discoveryReportSchema.parse(report).recommendations).toHaveLength(1);
+    expect(
+      discoveryReportSchema.safeParse({ ...report, recommendations: [] }).success,
+    ).toBe(false);
   });
 
   it("accepts a minimal enrichment payload and rejects a delta-less adjustment", () => {

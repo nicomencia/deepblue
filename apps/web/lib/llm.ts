@@ -6,9 +6,10 @@
 
 import Anthropic from "@anthropic-ai/sdk";
 
-/** Dossier research wants the strongest model; both overridable per env. */
+/** Dossier research wants the strongest model; all overridable per env. */
 export const DOSSIER_MODEL = process.env.DEEPBLUE_DOSSIER_MODEL ?? "claude-opus-4-8";
 export const ENRICH_MODEL = process.env.DEEPBLUE_ENRICH_MODEL ?? "claude-opus-4-8";
+export const DISCOVERY_MODEL = process.env.DEEPBLUE_DISCOVERY_MODEL ?? "claude-opus-4-8";
 
 export function isLlmConfigured(): boolean {
   return Boolean(process.env.ANTHROPIC_API_KEY);
