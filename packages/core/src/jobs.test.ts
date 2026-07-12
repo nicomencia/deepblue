@@ -12,6 +12,21 @@ describe("job payloads", () => {
     expect(parsed.type).toBe("check_listing");
   });
 
+  it("fetch_listing carries an optional adopt intent (manual-lead adoption)", () => {
+    const parsed = jobPayloadSchema.parse({
+      type: "fetch_listing",
+      platform: "wallapop",
+      platformListingId: "1267668806",
+      url: "https://es.wallapop.com/item/x-1267668806",
+      adopt: { maxPriceEur: 6000 },
+    });
+    expect(parsed.type === "fetch_listing" && parsed.adopt?.maxPriceEur).toBe(6000);
+    // and remains optional for the sweep-enrichment path
+    expect(
+      jobPayloadSchema.safeParse({ type: "fetch_listing", platform: "wallapop", platformListingId: "a" }).success,
+    ).toBe(true);
+  });
+
   it("still rejects unknown job types and platforms", () => {
     expect(jobPayloadSchema.safeParse({ type: "delete_everything", platform: "wallapop" }).success).toBe(false);
     expect(

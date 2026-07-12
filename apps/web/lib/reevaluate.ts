@@ -97,8 +97,11 @@ export async function reevaluateLead(
     ? applyEnrichment(evaluation.verdict, lead.enrichment, brief.criteria.riskTolerance ?? "medium")
     : evaluation.verdict;
 
+  // Manual (adopted) leads never die on hard filters — the user explicitly
+  // wants this ad tracked; the reason stays visible as a warning instead.
+  // The reaper still kills them honestly when the ad is truly gone.
   const nextState =
-    evaluation.outcome === "dead" && canTransition(lead.state, "dead")
+    evaluation.outcome === "dead" && lead.origin !== "manual" && canTransition(lead.state, "dead")
       ? ("dead" as const)
       : lead.state;
 

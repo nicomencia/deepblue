@@ -81,11 +81,27 @@ export default async function LeadDetail({
       </p>
       <p style={{ color: "var(--ink-muted)", fontSize: "0.85rem" }}>
         Búsqueda: {brief.name} · Estado: <strong>{lead.state}</strong>
-        {lead.deadReason ? ` (${lead.deadReason})` : ""}
+        {lead.state === "dead" && lead.deadReason ? ` (${lead.deadReason})` : ""}
+        {lead.origin === "manual" ? " · adoptado manualmente" : ""}
         {listing.sellerName
           ? ` · Vendedor: ${listing.sellerName}${listing.sellerType === "dealer" ? " (profesional)" : ""}`
           : ""}
       </p>
+
+      {lead.origin === "manual" && lead.state !== "dead" && lead.deadReason && (
+        <p
+          style={{
+            border: "1px solid var(--grade-c)",
+            color: "var(--grade-c)",
+            borderRadius: 8,
+            padding: "0.5rem 0.8rem",
+            fontSize: "0.85rem",
+          }}
+        >
+          No pasaría los filtros de esta búsqueda ({lead.deadReason}) — se mantiene vivo por
+          adopción manual.
+        </p>
+      )}
 
       {v ? (
         <>

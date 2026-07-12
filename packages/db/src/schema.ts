@@ -112,6 +112,8 @@ export const leads = pgTable(
     briefId: uuid("brief_id").notNull().references(() => briefs.id),
     listingId: uuid("listing_id").notNull().references(() => listings.id),
     state: text("state").$type<LeadState>().notNull().default("discovered"),
+    /** "manual" = adopted by the user from a pasted URL; survives hard filters. */
+    origin: text("origin").$type<"sweep" | "manual">().notNull().default("sweep"),
     autonomyMode: text("autonomy_mode").$type<AutonomyMode>()
       .notNull()
       .default("draft_only"),

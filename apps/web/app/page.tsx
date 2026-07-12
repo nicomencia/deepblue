@@ -3,6 +3,7 @@ import { and, asc, count, desc, eq, ne, sql } from "drizzle-orm";
 import Link from "next/link";
 import { getDb } from "../lib/db";
 import { fmtEur, fmtKm, gradeVar } from "../lib/ui";
+import { adoptAd } from "./actions";
 
 export const dynamic = "force-dynamic";
 
@@ -61,6 +62,44 @@ export default async function Home({
         {rows.length} lead{rows.length === 1 ? "" : "s"} activos
         {activeBrief ? ` en «${activeBrief.name}»` : ""}, ordenados por puntuación
       </p>
+
+      {/* Adopt a hand-found ad: analyzed, tracked and questioned like any lead */}
+      <details style={{ margin: "0 0 1rem" }}>
+        <summary style={{ cursor: "pointer", fontSize: "0.9rem", color: "var(--ink-muted)" }}>
+          Adoptar un anuncio que has encontrado tú
+        </summary>
+        <form
+          action={adoptAd}
+          style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap", marginTop: "0.6rem" }}
+        >
+          <input
+            name="url"
+            required
+            placeholder="https://es.wallapop.com/item/…"
+            style={{ ...adoptInput, flex: "2 1 320px" }}
+          />
+          <input
+            name="maxPriceEur"
+            placeholder="Tu precio máx (€)"
+            style={{ ...adoptInput, flex: "1 1 140px" }}
+          />
+          <select name="briefId" style={{ ...adoptInput, flex: "1 1 160px" }} defaultValue="auto">
+            <option value="auto">Búsqueda: automática</option>
+            {allBriefs.map((b) => (
+              <option key={b.id} value={b.id}>
+                {b.name}
+              </option>
+            ))}
+          </select>
+          <button type="submit" style={adoptBtn}>
+            Adoptar
+          </button>
+        </form>
+        <p style={{ color: "var(--ink-muted)", fontSize: "0.8rem", margin: "0.4rem 0 0" }}>
+          El runner analizará el anuncio en su siguiente ciclo (~1 min); aparecerá como lead
+          con veredicto completo y seguimiento de vida del anuncio.
+        </p>
+      </details>
 
       {rows.length === 0 ? (
         <p style={{ color: "var(--ink-muted)" }}>
@@ -148,3 +187,23 @@ const tab = (active: boolean): React.CSSProperties => ({
 });
 
 const tabCount: React.CSSProperties = { color: "var(--ink-muted)", fontWeight: 400 };
+
+const adoptInput: React.CSSProperties = {
+  padding: "0.4rem 0.6rem",
+  borderRadius: 6,
+  border: "1px solid var(--border)",
+  background: "transparent",
+  color: "inherit",
+  font: "inherit",
+  fontSize: "0.85rem",
+};
+const adoptBtn: React.CSSProperties = {
+  padding: "0.4rem 1rem",
+  borderRadius: 6,
+  border: "1px solid var(--border)",
+  background: "transparent",
+  color: "inherit",
+  fontSize: "0.85rem",
+  fontWeight: 600,
+  cursor: "pointer",
+};

@@ -1,0 +1,1 @@
+ALTER TABLE "leads" ADD COLUMN "origin" text DEFAULT 'sweep' NOT NULL;

@@ -2,6 +2,7 @@ import { listingCheckResultSchema, normalizedListingSchema } from "@deepblue/cor
 import { jobs } from "@deepblue/db";
 import { eq } from "drizzle-orm";
 import { z } from "zod";
+import { completeAdoption } from "../../../../../../lib/adopt";
 import { getDb } from "../../../../../../lib/db";
 import { ingestListingDetail, ingestSearchResults } from "../../../../../../lib/ingest";
 import { applyListingCheck } from "../../../../../../lib/reaper";
@@ -34,7 +35,10 @@ export async function POST(
     ingestStats = await ingestSearchResults(db, job.payload.briefId, items);
   } else if (report.status === "succeeded" && job.payload.type === "fetch_listing") {
     const item = normalizedListingSchema.parse(report.result);
-    ingestStats = await ingestListingDetail(db, item);
+    // Adoption intent rides the same job type; the Core decides what it means.
+    ingestStats = job.payload.adopt
+      ? await completeAdoption(db, job.userId, item, job.payload.adopt)
+      : await ingestListingDetail(db, item);
   } else if (report.status === "succeeded" && job.payload.type === "check_listing") {
     const check = listingCheckResultSchema.parse(report.result);
     ingestStats = await applyListingCheck(db, check);

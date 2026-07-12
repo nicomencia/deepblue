@@ -42,8 +42,20 @@ export const searchSweepPayload = z.object({
 export const fetchListingPayload = z.object({
   type: z.literal("fetch_listing"),
   platform: platformSchema,
+  /** May be a provisional web id from a pasted URL; the adapter resolves it. */
   platformListingId: z.string(),
   url: z.string().optional(),
+  /**
+   * Present when the user adopted this ad by hand: on ingest, the Core turns
+   * it into a manual lead (matching or creating its brief) instead of just
+   * refreshing listing detail.
+   */
+  adopt: z
+    .object({
+      maxPriceEur: z.number().optional(),
+      briefId: z.string().optional(),
+    })
+    .optional(),
 });
 
 /** Liveness probe: is this specific listing still on sale, reserved, or gone? */

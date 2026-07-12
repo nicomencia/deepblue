@@ -64,6 +64,13 @@
       "when": 1783891803365,
       "tag": "0008_complex_bug",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1783893772171,
+      "tag": "0009_curvy_metal_master",
+      "breakpoints": true
     }
   ]
 }

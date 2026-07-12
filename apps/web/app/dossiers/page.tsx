@@ -1,6 +1,6 @@
 import { dossierCoversModel } from "@deepblue/core";
 import { briefs, modelDossiers } from "@deepblue/db";
-import { desc, eq } from "drizzle-orm";
+import { desc, inArray } from "drizzle-orm";
 import { getDb } from "../../lib/db";
 import { isLlmConfigured } from "../../lib/llm";
 import { fmtDate } from "../../lib/ui";
@@ -24,7 +24,12 @@ export default async function DossiersPage() {
     .from(modelDossiers)
     .orderBy(modelDossiers.make, modelDossiers.model, desc(modelDossiers.version));
 
-  const activeBriefs = await db.select().from(briefs).where(eq(briefs.status, "active"));
+  // Active hunts AND paused "Seguimiento" briefs (manual adoptions): the
+  // dossier-first rule applies to both — anything evaluated needs coverage.
+  const activeBriefs = await db
+    .select()
+    .from(briefs)
+    .where(inArray(briefs.status, ["active", "paused"]));
   // Same tolerant semantics as the verdict lookup: a dossier keyed "207"
   // covers a brief hunting "207 RC".
   const isCovered = (make: string, model: string) =>

@@ -105,7 +105,16 @@ export const wallapopAdapter: PlatformAdapter = {
   async fetchListing(ref: ListingRef): Promise<NormalizedListing> {
     // Detail page carries what search omits: gearbox, power, doors, eco label,
     // full description — several of the agent's open questions answer themselves.
-    const detail = await fetchJson<ItemDetail>(`${API_BASE}/items/${ref.platformListingId}`);
+    let detail = await fetchJson<ItemDetail>(`${API_BASE}/items/${ref.platformListingId}`);
+    if (!detail?.id && ref.url) {
+      // Adoption path: a pasted web URL carries a legacy numeric id the API
+      // rejects; the item page's __NEXT_DATA__ holds the canonical one.
+      const canonical = await resolveItemIdFromPage(ref.url);
+      if (canonical) {
+        await sleep(500 + Math.random() * 1000);
+        detail = await fetchJson<ItemDetail>(`${API_BASE}/items/${canonical}`);
+      }
+    }
     if (!detail?.id) throw new Error(`wallapop item ${ref.platformListingId} not found`);
 
     // Seller reputation for the sellerCredibility factor. Non-fatal if missing.
@@ -158,6 +167,17 @@ async function fetchJson<T>(url: string): Promise<T | null> {
   const res = await fetch(url, { headers: HEADERS });
   if (!res.ok) return null;
   return (await res.json()) as T;
+}
+
+/** Canonical item id from an item web page ("pageProps":{"item":{"id":"…"}}). */
+async function resolveItemIdFromPage(url: string): Promise<string | null> {
+  const res = await fetch(url, { headers: HEADERS });
+  if (!res.ok) return null;
+  const html = await res.text();
+  const match =
+    html.match(/"pageProps":\{"item":\{"id":"([a-z0-9]+)"/) ??
+    html.match(/"itemsFavoriteState":\{"([a-z0-9]+)":/);
+  return match?.[1] ?? null;
 }
 
 // --- Item detail / user shapes (all optional, nothing trusted) --------------
