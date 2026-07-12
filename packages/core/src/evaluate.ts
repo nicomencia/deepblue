@@ -245,27 +245,24 @@ function assessModelReliability(
   const priceRef = Math.max(effectivePrice(listing) ?? 8000, 3000);
   const score = clamp(95 - (expectedCost / priceRef) * 250);
 
-  // One summary line per list; the verdict's issues[] is the single detailed
-  // view (each issue carries status, likelihood, cost and how to rule it out).
+  // Exactly one summary line ("7/7 riesgos sin verificar"); the verdict's
+  // issues[] is the single detailed view (status, likelihood, cost, evidence).
   const confirmed = issues.filter((i) => i.status === "confirmed").length;
   const ruledOut = issues.filter((i) => i.status === "ruled_out").length;
   const unconfirmed = issues.length - confirmed - ruledOut;
-  const knownParts = [
-    `${issues.length} riesgo${issues.length === 1 ? " conocido del modelo aplica" : "s conocidos del modelo aplican"} a esta unidad`,
+  const summaryParts = [
+    `${unconfirmed}/${issues.length} riesgo${issues.length === 1 ? "" : "s"} del modelo sin verificar`,
   ];
-  if (confirmed > 0) knownParts.push(`${confirmed} confirmado${confirmed === 1 ? "" : "s"}`);
-  if (ruledOut > 0) knownParts.push(`${ruledOut} descartado${ruledOut === 1 ? "" : "s"}`);
+  if (confirmed > 0) summaryParts.push(`${confirmed} confirmado${confirmed === 1 ? "" : "s"}`);
+  if (ruledOut > 0) summaryParts.push(`${ruledOut} descartado${ruledOut === 1 ? "" : "s"}`);
 
   return {
     factor: {
       grade: scoreToGrade(score),
       score,
-      known: [knownParts.join(" · ")],
+      known: [summaryParts.join(" · ")],
       assumed: [],
-      unverified:
-        unconfirmed > 0
-          ? [`${unconfirmed} pendiente${unconfirmed === 1 ? "" : "s"} de verificar con el vendedor`]
-          : [],
+      unverified: [],
     },
     issues,
     questions: applicableIssues.flatMap((i) => i.sellerQuestions),
