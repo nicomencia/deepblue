@@ -16,9 +16,15 @@ const FACTOR_NAMES: Record<string, string> = {
 };
 
 const STATUS_ES: Record<string, string> = {
-  unconfirmed: "sin confirmar",
-  confirmed: "confirmado",
-  ruled_out: "descartado",
+  unconfirmed: "Pendiente",
+  confirmed: "Confirmado",
+  ruled_out: "Descartado",
+};
+/** Status colors: pending = attention, confirmed = bad news, ruled out = good. */
+const STATUS_COLOR: Record<string, string> = {
+  unconfirmed: "var(--grade-c)",
+  confirmed: "var(--grade-e)",
+  ruled_out: "var(--grade-a)",
 };
 const LIKELIHOOD_ES: Record<string, string> = {
   low: "baja",
@@ -144,10 +150,24 @@ export default async function LeadDetail({
               <h2 style={h2}>Riesgos conocidos aplicables a esta unidad</h2>
               {v.issues.map((issue) => (
                 <div key={issue.title} style={card}>
+                  <span
+                    style={{
+                      display: "inline-block",
+                      padding: "0.05rem 0.55rem",
+                      marginRight: "0.5rem",
+                      borderRadius: 999,
+                      fontSize: "0.75rem",
+                      fontWeight: 700,
+                      color: STATUS_COLOR[issue.status] ?? "var(--ink-muted)",
+                      border: "1px solid currentcolor",
+                      verticalAlign: "middle",
+                    }}
+                  >
+                    {STATUS_ES[issue.status] ?? issue.status}
+                  </span>
                   <strong>{issue.title}</strong>{" "}
                   <span style={{ color: "var(--ink-muted)" }}>
-                    · {STATUS_ES[issue.status] ?? issue.status} · probabilidad{" "}
-                    {LIKELIHOOD_ES[issue.likelihood] ?? issue.likelihood}
+                    · probabilidad {LIKELIHOOD_ES[issue.likelihood] ?? issue.likelihood}
                     {issue.typicalRepairCostEur
                       ? ` · ~${issue.typicalRepairCostEur.min.toLocaleString("es-ES")}–${issue.typicalRepairCostEur.max.toLocaleString("es-ES")} €`
                       : ""}

@@ -129,12 +129,6 @@ const LIKELIHOOD_P: Record<IssueAssessment["likelihood"], number> = {
   high: 0.8,
 };
 
-const LIKELIHOOD_ES: Record<IssueAssessment["likelihood"], string> = {
-  low: "probabilidad baja",
-  medium: "probabilidad media",
-  high: "probabilidad alta",
-};
-
 function fieldMatches(value: string | undefined, token: string): boolean {
   // Unknown field → can't rule the issue out → applicable.
   if (value === undefined) return true;
@@ -251,22 +245,27 @@ function assessModelReliability(
   const priceRef = Math.max(effectivePrice(listing) ?? 8000, 3000);
   const score = clamp(95 - (expectedCost / priceRef) * 250);
 
-  const known = issues.map((i) => {
-    const cost = i.typicalRepairCostEur
-      ? `, ~${i.typicalRepairCostEur.min.toLocaleString("es-ES")}–${i.typicalRepairCostEur.max.toLocaleString("es-ES")} €`
-      : "";
-    return `${i.title} (${LIKELIHOOD_ES[i.likelihood]}${cost})`;
-  });
+  // One summary line per list; the verdict's issues[] is the single detailed
+  // view (each issue carries status, likelihood, cost and how to rule it out).
+  const confirmed = issues.filter((i) => i.status === "confirmed").length;
+  const ruledOut = issues.filter((i) => i.status === "ruled_out").length;
+  const unconfirmed = issues.length - confirmed - ruledOut;
+  const knownParts = [
+    `${issues.length} riesgo${issues.length === 1 ? " conocido del modelo aplica" : "s conocidos del modelo aplican"} a esta unidad`,
+  ];
+  if (confirmed > 0) knownParts.push(`${confirmed} confirmado${confirmed === 1 ? "" : "s"}`);
+  if (ruledOut > 0) knownParts.push(`${ruledOut} descartado${ruledOut === 1 ? "" : "s"}`);
 
   return {
     factor: {
       grade: scoreToGrade(score),
       score,
-      known,
+      known: [knownParts.join(" · ")],
       assumed: [],
-      unverified: issues
-        .filter((i) => i.status === "unconfirmed")
-        .map((i) => `Pendiente de verificar con el vendedor: ${i.title}`),
+      unverified:
+        unconfirmed > 0
+          ? [`${unconfirmed} pendiente${unconfirmed === 1 ? "" : "s"} de verificar con el vendedor`]
+          : [],
     },
     issues,
     questions: applicableIssues.flatMap((i) => i.sellerQuestions),

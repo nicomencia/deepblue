@@ -45,6 +45,7 @@ export async function GET(req: Request): Promise<Response> {
       location: listing.locationText,
       url: listing.url,
       state: lead.state,
+      createdAt: lead.createdAt,
       enrichedAt: lead.enrichedAt,
       verdict: lead.verdict,
     }));
