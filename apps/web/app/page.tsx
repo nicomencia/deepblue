@@ -64,9 +64,17 @@ export default async function Home({
       </p>
 
       {/* Adopt a hand-found ad: analyzed, tracked and questioned like any lead */}
-      <details style={{ margin: "0 0 1rem" }}>
-        <summary style={{ cursor: "pointer", fontSize: "0.9rem", color: "var(--ink-muted)" }}>
-          Adoptar un anuncio que has encontrado tú
+      <details
+        style={{
+          margin: "0 0 1rem",
+          background: "var(--card)",
+          border: "1px solid var(--border)",
+          borderRadius: 8,
+          padding: "0.6rem 0.9rem",
+        }}
+      >
+        <summary style={{ cursor: "pointer", fontSize: "0.9rem", fontWeight: 600 }}>
+          ＋ Adoptar un anuncio que has encontrado tú
         </summary>
         <form
           action={adoptAd}
