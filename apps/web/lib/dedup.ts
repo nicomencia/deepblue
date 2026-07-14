@@ -10,6 +10,7 @@ import {
   extractCashPriceEur,
   extractDedupKey,
   extractFirstImageUrl,
+  fingerprintDedupKey,
 } from "@deepblue/core";
 import { events, leads, listings, type Db } from "@deepblue/db";
 import { and, asc, eq, isNotNull, isNull, notInArray, or } from "drizzle-orm";
@@ -21,21 +22,31 @@ export async function backfillExtraction(db: Db): Promise<number> {
       platform: listings.platform,
       description: listings.description,
       priceEur: listings.priceEur,
+      make: listings.make,
+      model: listings.model,
+      version: listings.version,
+      year: listings.year,
+      km: listings.km,
       imageUrl: listings.imageUrl,
       raw: listings.raw,
     })
     .from(listings)
-    .where(
-      or(
-        and(isNotNull(listings.description), or(isNull(listings.cashPriceEur), isNull(listings.dedupKey))),
-        isNull(listings.imageUrl),
-      ),
-    );
+    .where(or(isNull(listings.cashPriceEur), isNull(listings.dedupKey), isNull(listings.imageUrl)));
 
   let updated = 0;
   for (const row of rows) {
     const cashPriceEur = extractCashPriceEur(row.description ?? undefined, row.priceEur ?? undefined);
-    const dedupKey = extractDedupKey(row.platform, row.description ?? undefined);
+    const dedupKey =
+      extractDedupKey(row.platform, row.description ?? undefined) ??
+      fingerprintDedupKey({
+        platform: row.platform,
+        make: row.make ?? undefined,
+        model: row.model ?? undefined,
+        version: row.version ?? undefined,
+        year: row.year ?? undefined,
+        km: row.km ?? undefined,
+        priceEur: row.priceEur ?? undefined,
+      });
     // Rows ingested before the imageUrl column: the photo is already in raw.
     const imageUrl =
       row.imageUrl === null && row.platform === "wallapop"

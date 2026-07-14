@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { extractCashPriceEur, extractDedupKey, extractFirstImageUrl } from "./extract.js";
+import { extractCashPriceEur, extractDedupKey, extractFirstImageUrl, fingerprintDedupKey } from "./extract.js";
 
 // Real Flexicar boilerplate, abridged — the pattern that motivated the rule.
 const FLEXICAR_AD = `Llegan las mejores ofertas
@@ -108,5 +108,59 @@ describe("extractFirstImageUrl", () => {
     expect(extractFirstImageUrl(null)).toBeUndefined();
     expect(extractFirstImageUrl("string")).toBeUndefined();
     expect(extractFirstImageUrl({ images: [{ urls: { medium: "not-a-url" } }] })).toBeUndefined();
+  });
+});
+
+describe("fingerprintDedupKey", () => {
+  // The real AUTOHERO case: one Golf, seven city accounts, no REF anywhere.
+  const autohero = {
+    platform: "wallapop",
+    make: "Volkswagen",
+    model: "Golf",
+    version: "1.0 TSI Advance",
+    year: 2018,
+    km: 122_065,
+    priceEur: 14_199,
+  };
+
+  it("produces the same key for the same unit across accounts", () => {
+    expect(fingerprintDedupKey(autohero)).toBe(
+      "wallapop|fp:volkswagen|golf|1.0 tsi advance|2018|122065|14199",
+    );
+    expect(fingerprintDedupKey({ ...autohero })).toBe(fingerprintDedupKey(autohero));
+  });
+
+  it("normalizes case and whitespace so account typos don't split the key", () => {
+    expect(
+      fingerprintDedupKey({ ...autohero, make: "VOLKSWAGEN", version: "1.0  TSI   Advance " }),
+    ).toBe(fingerprintDedupKey(autohero));
+  });
+
+  it("differs when any identity field differs", () => {
+    expect(fingerprintDedupKey({ ...autohero, km: 122_066 })).not.toBe(
+      fingerprintDedupKey(autohero),
+    );
+    expect(fingerprintDedupKey({ ...autohero, priceEur: 14_200 })).not.toBe(
+      fingerprintDedupKey(autohero),
+    );
+  });
+
+  it("never fingerprints rounded odometers (dealer templates, not readings)", () => {
+    expect(fingerprintDedupKey({ ...autohero, km: 120_000 })).toBeUndefined();
+    expect(fingerprintDedupKey({ ...autohero, km: 89_500 })).toBeUndefined();
+    expect(fingerprintDedupKey({ ...autohero, km: 500 })).toBeUndefined();
+  });
+
+  it("never fingerprints with missing fields", () => {
+    expect(fingerprintDedupKey({ ...autohero, km: undefined })).toBeUndefined();
+    expect(fingerprintDedupKey({ ...autohero, year: undefined })).toBeUndefined();
+    expect(fingerprintDedupKey({ ...autohero, make: undefined })).toBeUndefined();
+    expect(fingerprintDedupKey({ ...autohero, priceEur: undefined })).toBeUndefined();
+  });
+
+  it("tolerates a missing version (same unit listed with and without trim)", () => {
+    expect(fingerprintDedupKey({ ...autohero, version: undefined })).toBe(
+      "wallapop|fp:volkswagen|golf||2018|122065|14199",
+    );
   });
 });

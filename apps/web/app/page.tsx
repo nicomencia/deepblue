@@ -132,6 +132,7 @@ export default async function Home({
           <table style={{ borderCollapse: "collapse", width: "100%", fontSize: "0.9rem" }}>
             <thead>
               <tr style={{ textAlign: "left", borderBottom: "2px solid var(--border)" }}>
+                <th style={{ ...th, width: 76 }} aria-label="Foto"></th>
                 <th style={th}>Vehículo</th>
                 <th style={th}>Precio</th>
                 <th style={th}>Año</th>
@@ -144,6 +145,21 @@ export default async function Home({
             <tbody>
               {rows.map(({ lead, listing }) => (
                 <tr key={lead.id} style={{ borderBottom: "1px solid var(--border)" }}>
+                  <td style={{ ...td, padding: "0.35rem 0.75rem 0.35rem 0" }}>
+                    {listing.imageUrl && (
+                      <Link href={`/leads/${lead.id}`}>
+                        {/* eslint-disable-next-line @next/next/no-img-element -- platform CDN, unknown domains */}
+                        <img
+                          src={listing.imageUrl}
+                          alt=""
+                          width={68}
+                          height={51}
+                          loading="lazy"
+                          style={{ objectFit: "cover", borderRadius: 6, display: "block" }}
+                        />
+                      </Link>
+                    )}
+                  </td>
                   <td style={td}>
                     <Link href={`/leads/${lead.id}`} style={{ textDecoration: "none" }}>
                       {listing.title}

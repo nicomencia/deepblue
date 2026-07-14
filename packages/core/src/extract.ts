@@ -38,9 +38,8 @@ export function extractCashPriceEur(
 }
 
 /**
- * Stable identity of the physical car across accounts of the same network.
- * Only the explicit internal REF is trusted (high precision) — spec
- * fingerprints collide too easily to kill leads over.
+ * Stable identity of the physical car across accounts of the same network,
+ * from the dealer's explicit internal REF in the ad text (high precision).
  */
 export function extractDedupKey(
   platform: string,
@@ -49,6 +48,38 @@ export function extractDedupKey(
   if (!description) return undefined;
   const match = LISTING_REF_RE.exec(description);
   return match?.[1] ? `${platform}|ref:${match[1]}` : undefined;
+}
+
+/**
+ * Fallback identity when the ad has no REF: the exact odometer reading.
+ * Born from real data (AUTOHERO, 2026-07-15: one Golf posted from 7 city
+ * accounts — same 122.065 km to the kilometer, same price, consecutive ids).
+ * A generic spec fingerprint collides too easily to kill leads over, but
+ * exact km + exact price + same model/year identifies the physical unit:
+ * two genuinely distinct cars don't share an odometer to the kilometer AND
+ * a price. km is required non-round (dealers round template mileages) and
+ * every field must be present — missing data never fingerprints.
+ */
+export function fingerprintDedupKey(listing: {
+  platform: string;
+  make?: string;
+  model?: string;
+  version?: string;
+  year?: number;
+  km?: number;
+  priceEur?: number;
+}): string | undefined {
+  const { platform, make, model, version, year, km, priceEur } = listing;
+  if (!make || !model || year === undefined || km === undefined || priceEur === undefined) {
+    return undefined;
+  }
+  // Rounded odometers (120.000, 89.500) are dealer templates, not readings —
+  // they'd collide across real units, so they never fingerprint.
+  if (km < 1000 || km % 500 === 0) return undefined;
+  if (priceEur <= 0) return undefined;
+
+  const norm = (s: string) => s.toLowerCase().replace(/\s+/g, " ").trim();
+  return `${platform}|fp:${norm(make)}|${norm(model)}|${norm(version ?? "")}|${year}|${km}|${priceEur}`;
 }
 
 /**

@@ -7,6 +7,7 @@ import {
   evaluateListing,
   extractCashPriceEur,
   extractDedupKey,
+  fingerprintDedupKey,
   gradeAtMost,
   type ConfidenceGrade,
   type EvaluationResult,
@@ -48,9 +49,11 @@ export async function ingestSearchResults(
 
   for (const item of items) {
     // Text-derived facts: the real cash price behind financing-conditional
-    // headlines, and the dealer's internal REF identifying the physical car.
+    // headlines, and the physical car's identity — the dealer's internal REF
+    // when the text has one, else the exact-odometer fingerprint (AUTOHERO
+    // pattern: same unit from many city accounts, no REF anywhere).
     const cashPriceEur = item.cashPriceEur ?? extractCashPriceEur(item.description, item.priceEur);
-    const dedupKey = extractDedupKey(item.platform, item.description);
+    const dedupKey = extractDedupKey(item.platform, item.description) ?? fingerprintDedupKey(item);
 
     // Upsert into the global corpus; price/mileage/title refresh on re-sighting.
     const [listing] = await db
@@ -306,7 +309,7 @@ export async function ingestListingDetail(
       imageUrl: item.imageUrl,
       priceEur: item.priceEur,
       cashPriceEur: item.cashPriceEur ?? extractCashPriceEur(item.description, item.priceEur),
-      dedupKey: extractDedupKey(item.platform, item.description),
+      dedupKey: extractDedupKey(item.platform, item.description) ?? fingerprintDedupKey(item),
       make: item.make,
       model: item.model,
       version: item.version,

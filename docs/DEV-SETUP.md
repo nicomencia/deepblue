@@ -118,6 +118,17 @@ anuncios, digest con suelo de nota + alertas A/B sin duplicados, dossiers
 en la página del lead), tabs por búsqueda, página Actividad, descubrimiento de
 modelos y adopción manual de anuncios con dossier-first. 77 tests verdes.
 
+**Cambio 2026-07-15 — dedup por huella de cuentakilómetros + fotos en el
+dashboard.** Caso real AUTOHERO: el mismo Golf publicado desde 7 cuentas de
+ciudad, sin REF en el texto — indistinguible para el dedup por REF. Nueva
+huella en core (`fingerprintDedupKey`, testeada): km EXACTOS + precio + marca/
+modelo/versión/año identifican la unidad física; km redondos (plantillas de
+concesionario) o campos ausentes nunca generan huella. Misma columna
+`dedup_key` (prefijo `fp:` vs `ref:`), mismos mecanismos aguas abajo (nacer
+muerto como duplicado, pase de mantenimiento — 11 duplicados eliminados en el
+primer barrido, sobrevive el más antiguo). Además la lista de leads y la ficha
+muestran la foto del anuncio.
+
 **Cambio 2026-07-15 — foto del anuncio en emails.** Cada listing guarda la
 primera foto del anuncio (`image_url`, migración 0011): el adapter la extrae
 de búsqueda y detalle (extractFirstImageUrl en core, con tests), y el pase de

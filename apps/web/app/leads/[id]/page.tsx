@@ -67,6 +67,22 @@ export default async function LeadDetail({
         </Link>
       </p>
       <h1 style={{ fontSize: "1.3rem", margin: "0 0 0.25rem" }}>{listing.title}</h1>
+      {listing.imageUrl && (
+        <a href={listing.url} target="_blank" rel="noreferrer">
+          {/* eslint-disable-next-line @next/next/no-img-element -- platform CDN, unknown domains */}
+          <img
+            src={listing.imageUrl}
+            alt={listing.title}
+            style={{
+              maxWidth: "100%",
+              width: 420,
+              borderRadius: 8,
+              display: "block",
+              margin: "0.5rem 0",
+            }}
+          />
+        </a>
+      )}
       <p style={{ color: "var(--ink-muted)", marginTop: 0 }}>
         {listing.cashPriceEur != null && listing.cashPriceEur !== listing.priceEur
           ? `${fmtEur(listing.cashPriceEur)} al contado (anuncio: ${fmtEur(listing.priceEur)})`
