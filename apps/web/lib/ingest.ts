@@ -17,6 +17,7 @@ import {
 import { briefs, events, jobs, leads, listings, users, type Db } from "@deepblue/db";
 import { and, eq, ne } from "drizzle-orm";
 import { sendEmail } from "./email";
+import { leadUrl } from "./links";
 import { getBenchmark, getDossier } from "./lookups";
 import { newEvalCaches, reevaluateLead } from "./reevaluate";
 
@@ -186,7 +187,7 @@ export async function ingestSearchResults(
       await sendEmail({
         to: owner.email,
         subject: `deepblue · candidato ${evaluation.verdict.overall}: ${item.title}`,
-        text: composeAlert(item, evaluation),
+        text: composeAlert(item, evaluation, lead?.id),
       });
       // Stamp so tomorrow's digest shows it as "ya avisado", not as news.
       if (lead) {
@@ -211,7 +212,11 @@ export async function ingestSearchResults(
   return stats;
 }
 
-function composeAlert(item: NormalizedListing, evaluation: EvaluationResult): string {
+function composeAlert(
+  item: NormalizedListing,
+  evaluation: EvaluationResult,
+  leadId?: string,
+): string {
   const v = evaluation.verdict;
   const specs = [
     item.priceEur !== undefined ? `${item.priceEur.toLocaleString("es-ES")} €` : undefined,
@@ -236,7 +241,8 @@ function composeAlert(item: NormalizedListing, evaluation: EvaluationResult): st
     "Preguntas clave para el vendedor:",
     ...v.openQuestions.slice(0, 3).map((q) => `- ${q}`),
     "",
-    item.url,
+    ...(leadId ? [`Ficha en deepblue: ${leadUrl(leadId)}`] : []),
+    `Anuncio: ${item.url}`,
   ];
   return lines.join("\n");
 }

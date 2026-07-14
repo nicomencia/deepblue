@@ -18,8 +18,10 @@ ENABLE_LOCAL_SCHEDULER=1   # scheduler embebido (sweeps/digest/reap)
 
 Opcionales reconocidas: `ANTHROPIC_API_KEY` (activa la vía LLM de pago; hoy
 vacía a propósito — se usa la sesión de Claude Code), `DATABASE_URL` (Postgres
-real en vez de PGlite), `ALERT_MAX_GRADE` (def. B), `DIGEST_MAX_GRADE` (def.
-C), `SWEEP_INTERVAL_MINUTES` (def. 180), `LISTING_RECHECK_HOURS` (def. 36),
+real en vez de PGlite), `PUBLIC_BASE_URL` (base de los deep links de email a
+la ficha del lead; def. http://localhost:3000), `ALERT_MAX_GRADE` (def. B),
+`DIGEST_MAX_GRADE` (def. C), `SWEEP_INTERVAL_MINUTES` (def. 180),
+`LISTING_RECHECK_HOURS` (def. 36),
 `DEEPBLUE_DOSSIER_MODEL` / `DEEPBLUE_ENRICH_MODEL` / `DEEPBLUE_DISCOVERY_MODEL`
 (def. claude-opus-4-8), `DEV_USER_EMAIL`, `CRON_SECRET` (solo producción).
 
@@ -114,6 +116,11 @@ anuncios, digest con suelo de nota + alertas A/B sin duplicados, dossiers
 (207/THP, Golf, Elise) con verificación manual de riesgos (Confirmar/Descartar
 en la página del lead), tabs por búsqueda, página Actividad, descubrimiento de
 modelos y adopción manual de anuncios con dossier-first. 77 tests verdes.
+
+**Cambio 2026-07-14 — deep links en emails.** Alertas y digest enlazan
+primero a la ficha del lead en deepblue (`PUBLIC_BASE_URL`, def. localhost) y
+dejan el anuncio de la plataforma como enlace secundario — la ficha es donde
+viven veredicto, hallazgos y (Fase 2) las aprobaciones de un clic.
 
 **Cambio 2026-07-14 — cortacircuitos anti-baneo.** Un 403/429 de Wallapop
 detiene el runner en seco: el adapter lanza PlatformBlockedError en cuanto ve

@@ -9,6 +9,7 @@ import { gradeAtMost, type ConfidenceGrade } from "@deepblue/core";
 import { briefs, events, leads, listings, users, type Db } from "@deepblue/db";
 import { and, asc, desc, eq, gte, sql } from "drizzle-orm";
 import { sendEmail } from "./email";
+import { leadUrl } from "./links";
 import { newEvalCaches, reevaluateLead } from "./reevaluate";
 
 const MAX_LISTED = 25;
@@ -138,7 +139,8 @@ function leadSummary({ lead, listing }: { lead: LeadRow; listing: ListingRow }):
     );
   }
   if (v?.budgetNote) lines.push(`    ${v.budgetNote}`);
-  lines.push(`    ${listing.url}`);
+  lines.push(`    Ficha en deepblue: ${leadUrl(lead.id)}`);
+  lines.push(`    Anuncio: ${listing.url}`);
   return lines;
 }
 
@@ -153,11 +155,14 @@ function composeDigest(
   const htmlItems = listed
     .map((r) => {
       const [head, ...rest] = leadSummary(r);
+      // Link lines are rendered as anchors below, not repeated as text.
       const detail = rest
-        .filter((l) => !l.trim().startsWith("http"))
+        .filter((l) => !l.includes("http"))
         .map((l) => `<br><small>${escapeHtml(l.trim())}</small>`)
         .join("");
-      return `<li style="margin-bottom:12px"><a href="${r.listing.url}">${escapeHtml(head ?? "")}</a>${detail}</li>`;
+      // The headline is the action: it opens the lead's page in deepblue
+      // (verdict, findings, approvals); the raw ad is the secondary link.
+      return `<li style="margin-bottom:12px"><a href="${leadUrl(r.lead.id)}">${escapeHtml(head ?? "")}</a>${detail}<br><small><a href="${r.listing.url}">anuncio original</a></small></li>`;
     })
     .join("\n");
   const html = `<p>Nuevos candidatos (${rows.length}):</p><ul style="padding-left:16px">${htmlItems}</ul>${
