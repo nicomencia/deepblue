@@ -5,7 +5,12 @@
  * arrivals; this pass cleans what's stored.
  */
 
-import { ACTIVE_PLATFORMS, extractCashPriceEur, extractDedupKey } from "@deepblue/core";
+import {
+  ACTIVE_PLATFORMS,
+  extractCashPriceEur,
+  extractDedupKey,
+  extractFirstImageUrl,
+} from "@deepblue/core";
 import { events, leads, listings, type Db } from "@deepblue/db";
 import { and, asc, eq, isNotNull, isNull, notInArray, or } from "drizzle-orm";
 
@@ -16,22 +21,33 @@ export async function backfillExtraction(db: Db): Promise<number> {
       platform: listings.platform,
       description: listings.description,
       priceEur: listings.priceEur,
+      imageUrl: listings.imageUrl,
+      raw: listings.raw,
     })
     .from(listings)
     .where(
-      and(isNotNull(listings.description), or(isNull(listings.cashPriceEur), isNull(listings.dedupKey))),
+      or(
+        and(isNotNull(listings.description), or(isNull(listings.cashPriceEur), isNull(listings.dedupKey))),
+        isNull(listings.imageUrl),
+      ),
     );
 
   let updated = 0;
   for (const row of rows) {
     const cashPriceEur = extractCashPriceEur(row.description ?? undefined, row.priceEur ?? undefined);
     const dedupKey = extractDedupKey(row.platform, row.description ?? undefined);
-    if (cashPriceEur === undefined && dedupKey === undefined) continue;
+    // Rows ingested before the imageUrl column: the photo is already in raw.
+    const imageUrl =
+      row.imageUrl === null && row.platform === "wallapop"
+        ? extractFirstImageUrl(row.raw)
+        : undefined;
+    if (cashPriceEur === undefined && dedupKey === undefined && imageUrl === undefined) continue;
     await db
       .update(listings)
       .set({
         ...(cashPriceEur !== undefined ? { cashPriceEur } : {}),
         ...(dedupKey !== undefined ? { dedupKey } : {}),
+        ...(imageUrl !== undefined ? { imageUrl } : {}),
       })
       .where(eq(listings.id, row.id));
     updated += 1;

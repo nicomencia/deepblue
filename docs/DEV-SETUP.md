@@ -92,6 +92,7 @@ pnpm dev:runner
 | `GET /api/dev/briefs` | briefs con criterios |
 | `GET /api/dev/leads?limit=200` | shortlist con veredictos completos |
 | `GET /api/dev/jobs?status=queued` | cola del runner |
+| `GET /api/dev/listing-raw?id=…` o `?latest=wallapop` | payload raw de un listing |
 | `POST /api/dev/sweep` | disparar sweep de todos los briefs activos |
 | `POST /api/dev/reap` | sondas de vida (reaper) |
 | `POST /api/dev/reevaluate` | backfill + retire + dedup + reevaluar todo |
@@ -116,6 +117,15 @@ anuncios, digest con suelo de nota + alertas A/B sin duplicados, dossiers
 (207/THP, Golf, Elise) con verificación manual de riesgos (Confirmar/Descartar
 en la página del lead), tabs por búsqueda, página Actividad, descubrimiento de
 modelos y adopción manual de anuncios con dossier-first. 77 tests verdes.
+
+**Cambio 2026-07-15 — foto del anuncio en emails.** Cada listing guarda la
+primera foto del anuncio (`image_url`, migración 0011): el adapter la extrae
+de búsqueda y detalle (extractFirstImageUrl en core, con tests), y el pase de
+mantenimiento (/api/dev/reevaluate) la rellenó para todo lo ya almacenado
+desde el `raw` guardado — cero peticiones nuevas a la plataforma. El digest y
+las alertas (ahora también HTML) muestran la miniatura enlazada a la ficha.
+Endpoint dev nuevo: `GET /api/dev/listing-raw?id=…|latest=wallapop` para
+arqueología de payloads.
 
 **Cambio 2026-07-14 — deep links en emails.** Alertas y digest enlazan
 primero a la ficha del lead en deepblue (`PUBLIC_BASE_URL`, def. localhost) y

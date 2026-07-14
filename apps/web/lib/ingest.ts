@@ -61,6 +61,7 @@ export async function ingestSearchResults(
         url: item.url,
         title: item.title,
         description: item.description,
+        imageUrl: item.imageUrl,
         priceEur: item.priceEur,
         cashPriceEur,
         dedupKey,
@@ -88,6 +89,7 @@ export async function ingestSearchResults(
           priceEur: item.priceEur,
           cashPriceEur,
           dedupKey,
+          ...(item.imageUrl ? { imageUrl: item.imageUrl } : {}),
           make: item.make,
           model: item.model,
           version: item.version,
@@ -188,6 +190,7 @@ export async function ingestSearchResults(
         to: owner.email,
         subject: `deepblue · candidato ${evaluation.verdict.overall}: ${item.title}`,
         text: composeAlert(item, evaluation, lead?.id),
+        html: composeAlertHtml(item, evaluation, lead?.id),
       });
       // Stamp so tomorrow's digest shows it as "ya avisado", not as news.
       if (lead) {
@@ -247,6 +250,44 @@ function composeAlert(
   return lines.join("\n");
 }
 
+function composeAlertHtml(
+  item: NormalizedListing,
+  evaluation: EvaluationResult,
+  leadId?: string,
+): string {
+  const v = evaluation.verdict;
+  const href = leadId ? leadUrl(leadId) : item.url;
+  const specs = [
+    item.priceEur !== undefined ? `${item.priceEur.toLocaleString("es-ES")} €` : undefined,
+    item.year,
+    item.km !== undefined ? `${item.km.toLocaleString("es-ES")} km` : undefined,
+    item.locationText,
+  ]
+    .filter(Boolean)
+    .join(" · ");
+
+  const esc = (s: string) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+  const parts = [
+    `<p><strong><a href="${href}">${esc(item.title)}</a></strong><br><small>${esc(specs)}</small></p>`,
+    item.imageUrl
+      ? `<p><a href="${href}"><img src="${item.imageUrl}" alt="" width="320" style="max-width:100%;border-radius:6px"></a></p>`
+      : "",
+    `<p>Confianza global: <strong>${v.overall}</strong></p>`,
+    v.repairExposureEur
+      ? `<p><small>Riesgos sin verificar: ~${v.repairExposureEur.min.toLocaleString("es-ES")}–${v.repairExposureEur.max.toLocaleString("es-ES")} € de exposición en reparaciones</small></p>`
+      : "",
+    v.budgetNote ? `<p><small>${esc(v.budgetNote)}</small></p>` : "",
+    v.openQuestions.length > 0
+      ? `<p>Preguntas clave para el vendedor:</p><ul>${v.openQuestions
+          .slice(0, 3)
+          .map((q) => `<li>${esc(q)}</li>`)
+          .join("")}</ul>`
+      : "",
+    `<p><a href="${href}">Ficha en deepblue</a> · <a href="${item.url}">anuncio original</a></p>`,
+  ];
+  return parts.filter(Boolean).join("\n");
+}
+
 /**
  * Detail enrichment result: update the listing with what the item page
  * revealed (gearbox, power, eco label, seller reputation, full description),
@@ -262,6 +303,7 @@ export async function ingestListingDetail(
     .set({
       title: item.title || undefined,
       description: item.description,
+      imageUrl: item.imageUrl,
       priceEur: item.priceEur,
       cashPriceEur: item.cashPriceEur ?? extractCashPriceEur(item.description, item.priceEur),
       dedupKey: extractDedupKey(item.platform, item.description),

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { extractCashPriceEur, extractDedupKey } from "./extract.js";
+import { extractCashPriceEur, extractDedupKey, extractFirstImageUrl } from "./extract.js";
 
 // Real Flexicar boilerplate, abridged — the pattern that motivated the rule.
 const FLEXICAR_AD = `Llegan las mejores ofertas
@@ -56,5 +56,57 @@ describe("extractDedupKey", () => {
   it("returns undefined without a REF or without text", () => {
     expect(extractDedupKey("wallapop", "Golf de 2018, único dueño")).toBeUndefined();
     expect(extractDedupKey("wallapop", undefined)).toBeUndefined();
+  });
+});
+
+describe("extractFirstImageUrl", () => {
+  const modern = {
+    images: [
+      {
+        id: "36edord3l9yj",
+        urls: {
+          big: "https://cdn.wallapop.com/images/x.jpg?pictureSize=W800",
+          small: "https://cdn.wallapop.com/images/x.jpg?pictureSize=W320",
+          medium: "https://cdn.wallapop.com/images/x.jpg?pictureSize=W640",
+        },
+        average_color: "13C1AC",
+      },
+      { urls: { medium: "https://cdn.wallapop.com/images/second.jpg" } },
+    ],
+  };
+
+  it("takes the FIRST image at medium size from the modern urls shape", () => {
+    expect(extractFirstImageUrl(modern)).toBe(
+      "https://cdn.wallapop.com/images/x.jpg?pictureSize=W640",
+    );
+  });
+
+  it("unwraps stored raw columns shaped { detail, user, stats }", () => {
+    expect(extractFirstImageUrl({ detail: modern, user: null, stats: null })).toBe(
+      "https://cdn.wallapop.com/images/x.jpg?pictureSize=W640",
+    );
+  });
+
+  it("falls back through big/small when medium is missing", () => {
+    expect(
+      extractFirstImageUrl({ images: [{ urls: { big: "https://cdn.wallapop.com/b.jpg" } }] }),
+    ).toBe("https://cdn.wallapop.com/b.jpg");
+  });
+
+  it("reads the legacy flat shape", () => {
+    expect(
+      extractFirstImageUrl({
+        images: [{ original: "https://cdn.wallapop.com/o.jpg", small: "https://cdn.wallapop.com/s.jpg" }],
+      }),
+    ).toBe("https://cdn.wallapop.com/o.jpg");
+  });
+
+  it("returns undefined on empty, malformed, or absent images", () => {
+    expect(extractFirstImageUrl({ images: [] })).toBeUndefined();
+    expect(extractFirstImageUrl({ images: [{ urls: {} }] })).toBeUndefined();
+    expect(extractFirstImageUrl({ title: "no images" })).toBeUndefined();
+    expect(extractFirstImageUrl(null)).toBeUndefined();
+    expect(extractFirstImageUrl("string")).toBeUndefined();
+    expect(extractFirstImageUrl({ images: [{ urls: { medium: "not-a-url" } }] })).toBeUndefined();
   });
 });

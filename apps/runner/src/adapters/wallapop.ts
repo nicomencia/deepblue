@@ -5,12 +5,13 @@
  */
 
 import { setTimeout as sleep } from "node:timers/promises";
-import type {
-  ListingCheck,
-  ListingRef,
-  NormalizedListing,
-  PlatformAdapter,
-  SearchQuery,
+import {
+  extractFirstImageUrl,
+  type ListingCheck,
+  type ListingRef,
+  type NormalizedListing,
+  type PlatformAdapter,
+  type SearchQuery,
 } from "@deepblue/core";
 import { assertNotBlocked } from "../blocked.js";
 
@@ -257,6 +258,7 @@ function normalizeDetail(
     url: detail.slug ? `${ITEM_URL_PREFIX}${detail.slug}` : `${ITEM_URL_PREFIX}${detail.id}`,
     title: detail.title?.original ?? "",
     description: detail.description?.original,
+    imageUrl: extractFirstImageUrl(detail),
     priceEur,
     make: ta.brand?.value ?? ta.brand?.text,
     model: ta.model?.value ?? ta.model?.text,
@@ -303,6 +305,7 @@ function normalize(item: RawItem): NormalizedListing | null {
     url: item.web_slug ? `${ITEM_URL_PREFIX}${item.web_slug}` : `${ITEM_URL_PREFIX}${item.id}`,
     title: item.title,
     description: item.description,
+    imageUrl: extractFirstImageUrl(item),
     priceEur,
     make: ta.brand,
     model: ta.model,

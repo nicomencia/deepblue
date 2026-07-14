@@ -79,6 +79,8 @@ export const listings = pgTable(
     gearbox: text("gearbox"),
     powerCv: integer("power_cv"),
     ecoLabel: text("eco_label"),
+    /** First ad photo (platform CDN URL) — email thumbnails, dashboard cards. */
+    imageUrl: text("image_url"),
     sellerType: text("seller_type").$type<"private" | "dealer" | "unknown">(),
     sellerName: text("seller_name"),
     sellerRating: real("seller_rating"),

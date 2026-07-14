@@ -44,6 +44,7 @@ export async function GET(req: Request): Promise<Response> {
       sellerSoldCount: listing.sellerSoldCount,
       location: listing.locationText,
       url: listing.url,
+      imageUrl: listing.imageUrl,
       state: lead.state,
       createdAt: lead.createdAt,
       enrichedAt: lead.enrichedAt,

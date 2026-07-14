@@ -162,7 +162,10 @@ function composeDigest(
         .join("");
       // The headline is the action: it opens the lead's page in deepblue
       // (verdict, findings, approvals); the raw ad is the secondary link.
-      return `<li style="margin-bottom:12px"><a href="${leadUrl(r.lead.id)}">${escapeHtml(head ?? "")}</a>${detail}<br><small><a href="${r.listing.url}">anuncio original</a></small></li>`;
+      const photo = r.listing.imageUrl
+        ? `<br><a href="${leadUrl(r.lead.id)}"><img src="${r.listing.imageUrl}" alt="" width="280" style="max-width:100%;border-radius:6px;margin-top:6px"></a>`
+        : "";
+      return `<li style="margin-bottom:16px"><a href="${leadUrl(r.lead.id)}">${escapeHtml(head ?? "")}</a>${detail}${photo}<br><small><a href="${r.listing.url}">anuncio original</a></small></li>`;
     })
     .join("\n");
   const html = `<p>Nuevos candidatos (${rows.length}):</p><ul style="padding-left:16px">${htmlItems}</ul>${

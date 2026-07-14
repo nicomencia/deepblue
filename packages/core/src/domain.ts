@@ -140,6 +140,8 @@ export const normalizedListingSchema = z.object({
   powerCv: z.number().optional(),
   /** DGT environmental badge (0, ECO, C, B...) — matters for Spanish city access. */
   ecoLabel: z.string().optional(),
+  /** First ad photo (platform CDN URL): email thumbnails and dashboard cards. */
+  imageUrl: z.string().optional(),
   /** ISO country of the listing's market. Prices are only comparable within one market. */
   countryCode: z.string().optional(),
   sellerType: z.enum(["private", "dealer", "unknown"]).optional(),
