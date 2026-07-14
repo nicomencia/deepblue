@@ -69,8 +69,10 @@ pnpm dev:runner
   aplica el servidor web al arrancar. No ejecutar `db:migrate` contra PGlite
   (segundo escritor).
 - **Invariantes de diseño** (PROJECT.md manda): runner = manos, nunca cerebro;
-  límites duros y vetos en código, no en prompt; solo dossiers *aprobados*
-  alimentan afirmaciones de fiabilidad; leads muertos no resucitan;
+  límites duros y vetos en código, no en prompt; los dossiers entran en uso al
+  crearse (auto-aprobados desde 2026-07-14) y la revisión es a posteriori —
+  desactivar uno en /dossiers lo saca de los veredictos al momento; leads
+  muertos no resucitan;
   `ACTIVE_PLATFORMS = ["wallapop"]` (AS24 pausado — no reactivar sin decidirlo).
 - **Higiene Wallapop**: volumen bajo, pacing con jitter, ante 403/429 parar,
   nunca reintentar más fuerte.
@@ -110,6 +112,14 @@ anuncios, digest con suelo de nota + alertas A/B sin duplicados, dossiers
 (207/THP, Golf, Elise) con verificación manual de riesgos (Confirmar/Descartar
 en la página del lead), tabs por búsqueda, página Actividad, descubrimiento de
 modelos y adopción manual de anuncios con dossier-first. 77 tests verdes.
+
+**Cambio 2026-07-14 — dossiers auto-aprobados.** Los dossiers entran en uso al
+crearse (ambas vías: builder API e import por suscripción) y re-evalúan sus
+leads al momento; la revisión pasa a ser a posteriori con botón Desactivar /
+Reactivar en /dossiers (columna `disabled_at`, migración 0010). Un dossier
+desactivado no alimenta veredictos, no cuenta como cobertura y el modelo vuelve
+a aparecer como "sin dossier". Los borradores antiguos (pre-cambio) conservan
+el botón Aprobar.
 
 **Siguiente hito: Fase 2 (chat Wallapop).** Orden acordado: (1) salida con
 aprobación — borrador determinista desde las preguntas abiertas del lead,

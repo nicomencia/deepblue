@@ -1,8 +1,8 @@
 /**
  * Automated model-dossier builder: Claude + web research → a source-cited
- * ModelDossier draft, stored with reviewedAt = null. Drafts NEVER drive
- * reliability claims (getDossier only returns reviewed rows) — a human
- * approves each one in /dossiers first. See PROJECT.md, Reliability pillar.
+ * ModelDossier, live from the moment it's stored (auto-approved, 2026-07-14).
+ * Review is opt-out: /dossiers can disable any dossier, which pulls it out of
+ * verdicts immediately (getDossier skips disabled rows). PROJECT.md, Reliability.
  */
 
 import { modelDossierSchema, type ModelDossier } from "@deepblue/core";
@@ -11,6 +11,7 @@ import { zodOutputFormat } from "@anthropic-ai/sdk/helpers/zod";
 import type Anthropic from "@anthropic-ai/sdk";
 import { sql } from "drizzle-orm";
 import { DOSSIER_MODEL, getAnthropic, messageText } from "./llm";
+import { reevaluateModelLeads } from "./reevaluate";
 
 export interface DossierRequest {
   make: string;
@@ -93,11 +94,12 @@ export interface BuiltDossier {
 }
 
 /**
- * Store a validated dossier as an unreviewed draft. Shared by the API
- * builder and the manual import lane (a Claude Code session drafting
+ * Store a validated dossier and put it in use immediately, re-evaluating the
+ * model's shortlisted leads so verdicts pick the knowledge up. Shared by the
+ * API builder and the manual import lane (a Claude Code session drafting
  * dossiers on the user's subscription instead of per-token billing).
  */
-export async function insertDraftDossier(
+export async function insertDossier(
   db: Db,
   dossier: ModelDossier,
   userId: string,
@@ -121,14 +123,16 @@ export async function insertDraftDossier(
       generation: dossier.generation,
       version,
       content: dossier,
-      reviewedAt: null, // draft: a human approves it in /dossiers before use
+      reviewedAt: new Date(), // auto-approved: in use now, disable in /dossiers to revoke
     })
     .returning({ id: modelDossiers.id });
   if (!inserted) throw new Error("dossier insert returned no row");
 
+  const reevaluated = await reevaluateModelLeads(db, dossier.make, dossier.model);
+
   await db.insert(events).values({
     userId,
-    type: "dossier_drafted",
+    type: "dossier_created",
     payload: {
       dossierId: inserted.id,
       make: dossier.make,
@@ -137,6 +141,7 @@ export async function insertDraftDossier(
       issues: dossier.knownIssues.length,
       sources: dossier.sources.length,
       source,
+      reevaluated,
     },
   });
 
@@ -151,5 +156,5 @@ export async function buildDossier(
   const drafted = await draftWithResearch(req);
   // Canonical identity comes from the request, whatever the model echoed.
   const dossier: ModelDossier = { ...drafted, make: req.make, model: req.model };
-  return insertDraftDossier(db, dossier, userId, DOSSIER_MODEL);
+  return insertDossier(db, dossier, userId, DOSSIER_MODEL);
 }

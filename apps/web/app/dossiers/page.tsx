@@ -4,7 +4,7 @@ import { desc, inArray } from "drizzle-orm";
 import { getDb } from "../../lib/db";
 import { isLlmConfigured } from "../../lib/llm";
 import { fmtDate } from "../../lib/ui";
-import { approveDossier, deleteDossier, generateDossier } from "./actions";
+import { approveDossier, deleteDossier, disableDossier, enableDossier, generateDossier } from "./actions";
 
 export const dynamic = "force-dynamic";
 
@@ -31,10 +31,14 @@ export default async function DossiersPage() {
     .from(briefs)
     .where(inArray(briefs.status, ["active", "paused"]));
   // Same tolerant semantics as the verdict lookup: a dossier keyed "207"
-  // covers a brief hunting "207 RC".
+  // covers a brief hunting "207 RC". Disabled dossiers don't cover anything —
+  // a model whose only dossier was disabled needs a fresh one.
   const isCovered = (make: string, model: string) =>
     rows.some(
-      (d) => d.make.toLowerCase() === make.toLowerCase() && dossierCoversModel(d.model, model),
+      (d) =>
+        d.disabledAt === null &&
+        d.make.toLowerCase() === make.toLowerCase() &&
+        dossierCoversModel(d.model, model),
     );
   const missing = new Map<string, { make: string; model: string; generation?: string }>();
   for (const brief of activeBriefs) {
@@ -54,8 +58,9 @@ export default async function DossiersPage() {
     <main style={{ maxWidth: 860, margin: "0 auto", padding: "2rem 1.5rem" }}>
       <h1 style={{ fontSize: "1.2rem", marginBottom: "0.25rem" }}>Dossiers de fiabilidad</h1>
       <p style={{ color: "var(--ink-muted)", marginTop: 0, fontSize: "0.9rem" }}>
-        Conocimiento con recibos: la IA investiga y redacta el borrador con fuentes; solo un
-        dossier <strong>aprobado por ti</strong> puede alimentar veredictos.
+        Conocimiento con recibos: la IA investiga y redacta con fuentes, y el dossier{" "}
+        <strong>entra en uso al crearse</strong>. La revisión es a posteriori: si algo no te
+        convence, <strong>desactívalo</strong> aquí y saldrá de todos los veredictos al momento.
       </p>
       {!llmReady && (
         <p style={{ ...notice }}>
@@ -99,6 +104,7 @@ export default async function DossiersPage() {
       {rows.map((d) => {
         const c = d.content;
         const draft = d.reviewedAt === null;
+        const disabled = d.disabledAt !== null;
         return (
           <div key={d.id} style={card}>
             <div style={{ display: "flex", justifyContent: "space-between", flexWrap: "wrap", gap: "0.5rem" }}>
@@ -113,32 +119,58 @@ export default async function DossiersPage() {
                   style={{
                     fontSize: "0.78rem",
                     fontWeight: 600,
-                    color: draft ? "var(--grade-c)" : "var(--grade-a)",
+                    color: disabled
+                      ? "var(--grade-e)"
+                      : draft
+                        ? "var(--grade-c)"
+                        : "var(--grade-a)",
                   }}
                 >
-                  {draft ? "BORRADOR — pendiente de tu revisión" : `en uso · aprobado ${fmtDate(d.reviewedAt!)}`}
+                  {disabled
+                    ? `DESACTIVADO ${fmtDate(d.disabledAt!)} — no alimenta veredictos`
+                    : draft
+                      ? "BORRADOR — pendiente de tu revisión"
+                      : `en uso desde ${fmtDate(d.reviewedAt!)}`}
                 </span>
                 <p style={{ margin: "0.3rem 0 0", fontSize: "0.85rem", color: "var(--ink-muted)" }}>
                   {c.knownIssues.length} problemas conocidos · {c.recalls.length} recalls ·{" "}
                   {c.sources.length} fuentes · creado {fmtDate(d.createdAt)}
                 </p>
               </div>
-              {draft && (
-                <span style={{ display: "flex", gap: "0.4rem", alignItems: "start" }}>
-                  <form action={approveDossier}>
-                    <input type="hidden" name="id" value={d.id} />
-                    <button type="submit" style={{ ...btn, fontWeight: 600 }}>
-                      Aprobar
-                    </button>
-                  </form>
-                  <form action={deleteDossier}>
+              <span style={{ display: "flex", gap: "0.4rem", alignItems: "start" }}>
+                {draft && (
+                  <>
+                    <form action={approveDossier}>
+                      <input type="hidden" name="id" value={d.id} />
+                      <button type="submit" style={{ ...btn, fontWeight: 600 }}>
+                        Aprobar
+                      </button>
+                    </form>
+                    <form action={deleteDossier}>
+                      <input type="hidden" name="id" value={d.id} />
+                      <button type="submit" style={btn}>
+                        Descartar
+                      </button>
+                    </form>
+                  </>
+                )}
+                {!draft && !disabled && (
+                  <form action={disableDossier}>
                     <input type="hidden" name="id" value={d.id} />
                     <button type="submit" style={btn}>
-                      Descartar
+                      Desactivar
                     </button>
                   </form>
-                </span>
-              )}
+                )}
+                {!draft && disabled && (
+                  <form action={enableDossier}>
+                    <input type="hidden" name="id" value={d.id} />
+                    <button type="submit" style={{ ...btn, fontWeight: 600 }}>
+                      Reactivar
+                    </button>
+                  </form>
+                )}
+              </span>
             </div>
 
             <details style={{ marginTop: "0.6rem" }}>

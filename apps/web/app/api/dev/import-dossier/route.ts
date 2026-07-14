@@ -1,13 +1,14 @@
 import { modelDossierSchema } from "@deepblue/core";
 import { users } from "@deepblue/db";
 import { getDb } from "../../../../lib/db";
-import { insertDraftDossier } from "../../../../lib/dossier-builder";
+import { insertDossier } from "../../../../lib/dossier-builder";
 
 /**
- * Dev-only: import a ready-made dossier as an unreviewed draft — the
- * no-API-key lane, where a Claude Code session does the web research on the
- * user's subscription and POSTs the result here. Same zod trust boundary,
- * same human-approval gate in /dossiers as the automated builder.
+ * Dev-only: import a ready-made dossier — the no-API-key lane, where a
+ * Claude Code session does the web research on the user's subscription and
+ * POSTs the result here. Same zod trust boundary as the automated builder;
+ * the dossier goes live on arrival (auto-approval) and /dossiers can
+ * disable it on review.
  */
 export async function POST(req: Request): Promise<Response> {
   if (process.env.NODE_ENV === "production") return new Response(null, { status: 404 });
@@ -26,7 +27,7 @@ export async function POST(req: Request): Promise<Response> {
     );
   }
 
-  const built = await insertDraftDossier(db, parsed.data, user.id, "manual_import");
+  const built = await insertDossier(db, parsed.data, user.id, "manual_import");
   return Response.json({
     ok: true,
     id: built.id,

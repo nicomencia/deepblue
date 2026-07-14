@@ -139,9 +139,11 @@ alert tools exist; a calibrated mechanical opinion per unit does not.
 (or reuses) a structured dossier per model/engine/generation in scope: known failure modes
 (e.g. belt-in-oil wear, DSG mechatronics, timing-chain stretch), at what age/mileage they
 bite, typical repair cost, recalls, and what evidence rules each in or out. Dossiers are
-LLM-drafted with web research, **source-cited, stored and versioned in the DB**, and
-reviewed before first use. When talking reliability, the agent is constrained to the
-dossier — no free-styling from model memory. Unknown = "unverified", never invented.
+LLM-drafted with web research, **source-cited, stored and versioned in the DB**. Review is
+opt-out since 2026-07-14 (draft quality earned it): a dossier goes live on creation and
+re-evaluates the model's leads immediately; /dossiers can disable any dossier, which pulls
+it out of every verdict on the spot. When talking reliability, the agent is constrained to
+the dossier — no free-styling from model memory. Unknown = "unverified", never invented.
 Briefs make this tractable: dossiers are only needed for models actually being shopped,
 built once, reused across every matching listing.
 

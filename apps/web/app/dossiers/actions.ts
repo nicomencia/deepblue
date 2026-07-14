@@ -1,11 +1,11 @@
 "use server";
 
-import { briefs, events, leads, listings, modelDossiers, users } from "@deepblue/db";
-import { and, eq, isNull, or, sql } from "drizzle-orm";
+import { events, modelDossiers, users } from "@deepblue/db";
+import { and, eq, isNull } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { getDb } from "../../lib/db";
 import { buildDossier } from "../../lib/dossier-builder";
-import { newEvalCaches, reevaluateLead } from "../../lib/reevaluate";
+import { reevaluateModelLeads } from "../../lib/reevaluate";
 
 // Single-user phase: everything belongs to the dev user (Firebase Auth later).
 async function resolveUserId(): Promise<string> {
@@ -34,65 +34,68 @@ export async function generateDossier(formData: FormData): Promise<void> {
   revalidatePath("/dossiers");
 }
 
-/**
- * Approval is the human-review gate: only from here on may this dossier
- * drive reliability claims. Every shortlisted lead on the model is
- * re-evaluated immediately so verdicts pick the new knowledge up.
- */
-export async function approveDossier(formData: FormData): Promise<void> {
+/** Flip a dossier's live state and land the change on verdicts immediately. */
+async function setDossierState(
+  id: string,
+  patch: { reviewedAt?: Date; disabledAt: Date | null },
+  eventType: "dossier_approved" | "dossier_disabled" | "dossier_enabled",
+): Promise<void> {
   const db = await getDb();
-  const id = String(formData.get("id") ?? "");
 
   const [dossier] = await db
     .update(modelDossiers)
-    .set({ reviewedAt: new Date() })
+    .set(patch)
     .where(eq(modelDossiers.id, id))
     .returning();
   if (!dossier) throw new Error(`dossier ${id} not found`);
 
-  const make = dossier.make.toLowerCase();
-  const model = dossier.model.toLowerCase();
-  const rows = await db
-    .select({ lead: leads, listing: listings, brief: briefs })
-    .from(leads)
-    .innerJoin(listings, eq(leads.listingId, listings.id))
-    .innerJoin(briefs, eq(leads.briefId, briefs.id))
-    .where(
-      and(
-        eq(leads.state, "shortlisted"),
-        or(
-          and(
-            sql`lower(${listings.make}) = ${make}`,
-            sql`lower(${listings.model}) = ${model}`,
-          ),
-          // Legacy rows without make/model columns: match on the title.
-          and(
-            sql`${listings.title} ilike ${"%" + make + "%"}`,
-            sql`${listings.title} ilike ${"%" + model + "%"}`,
-          ),
-        ),
-      ),
-    );
-
-  const caches = newEvalCaches();
-  for (const row of rows) {
-    await reevaluateLead(db, row.lead, row.listing, row.brief, caches);
-  }
+  const reevaluated = await reevaluateModelLeads(db, dossier.make, dossier.model);
 
   await db.insert(events).values({
     userId: await resolveUserId(),
-    type: "dossier_approved",
+    type: eventType,
     payload: {
       dossierId: dossier.id,
       make: dossier.make,
       model: dossier.model,
       version: dossier.version,
-      reevaluated: rows.length,
+      reevaluated,
     },
   });
 
   revalidatePath("/dossiers");
   revalidatePath("/");
+}
+
+/** Legacy drafts (pre-auto-approval) can still be approved by hand. */
+export async function approveDossier(formData: FormData): Promise<void> {
+  await setDossierState(
+    String(formData.get("id") ?? ""),
+    { reviewedAt: new Date(), disabledAt: null },
+    "dossier_approved",
+  );
+}
+
+/**
+ * Review is opt-out since auto-approval (2026-07-14): disabling pulls the
+ * dossier out of every verdict immediately (getDossier skips disabled rows;
+ * an older live version, if any, takes over).
+ */
+export async function disableDossier(formData: FormData): Promise<void> {
+  await setDossierState(
+    String(formData.get("id") ?? ""),
+    { disabledAt: new Date() },
+    "dossier_disabled",
+  );
+}
+
+/** Undo for disable. */
+export async function enableDossier(formData: FormData): Promise<void> {
+  await setDossierState(
+    String(formData.get("id") ?? ""),
+    { disabledAt: null },
+    "dossier_enabled",
+  );
 }
 
 /** Drafts can be discarded; reviewed dossiers are knowledge in use — keep them. */

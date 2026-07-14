@@ -1,0 +1,1 @@
+ALTER TABLE "model_dossiers" ADD COLUMN "disabled_at" timestamp with time zone;

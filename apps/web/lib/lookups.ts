@@ -9,7 +9,7 @@ import {
   type PriceBenchmark,
 } from "@deepblue/core";
 import { listings, modelDossiers, type Db } from "@deepblue/db";
-import { and, desc, inArray, isNotNull, sql } from "drizzle-orm";
+import { and, desc, inArray, isNotNull, isNull, sql } from "drizzle-orm";
 
 /** One SQL fetch per make+model+market per batch; weighting runs per listing. */
 export type ComparableCache = Map<string, Comparable[]>;
@@ -81,7 +81,7 @@ export async function getBenchmark(
   return computeBenchmark(target, comparables, mkt);
 }
 
-/** Latest reviewed dossier for make+model. Unreviewed dossiers never drive claims. */
+/** Latest live dossier for make+model. Disabled (or legacy unreviewed) rows never drive claims. */
 export async function getDossier(
   db: Db,
   make: string | undefined,
@@ -104,6 +104,7 @@ export async function getDossier(
         sql`lower(${modelDossiers.make}) = ${make.toLowerCase()}`,
         sql`(lower(${modelDossiers.model}) = ${m} or ${m} like lower(${modelDossiers.model}) || ' %')`,
         isNotNull(modelDossiers.reviewedAt),
+        isNull(modelDossiers.disabledAt),
       ),
     )
     .orderBy(desc(sql`lower(${modelDossiers.model}) = ${m}`), desc(modelDossiers.version))

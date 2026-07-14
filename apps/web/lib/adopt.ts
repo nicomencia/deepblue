@@ -22,7 +22,7 @@ import {
   type NormalizedListing,
 } from "@deepblue/core";
 import { briefs, events, jobs, leads, listings, modelDossiers, type Db } from "@deepblue/db";
-import { and, eq } from "drizzle-orm";
+import { and, eq, isNull } from "drizzle-orm";
 import { buildDossier } from "./dossier-builder";
 import { isLlmConfigured } from "./llm";
 import { getBenchmark, getDossier } from "./lookups";
@@ -85,7 +85,7 @@ export async function adoptListing(
   return { ok: true, jobId: job.id };
 }
 
-/** Dossier-first rule: any dossier (draft or reviewed) covering make+model? */
+/** Dossier-first rule: any non-disabled dossier covering make+model? */
 async function ensureDossierRequested(
   db: Db,
   userId: string,
@@ -96,7 +96,7 @@ async function ensureDossierRequested(
   const rows = await db
     .select({ model: modelDossiers.model })
     .from(modelDossiers)
-    .where(eq(modelDossiers.make, make));
+    .where(and(eq(modelDossiers.make, make), isNull(modelDossiers.disabledAt)));
   const covered = rows.some((d) => dossierCoversModel(d.model, model));
   if (covered) return "ready";
 

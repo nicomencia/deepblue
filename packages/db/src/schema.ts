@@ -239,7 +239,7 @@ export const discoveries = pgTable(
   (t) => [index("discoveries_user_idx").on(t.userId)],
 );
 
-/** Global reliability knowledge base — source-cited, versioned, reviewed before use. */
+/** Global reliability knowledge base — source-cited, versioned, live on creation. */
 export const modelDossiers = pgTable(
   "model_dossiers",
   {
@@ -250,8 +250,10 @@ export const modelDossiers = pgTable(
     engineCode: text("engine_code"),
     version: integer("version").notNull().default(1),
     content: jsonb("content").$type<ModelDossier>().notNull(),
-    /** Null until a human has reviewed it; unreviewed dossiers must not drive claims. */
+    /** When the dossier went live (set at creation since auto-approval, 2026-07-14). */
     reviewedAt: timestamp("reviewed_at", { withTimezone: true }),
+    /** Review is opt-out: a disabled dossier stops driving claims immediately. */
+    disabledAt: timestamp("disabled_at", { withTimezone: true }),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [

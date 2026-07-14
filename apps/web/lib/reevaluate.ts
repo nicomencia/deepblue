@@ -8,7 +8,7 @@ import {
   type NormalizedListing,
 } from "@deepblue/core";
 import { briefs, events, leads, listings, type Db } from "@deepblue/db";
-import { eq } from "drizzle-orm";
+import { and, eq, or, sql } from "drizzle-orm";
 import { getBenchmark, getDossier, type ComparableCache } from "./lookups";
 
 type ListingRow = typeof listings.$inferSelect;
@@ -63,6 +63,46 @@ export function listingRowToNormalized(
     lon: listing.lon ?? undefined,
     raw: listing.raw,
   };
+}
+
+/**
+ * Re-evaluate every shortlisted lead on a make+model — the step that makes a
+ * dossier change (created, disabled, re-enabled) land on verdicts immediately.
+ */
+export async function reevaluateModelLeads(
+  db: Db,
+  make: string,
+  model: string,
+): Promise<number> {
+  const mk = make.toLowerCase();
+  const md = model.toLowerCase();
+  const rows = await db
+    .select({ lead: leads, listing: listings, brief: briefs })
+    .from(leads)
+    .innerJoin(listings, eq(leads.listingId, listings.id))
+    .innerJoin(briefs, eq(leads.briefId, briefs.id))
+    .where(
+      and(
+        eq(leads.state, "shortlisted"),
+        or(
+          and(
+            sql`lower(${listings.make}) = ${mk}`,
+            sql`lower(${listings.model}) = ${md}`,
+          ),
+          // Legacy rows without make/model columns: match on the title.
+          and(
+            sql`${listings.title} ilike ${"%" + mk + "%"}`,
+            sql`${listings.title} ilike ${"%" + md + "%"}`,
+          ),
+        ),
+      ),
+    );
+
+  const caches = newEvalCaches();
+  for (const row of rows) {
+    await reevaluateLead(db, row.lead, row.listing, row.brief, caches);
+  }
+  return rows.length;
 }
 
 export async function reevaluateLead(
