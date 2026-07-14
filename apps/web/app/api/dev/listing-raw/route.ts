@@ -17,11 +17,18 @@ export async function GET(req: Request): Promise<Response> {
     );
   }
 
+  // Only compare against the uuid column when the id can be one — Postgres
+  // throws on invalid uuid syntax, it doesn't just mismatch.
+  const isUuid = id !== null && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id);
   const [row] = id
     ? await db
         .select()
         .from(listings)
-        .where(or(eq(listings.platformListingId, id), eq(listings.id, id)))
+        .where(
+          isUuid
+            ? or(eq(listings.platformListingId, id), eq(listings.id, id))
+            : eq(listings.platformListingId, id),
+        )
         .limit(1)
     : await db
         .select()

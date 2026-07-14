@@ -118,6 +118,14 @@ anuncios, digest con suelo de nota + alertas A/B sin duplicados, dossiers
 en la página del lead), tabs por búsqueda, página Actividad, descubrimiento de
 modelos y adopción manual de anuncios con dossier-first. 77 tests verdes.
 
+**Cambio 2026-07-15 — ingesta blindada contra datos basura.** Caso real: un
+vendedor escribió «1.4» (la cilindrada) en el campo de caballos de Wallapop y
+el float tumbó la columna integer — y con ella el batch entero del sweep
+(report 500). Doble arreglo: `sanitizePowerCv` en core (CV entero en [20,
+1500] o undefined, aplicado en adapter e ingesta) y aislamiento por item en
+`ingestSearchResults` (un item podrido registra `ingest_item_failed` y el
+resto del batch sigue). La ingesta de cada item vive ahora en `ingestOne`.
+
 **Cambio 2026-07-15 — dedup por huella de cuentakilómetros + fotos en el
 dashboard.** Caso real AUTOHERO: el mismo Golf publicado desde 7 cuentas de
 ciudad, sin REF en el texto — indistinguible para el dedup por REF. Nueva

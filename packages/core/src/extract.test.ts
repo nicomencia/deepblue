@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { extractCashPriceEur, extractDedupKey, extractFirstImageUrl, fingerprintDedupKey } from "./extract.js";
+import { extractCashPriceEur, extractDedupKey, extractFirstImageUrl, fingerprintDedupKey, sanitizePowerCv } from "./extract.js";
 
 // Real Flexicar boilerplate, abridged — the pattern that motivated the rule.
 const FLEXICAR_AD = `Llegan las mejores ofertas
@@ -162,5 +162,26 @@ describe("fingerprintDedupKey", () => {
     expect(fingerprintDedupKey({ ...autohero, version: undefined })).toBe(
       "wallapop|fp:volkswagen|golf||2018|122065|14199",
     );
+  });
+});
+
+describe("sanitizePowerCv", () => {
+  it("passes plausible whole-CV values through", () => {
+    expect(sanitizePowerCv(110)).toBe(110);
+    expect(sanitizePowerCv(20)).toBe(20);
+    expect(sanitizePowerCv(1500)).toBe(1500);
+  });
+
+  it("rejects the real-world garbage: displacement typed as horsepower", () => {
+    expect(sanitizePowerCv(1.4)).toBeUndefined();
+    expect(sanitizePowerCv(2.0)).toBeUndefined();
+  });
+
+  it("rejects out-of-range and non-finite values", () => {
+    expect(sanitizePowerCv(19)).toBeUndefined();
+    expect(sanitizePowerCv(1501)).toBeUndefined();
+    expect(sanitizePowerCv(NaN)).toBeUndefined();
+    expect(sanitizePowerCv(Infinity)).toBeUndefined();
+    expect(sanitizePowerCv(undefined)).toBeUndefined();
   });
 });

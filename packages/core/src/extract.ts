@@ -111,3 +111,16 @@ export function extractFirstImageUrl(raw: unknown): string | undefined {
   const url = candidates.find((c): c is string => typeof c === "string" && c.startsWith("http"));
   return url;
 }
+
+/**
+ * Sellers type anything into structured fields: horsepower has arrived as
+ * "1.4" (the displacement) and killed a whole ingest batch against the
+ * integer column. Plausible car power is a whole number of CV in [20, 1500];
+ * everything else is garbage and becomes undefined, never an error.
+ */
+export function sanitizePowerCv(value: number | undefined): number | undefined {
+  if (value === undefined || !Number.isFinite(value)) return undefined;
+  const cv = Math.round(value);
+  if (cv !== value || cv < 20 || cv > 1500) return undefined;
+  return cv;
+}

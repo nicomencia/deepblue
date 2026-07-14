@@ -9,6 +9,7 @@ import {
   extractDedupKey,
   fingerprintDedupKey,
   gradeAtMost,
+  sanitizePowerCv,
   type ConfidenceGrade,
   type EvaluationResult,
   type JobPayload,
@@ -44,178 +45,214 @@ export async function ingestSearchResults(
   const [owner] = await db.select().from(users).where(eq(users.id, brief.userId)).limit(1);
 
   const caches = newEvalCaches();
-  const dossierCache = caches.dossier;
   let alertsSent = 0;
 
   for (const item of items) {
-    // Text-derived facts: the real cash price behind financing-conditional
-    // headlines, and the physical car's identity — the dealer's internal REF
-    // when the text has one, else the exact-odometer fingerprint (AUTOHERO
-    // pattern: same unit from many city accounts, no REF anywhere).
-    const cashPriceEur = item.cashPriceEur ?? extractCashPriceEur(item.description, item.priceEur);
-    const dedupKey = extractDedupKey(item.platform, item.description) ?? fingerprintDedupKey(item);
-
-    // Upsert into the global corpus; price/mileage/title refresh on re-sighting.
-    const [listing] = await db
-      .insert(listings)
-      .values({
-        platform: item.platform,
-        platformListingId: item.platformListingId,
-        url: item.url,
-        title: item.title,
-        description: item.description,
-        imageUrl: item.imageUrl,
-        priceEur: item.priceEur,
-        cashPriceEur,
-        dedupKey,
-        make: item.make,
-        model: item.model,
-        version: item.version,
-        year: item.year,
-        km: item.km,
-        fuel: item.fuel,
-        gearbox: item.gearbox,
-        powerCv: item.powerCv,
-        ecoLabel: item.ecoLabel,
-        sellerType: item.sellerType,
-        sellerName: item.sellerName,
-        locationText: item.locationText,
-        countryCode: item.countryCode,
-        lat: item.lat,
-        lon: item.lon,
-        raw: item.raw,
-      })
-      .onConflictDoUpdate({
-        target: [listings.platform, listings.platformListingId],
-        set: {
-          title: item.title,
-          priceEur: item.priceEur,
-          cashPriceEur,
-          dedupKey,
-          ...(item.imageUrl ? { imageUrl: item.imageUrl } : {}),
-          make: item.make,
-          model: item.model,
-          version: item.version,
-          km: item.km,
-          countryCode: item.countryCode,
-          active: true,
-          lastSeenAt: new Date(),
-        },
-      })
-      .returning({ id: listings.id });
-    if (!listing) continue;
-
-    const [existingLead] = await db
-      .select({ id: leads.id })
-      .from(leads)
-      .where(and(eq(leads.briefId, briefId), eq(leads.listingId, listing.id)))
-      .limit(1);
-    if (existingLead) continue;
-
-    // Same physical car already leading this brief under another account
-    // (same dealer REF) → the newcomer is born dead, not a second chance.
-    let duplicateOf: string | undefined;
-    if (dedupKey) {
-      const [dup] = await db
-        .select({ id: leads.id })
-        .from(leads)
-        .innerJoin(listings, eq(leads.listingId, listings.id))
-        .where(
-          and(
-            eq(leads.briefId, briefId),
-            eq(listings.dedupKey, dedupKey),
-            ne(listings.id, listing.id),
-            ne(leads.state, "dead"),
-          ),
-        )
-        .limit(1);
-      duplicateOf = dup?.id;
-    }
-
-    const benchmark = await getBenchmark(
-      db,
-      item.make,
-      item.model,
-      item.countryCode,
-      { version: item.version, year: item.year, powerCv: item.powerCv },
-      caches.benchmark,
-    );
-    const dossier = await getDossier(db, item.make, item.model, dossierCache);
-    const evaluation = evaluateListing(
-      item,
-      brief.criteria,
-      brief.hardLimits,
-      benchmark,
-      dossier,
-    );
-
-    const outcome = duplicateOf ? ("dead" as const) : evaluation.outcome;
-    const deadReason = duplicateOf ? "duplicate_listing" : evaluation.deadReason;
-    const [lead] = await db
-      .insert(leads)
-      .values({
-        userId: brief.userId,
-        briefId,
-        listingId: listing.id,
-        state: outcome,
-        verdict: evaluation.verdict,
-        deadReason,
-      })
-      .returning({ id: leads.id });
-
-    stats.newLeads += 1;
-    if (outcome === "shortlisted") stats.shortlisted += 1;
-    else stats.dead += 1;
-
-    // Shortlisted → enqueue detail enrichment (gearbox, power, eco label,
-    // seller reputation). Wallapop only for now; AutoScout24 detail later.
-    if (outcome === "shortlisted" && item.platform === "wallapop") {
-      const payload: JobPayload = {
-        type: "fetch_listing",
-        platform: item.platform,
-        platformListingId: item.platformListingId,
-        url: item.url,
-      };
-      await db.insert(jobs).values({ userId: brief.userId, type: payload.type, payload });
-    }
-
-    // Instant alert for top-grade finds. Fires only on first evaluation —
-    // re-evaluations (digest, enrichment) never alert, so no spam.
-    const alertThreshold = (process.env.ALERT_MAX_GRADE ?? "B") as ConfidenceGrade;
-    if (
-      outcome === "shortlisted" &&
-      owner &&
-      alertsSent < MAX_ALERTS_PER_INGEST &&
-      gradeAtMost(evaluation.verdict.overall, alertThreshold)
-    ) {
-      alertsSent += 1;
-      await sendEmail({
-        to: owner.email,
-        subject: `deepblue · candidato ${evaluation.verdict.overall}: ${item.title}`,
-        text: composeAlert(item, evaluation, lead?.id),
-        html: composeAlertHtml(item, evaluation, lead?.id),
+    // One rotten item must not kill the batch: a seller once typed "1.4"
+    // into horsepower and the integer column rejected the whole sweep.
+    // Sanitizers catch the known garbage; this isolates the unknown kind.
+    try {
+      await ingestOne(db, brief, item, caches, stats, async (lead, evaluation) => {
+        const alertThreshold = (process.env.ALERT_MAX_GRADE ?? "B") as ConfidenceGrade;
+        if (
+          owner &&
+          alertsSent < MAX_ALERTS_PER_INGEST &&
+          gradeAtMost(evaluation.verdict.overall, alertThreshold)
+        ) {
+          alertsSent += 1;
+          await sendEmail({
+            to: owner.email,
+            subject: `deepblue · candidato ${evaluation.verdict.overall}: ${item.title}`,
+            text: composeAlert(item, evaluation, lead?.id),
+            html: composeAlertHtml(item, evaluation, lead?.id),
+          });
+          // Stamp so tomorrow's digest shows it as "ya avisado", not as news.
+          if (lead) {
+            await db.update(leads).set({ alertedAt: new Date() }).where(eq(leads.id, lead.id));
+          }
+        }
       });
-      // Stamp so tomorrow's digest shows it as "ya avisado", not as news.
-      if (lead) {
-        await db.update(leads).set({ alertedAt: new Date() }).where(eq(leads.id, lead.id));
-      }
+    } catch (err) {
+      await db.insert(events).values({
+        userId: brief.userId,
+        type: "ingest_item_failed",
+        payload: {
+          platform: item.platform,
+          platformListingId: item.platformListingId,
+          title: item.title,
+          error: String(err instanceof Error ? err.message : err).slice(0, 500),
+        },
+      });
     }
-
-    await db.insert(events).values({
-      userId: brief.userId,
-      leadId: lead?.id,
-      type: "lead_evaluated",
-      payload: {
-        outcome,
-        deadReason,
-        overall: evaluation.verdict.overall,
-        title: item.title,
-        priceEur: item.priceEur,
-      },
-    });
   }
 
   return stats;
+}
+
+/** Ingest a single normalized listing: upsert, lead, evaluation, alert hook. */
+async function ingestOne(
+  db: Db,
+  brief: typeof briefs.$inferSelect,
+  item: NormalizedListing,
+  caches: ReturnType<typeof newEvalCaches>,
+  stats: IngestStats,
+  onShortlisted: (
+    lead: { id: string } | undefined,
+    evaluation: EvaluationResult,
+  ) => Promise<void>,
+): Promise<void> {
+  const briefId = brief.id;
+  // Text-derived facts: the real cash price behind financing-conditional
+  // headlines, and the physical car's identity — the dealer's internal REF
+  // when the text has one, else the exact-odometer fingerprint (AUTOHERO
+  // pattern: same unit from many city accounts, no REF anywhere).
+  const cashPriceEur = item.cashPriceEur ?? extractCashPriceEur(item.description, item.priceEur);
+  const dedupKey = extractDedupKey(item.platform, item.description) ?? fingerprintDedupKey(item);
+
+  // Upsert into the global corpus; price/mileage/title refresh on re-sighting.
+  // powerCv re-sanitized here: garbage from an out-of-date runner must not
+  // reach the integer column (the "1.4 CV" incident).
+  const [listing] = await db
+    .insert(listings)
+    .values({
+      platform: item.platform,
+      platformListingId: item.platformListingId,
+      url: item.url,
+      title: item.title,
+      description: item.description,
+      imageUrl: item.imageUrl,
+      priceEur: item.priceEur,
+      cashPriceEur,
+      dedupKey,
+      make: item.make,
+      model: item.model,
+      version: item.version,
+      year: item.year,
+      km: item.km,
+      fuel: item.fuel,
+      gearbox: item.gearbox,
+      powerCv: sanitizePowerCv(item.powerCv),
+      ecoLabel: item.ecoLabel,
+      sellerType: item.sellerType,
+      sellerName: item.sellerName,
+      locationText: item.locationText,
+      countryCode: item.countryCode,
+      lat: item.lat,
+      lon: item.lon,
+      raw: item.raw,
+    })
+    .onConflictDoUpdate({
+      target: [listings.platform, listings.platformListingId],
+      set: {
+        title: item.title,
+        priceEur: item.priceEur,
+        cashPriceEur,
+        dedupKey,
+        ...(item.imageUrl ? { imageUrl: item.imageUrl } : {}),
+        make: item.make,
+        model: item.model,
+        version: item.version,
+        km: item.km,
+        countryCode: item.countryCode,
+        active: true,
+        lastSeenAt: new Date(),
+      },
+    })
+    .returning({ id: listings.id });
+  if (!listing) return;
+
+  const [existingLead] = await db
+    .select({ id: leads.id })
+    .from(leads)
+    .where(and(eq(leads.briefId, briefId), eq(leads.listingId, listing.id)))
+    .limit(1);
+  if (existingLead) return;
+
+  // Same physical car already leading this brief under another account
+  // (same dealer REF) → the newcomer is born dead, not a second chance.
+  let duplicateOf: string | undefined;
+  if (dedupKey) {
+    const [dup] = await db
+      .select({ id: leads.id })
+      .from(leads)
+      .innerJoin(listings, eq(leads.listingId, listings.id))
+      .where(
+        and(
+          eq(leads.briefId, briefId),
+          eq(listings.dedupKey, dedupKey),
+          ne(listings.id, listing.id),
+          ne(leads.state, "dead"),
+        ),
+      )
+      .limit(1);
+    duplicateOf = dup?.id;
+  }
+
+  const benchmark = await getBenchmark(
+    db,
+    item.make,
+    item.model,
+    item.countryCode,
+    { version: item.version, year: item.year, powerCv: item.powerCv },
+    caches.benchmark,
+  );
+  const dossier = await getDossier(db, item.make, item.model, caches.dossier);
+  const evaluation = evaluateListing(
+    item,
+    brief.criteria,
+    brief.hardLimits,
+    benchmark,
+    dossier,
+  );
+
+  const outcome = duplicateOf ? ("dead" as const) : evaluation.outcome;
+  const deadReason = duplicateOf ? "duplicate_listing" : evaluation.deadReason;
+  const [lead] = await db
+    .insert(leads)
+    .values({
+      userId: brief.userId,
+      briefId,
+      listingId: listing.id,
+      state: outcome,
+      verdict: evaluation.verdict,
+      deadReason,
+    })
+    .returning({ id: leads.id });
+
+  stats.newLeads += 1;
+  if (outcome === "shortlisted") stats.shortlisted += 1;
+  else stats.dead += 1;
+
+  // Shortlisted → enqueue detail enrichment (gearbox, power, eco label,
+  // seller reputation). Wallapop only for now; AutoScout24 detail later.
+  if (outcome === "shortlisted" && item.platform === "wallapop") {
+    const payload: JobPayload = {
+      type: "fetch_listing",
+      platform: item.platform,
+      platformListingId: item.platformListingId,
+      url: item.url,
+    };
+    await db.insert(jobs).values({ userId: brief.userId, type: payload.type, payload });
+  }
+
+  // Instant alert for top-grade finds. Fires only on first evaluation —
+  // re-evaluations (digest, enrichment) never alert, so no spam.
+  if (outcome === "shortlisted") {
+    await onShortlisted(lead, evaluation);
+  }
+
+  await db.insert(events).values({
+    userId: brief.userId,
+    leadId: lead?.id,
+    type: "lead_evaluated",
+    payload: {
+      outcome,
+      deadReason,
+      overall: evaluation.verdict.overall,
+      title: item.title,
+      priceEur: item.priceEur,
+    },
+  });
 }
 
 function composeAlert(
@@ -317,7 +354,7 @@ export async function ingestListingDetail(
       km: item.km,
       fuel: item.fuel,
       gearbox: item.gearbox,
-      powerCv: item.powerCv,
+      powerCv: sanitizePowerCv(item.powerCv),
       ecoLabel: item.ecoLabel,
       sellerType: item.sellerType,
       sellerName: item.sellerName,

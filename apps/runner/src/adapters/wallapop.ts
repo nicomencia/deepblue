@@ -7,6 +7,7 @@
 import { setTimeout as sleep } from "node:timers/promises";
 import {
   extractFirstImageUrl,
+  sanitizePowerCv,
   type ListingCheck,
   type ListingRef,
   type NormalizedListing,
@@ -267,7 +268,7 @@ function normalizeDetail(
     km: attrNum(ta.km),
     fuel: ta.engine?.text ?? ta.engine?.value,
     gearbox: ta.gear_box?.text ?? ta.gear_box?.value,
-    powerCv: attrNum(ta.horsepower),
+    powerCv: sanitizePowerCv(attrNum(ta.horsepower)),
     ecoLabel: ta.eco_label?.value,
     countryCode: "ES", // Wallapop is Spain-only
     sellerType: user?.type && user.type !== "normal" ? "dealer" : "private",
@@ -314,7 +315,7 @@ function normalize(item: RawItem): NormalizedListing | null {
     km: ta.km,
     fuel: ta.engine,
     gearbox: ta.gearbox,
-    powerCv: typeof ta.horsepower === "number" ? ta.horsepower : undefined,
+    powerCv: sanitizePowerCv(typeof ta.horsepower === "number" ? ta.horsepower : undefined),
     countryCode: "ES", // Wallapop is Spain-only
     sellerType: "unknown",
     locationText: item.location?.city
