@@ -75,7 +75,9 @@ pnpm dev:runner
   muertos no resucitan;
   `ACTIVE_PLATFORMS = ["wallapop"]` (AS24 pausado — no reactivar sin decidirlo).
 - **Higiene Wallapop**: volumen bajo, pacing con jitter, ante 403/429 parar,
-  nunca reintentar más fuerte.
+  nunca reintentar más fuerte. Desde 2026-07-14 esto es código: los adapters
+  lanzan PlatformBlockedError ante 403/429 (sin fallback) y el runner deja de
+  arrendar jobs 45–90 min; el Core registra el evento y avisa por email.
 - **Convención de commits**: un commit por feature, mensaje explicando el
   porqué; `pnpm typecheck && pnpm test` SIEMPRE después del último archivo
   tocado, no antes.
@@ -112,6 +114,13 @@ anuncios, digest con suelo de nota + alertas A/B sin duplicados, dossiers
 (207/THP, Golf, Elise) con verificación manual de riesgos (Confirmar/Descartar
 en la página del lead), tabs por búsqueda, página Actividad, descubrimiento de
 modelos y adopción manual de anuncios con dossier-first. 77 tests verdes.
+
+**Cambio 2026-07-14 — cortacircuitos anti-baneo.** Un 403/429 de Wallapop
+detiene el runner en seco: el adapter lanza PlatformBlockedError en cuanto ve
+el status (antes el fallback de búsqueda reintentaba contra el bloqueo), el
+runner se pausa 45–90 min con jitter y el Core lo audita (evento
+`platform_blocked`) y envía email de aviso. Prerrequisito de Fase 2: proteger
+la cuenta real antes de que existan send_message.
 
 **Cambio 2026-07-14 — dossiers auto-aprobados.** Los dossiers entran en uso al
 crearse (ambas vías: builder API e import por suscripción) y re-evalúan sus

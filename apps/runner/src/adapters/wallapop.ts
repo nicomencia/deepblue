@@ -12,6 +12,7 @@ import type {
   PlatformAdapter,
   SearchQuery,
 } from "@deepblue/core";
+import { assertNotBlocked } from "../blocked.js";
 
 const API_BASE = "https://api.wallapop.com/api/v3";
 const API = `${API_BASE}/search`;
@@ -83,7 +84,9 @@ export const wallapopAdapter: PlatformAdapter = {
     if (query.fuel !== undefined) params.set("engine", WALLAPOP_ENGINE[query.fuel]);
 
     // Fallback: if the filtered request is ever rejected (param drift), retry
-    // with the minimal verified set rather than failing the sweep.
+    // with the minimal verified set rather than failing the sweep. A 403/429
+    // never reaches the fallback — fetchItems throws PlatformBlockedError
+    // first, because retrying against a block is how accounts get banned.
     let items = await fetchItems(params);
     items ??= await fetchItems(
       new URLSearchParams({
@@ -137,6 +140,7 @@ export const wallapopAdapter: PlatformAdapter = {
     // not. One request, no user/stats calls — deliberately lighter than
     // fetchListing so liveness sweeps stay within pacing hygiene.
     const res = await fetch(`${API_BASE}/items/${ref.platformListingId}`, { headers: HEADERS });
+    assertNotBlocked("wallapop", res.status, "check_listing");
     if (res.status === 404 || res.status === 410) {
       return { platform: "wallapop", platformListingId: ref.platformListingId, status: "gone" };
     }
@@ -156,6 +160,7 @@ export const wallapopAdapter: PlatformAdapter = {
 
 async function fetchItems(params: URLSearchParams): Promise<RawItem[] | null> {
   const res = await fetch(`${API}?${params}`, { headers: HEADERS });
+  assertNotBlocked("wallapop", res.status, "search");
   if (!res.ok) return null;
   const data: unknown = await res.json();
   const items = (data as { data?: { section?: { payload?: { items?: unknown } } } })
@@ -165,6 +170,7 @@ async function fetchItems(params: URLSearchParams): Promise<RawItem[] | null> {
 
 async function fetchJson<T>(url: string): Promise<T | null> {
   const res = await fetch(url, { headers: HEADERS });
+  assertNotBlocked("wallapop", res.status, "fetch");
   if (!res.ok) return null;
   return (await res.json()) as T;
 }
@@ -172,6 +178,7 @@ async function fetchJson<T>(url: string): Promise<T | null> {
 /** Canonical item id from an item web page ("pageProps":{"item":{"id":"…"}}). */
 async function resolveItemIdFromPage(url: string): Promise<string | null> {
   const res = await fetch(url, { headers: HEADERS });
+  assertNotBlocked("wallapop", res.status, "resolve_id");
   if (!res.ok) return null;
   const html = await res.text();
   const match =

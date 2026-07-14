@@ -1,9 +1,10 @@
 import { listingCheckResultSchema, normalizedListingSchema } from "@deepblue/core";
-import { jobs } from "@deepblue/db";
+import { events, jobs, users } from "@deepblue/db";
 import { eq } from "drizzle-orm";
 import { z } from "zod";
 import { completeAdoption } from "../../../../../../lib/adopt";
 import { getDb } from "../../../../../../lib/db";
+import { sendEmail } from "../../../../../../lib/email";
 import { ingestListingDetail, ingestSearchResults } from "../../../../../../lib/ingest";
 import { applyListingCheck } from "../../../../../../lib/reaper";
 import { isAuthorizedRunner } from "../../../../../../lib/runner-auth";
@@ -53,6 +54,28 @@ export async function POST(
       updatedAt: new Date(),
     })
     .where(eq(jobs.id, id));
+
+  // A tripped circuit breaker is account-safety news: audit it and tell the
+  // user immediately. At most one report carries this error per cooldown
+  // (the runner stops leasing after it), so this cannot spam.
+  if (report.status === "failed" && report.error?.startsWith("platform_blocked")) {
+    await db.insert(events).values({
+      userId: job.userId,
+      type: "platform_blocked",
+      payload: { jobId: job.id, jobType: job.payload.type, error: report.error },
+    });
+    const [owner] = await db.select().from(users).where(eq(users.id, job.userId)).limit(1);
+    if (owner) {
+      await sendEmail({
+        to: owner.email,
+        subject: "deepblue · Wallapop ha bloqueado una petición — runner en pausa",
+        text:
+          `El runner ha recibido un bloqueo (403/429) y se ha pausado solo:\n\n${report.error}\n\n` +
+          "No hace falta hacer nada: reanudará solo tras el enfriamiento. Si esto se repite a " +
+          "menudo, conviene bajar la frecuencia de sweeps (SWEEP_INTERVAL_MINUTES).",
+      });
+    }
+  }
 
   return Response.json({ ok: true, stats: ingestStats ?? null });
 }

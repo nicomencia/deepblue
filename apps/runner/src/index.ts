@@ -7,6 +7,7 @@
 import { setTimeout as sleep } from "node:timers/promises";
 import type { LeasedJob } from "@deepblue/core";
 import { adapters } from "./adapters/index.js";
+import { blockedCooldownMs, PlatformBlockedError } from "./blocked.js";
 import { loadConfig, type RunnerConfig } from "./config.js";
 
 /** Human pacing: never operate on a metronome. */
@@ -74,8 +75,15 @@ async function main(): Promise<void> {
   });
 
   console.log(`runner started, polling ${config.coreApiUrl}`);
+  // Circuit breaker: after a 403/429 the runner leases nothing until the
+  // cooldown passes. Retrying against a block is how the real account dies.
+  let pausedUntil = 0;
   while (running) {
     try {
+      if (Date.now() < pausedUntil) {
+        await sleep(jittered(config.pollIntervalMs));
+        continue;
+      }
       const job = await leaseJob(config);
       if (job) {
         console.log(`executing job ${job.id} (${job.payload.type})`);
@@ -83,10 +91,20 @@ async function main(): Promise<void> {
           const result = await executeJob(job);
           await reportJob(config, job.id, { status: "succeeded", result });
         } catch (err) {
-          await reportJob(config, job.id, {
-            status: "failed",
-            error: err instanceof Error ? err.message : String(err),
-          });
+          if (err instanceof PlatformBlockedError) {
+            pausedUntil = Date.now() + blockedCooldownMs();
+            const until = new Date(pausedUntil).toISOString();
+            console.error(`${err.message} — pausing all jobs until ${until}`);
+            await reportJob(config, job.id, {
+              status: "failed",
+              error: `${err.message} — runner paused until ${until}`,
+            });
+          } else {
+            await reportJob(config, job.id, {
+              status: "failed",
+              error: err instanceof Error ? err.message : String(err),
+            });
+          }
         }
       }
     } catch (err) {
