@@ -426,11 +426,18 @@ function assessPrice(
       `Matrícula extranjera: comparado sumando ~${REMATRICULATION_COST_EUR.toLocaleString("es-ES")} € de rematriculación (ITV, homologación, tasas — y si viene de UK, posible IVA y arancel encima)`,
     );
   }
+  const assumed: string[] = [];
   if (imported.rhd) {
     score = clamp(score - RHD_PRICE_PENALTY);
-    known.push(
-      "Volante a la derecha (RHD): el mercado español lo descuenta con fuerza y la mediana de comparables LHD sobrevalora este anuncio",
-    );
+    if (imported.rhdAssumed) {
+      assumed.push(
+        "Volante a la derecha asumido: coche de origen inglés sin mencionar volante izquierdo — los LHD con matrícula UK siempre lo anuncian",
+      );
+    } else {
+      known.push(
+        "Volante a la derecha (RHD): el mercado español lo descuenta con fuerza y la mediana de comparables LHD sobrevalora este anuncio",
+      );
+    }
   }
   if (criteria.targetPriceEur !== undefined && price <= criteria.targetPriceEur) {
     score = clamp(score + 5);
@@ -438,7 +445,7 @@ function assessPrice(
   }
 
   return {
-    factor: { grade: scoreToGrade(score), score, known, assumed: [], unverified: [] },
+    factor: { grade: scoreToGrade(score), score, known, assumed, unverified: [] },
     scamSignal,
   };
 }
@@ -529,6 +536,9 @@ function buildVerdict(
   // Import signals (RHD / foreign plates) hit the price factor and always
   // deserve a direct question — sellers rarely volunteer the paperwork cost.
   const imported = extractImportSignals(listing.title, listing.description);
+  if (imported.rhdAssumed) {
+    openQuestions.unshift("¿El volante está a la derecha o a la izquierda?");
+  }
   if (imported.foreignPlate) {
     openQuestions.unshift(
       "¿Quién asume la rematriculación en España (y aduanas/IVA si viene de UK)? ¿Qué documentación de importación tiene?",

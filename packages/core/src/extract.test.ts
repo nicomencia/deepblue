@@ -190,8 +190,25 @@ describe("extractImportSignals", () => {
   it("detects the real case: RHD in the title", () => {
     expect(extractImportSignals("Porsche Boxster 2005 Manual RHD", undefined)).toEqual({
       rhd: true,
+      rhdAssumed: false,
       foreignPlate: false,
     });
+  });
+
+  it("assumes RHD on UK origin unless the ad claims left-hand drive", () => {
+    // The real S 3.4 case: "matricula inglesa" (no accent), volante unstated.
+    const s34 = extractImportSignals(
+      "Porsche Boxster S 3.4",
+      "Vehiculo con papeles y matricula inglesa.",
+    );
+    expect(s34).toEqual({ rhd: true, rhdAssumed: true, foreignPlate: true });
+
+    const lhd = extractImportSignals(undefined, "matrícula inglesa, volante a la izquierda");
+    expect(lhd.rhd).toBe(false);
+    expect(lhd.foreignPlate).toBe(true);
+
+    // A German import is LHD country — no RHD assumption.
+    expect(extractImportSignals(undefined, "matrícula alemana").rhd).toBe(false);
   });
 
   it("detects RHD phrasings in Spanish", () => {
@@ -219,6 +236,7 @@ describe("extractImportSignals", () => {
   it("stays quiet on ordinary ads", () => {
     expect(extractImportSignals("Golf VII 1.4 TSI", "coche nacional, único dueño")).toEqual({
       rhd: false,
+      rhdAssumed: false,
       foreignPlate: false,
     });
   });

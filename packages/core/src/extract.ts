@@ -135,12 +135,21 @@ export function sanitizePowerCv(value: number | undefined): number | undefined {
  * en España" wins over plate mentions (sellers preempt the question).
  */
 export interface ImportSignals {
+  /** Explicitly right-hand drive, or UK-origin without claiming LHD (see rhdAssumed). */
   rhd: boolean;
+  /** The RHD flag is an inference from UK origin, not stated in the ad. */
+  rhdAssumed: boolean;
   foreignPlate: boolean;
 }
 
 const RHD_RE =
   /\bRHD\b|volante\s+(?:a\s+la\s+)?derecha|volante\s+ingl[eé]s|conducci[oó]n\s+(?:a\s+la\s+)?derecha/i;
+
+/** Sellers of LHD cars on UK plates advertise it — silence means RHD. */
+const LHD_RE = /\bLHD\b|volante\s+(?:a\s+la\s+)?izquierd[oa]/i;
+
+const UK_ORIGIN_RE =
+  /matr[ií]cula\s+(?:inglesa|brit[aá]nica|uk\b)|matr[ií]cula\s+de\s+(?:uk|inglaterra|reino\s+unido)|papeles\s+(?:ingleses|brit[aá]nicos)|(?:coche|veh[ií]culo)\s+ingl[eé]s|importado\s+de\s+(?:uk|inglaterra|reino\s+unido)/i;
 
 const FOREIGN_PLATE_RE =
   /matr[ií]cula\s+(?:inglesa|brit[aá]nica|extranjera|francesa|alemana|italiana|portuguesa|belga|holandesa|uk\b)|matr[ií]cula\s+de\s+(?:uk|inglaterra|reino\s+unido|francia|alemania|italia|portugal)|papeles\s+(?:ingleses|brit[aá]nicos|franceses|alemanes|extranjeros)|(?:pendiente|falta)\s+de\s+(?:re)?matricular|sin\s+matricular|(?:re)?matriculaci[oó]n\s+(?:no\s+incluida|a\s+cargo\s+del\s+comprador)/i;
@@ -152,9 +161,15 @@ export function extractImportSignals(
   description: string | undefined,
 ): ImportSignals {
   const text = [title, description].filter(Boolean).join("\n");
-  if (!text) return { rhd: false, foreignPlate: false };
+  if (!text) return { rhd: false, rhdAssumed: false, foreignPlate: false };
+
+  const explicit = RHD_RE.test(text);
+  // A UK-origin car that doesn't advertise "volante a la izquierda" is RHD
+  // in practice: LHD units on UK plates are rare and always sold on that fact.
+  const assumed = !explicit && UK_ORIGIN_RE.test(text) && !LHD_RE.test(text);
   return {
-    rhd: RHD_RE.test(text),
+    rhd: explicit || assumed,
+    rhdAssumed: assumed,
     foreignPlate: FOREIGN_PLATE_RE.test(text) && !SPANISH_PLATE_RE.test(text),
   };
 }

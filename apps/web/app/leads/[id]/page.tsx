@@ -1,4 +1,4 @@
-import type { IssueAssessment, IssueFinding, VerdictFactor } from "@deepblue/core";
+import { extractImportSignals, type IssueAssessment, type IssueFinding, type VerdictFactor } from "@deepblue/core";
 import { briefs, events, leads, listings } from "@deepblue/db";
 import { desc, eq } from "drizzle-orm";
 import Link from "next/link";
@@ -59,6 +59,9 @@ export default async function LeadDetail({
     .orderBy(desc(events.createdAt))
     .limit(10);
 
+  // High-signal import warnings belong next to the title, not buried in a card.
+  const imported = extractImportSignals(listing.title, listing.description ?? undefined);
+
   return (
     <main style={{ maxWidth: 860, margin: "0 auto", padding: "2rem 1.5rem" }}>
       <p style={{ margin: "0 0 0.5rem" }}>
@@ -67,6 +70,20 @@ export default async function LeadDetail({
         </Link>
       </p>
       <h1 style={{ fontSize: "1.3rem", margin: "0 0 0.25rem" }}>{listing.title}</h1>
+      {(imported.rhd || imported.foreignPlate) && (
+        <p style={{ margin: "0.15rem 0 0.35rem", display: "flex", gap: "0.4rem", flexWrap: "wrap" }}>
+          {imported.foreignPlate && (
+            <span style={importChip}>
+              🇬🇧 Matrícula extranjera — rematriculación ~1.500 € (+aduanas/IVA si UK)
+            </span>
+          )}
+          {imported.rhd && (
+            <span style={importChip}>
+              Volante a la derecha{imported.rhdAssumed ? " (asumido: origen inglés)" : " (RHD)"}
+            </span>
+          )}
+        </p>
+      )}
       {listing.imageUrl && (
         <a href={listing.url} target="_blank" rel="noreferrer">
           {/* eslint-disable-next-line @next/next/no-img-element -- platform CDN, unknown domains */}
@@ -374,6 +391,15 @@ const card: React.CSSProperties = {
   margin: "0.75rem 0",
 };
 const h2: React.CSSProperties = { fontSize: "1rem", margin: "1.5rem 0 0.5rem" };
+const importChip: React.CSSProperties = {
+  display: "inline-block",
+  padding: "0.15rem 0.6rem",
+  borderRadius: 999,
+  fontSize: "0.78rem",
+  fontWeight: 600,
+  color: "var(--grade-d)",
+  border: "1px solid currentcolor",
+};
 const btn: React.CSSProperties = {
   padding: "0.3rem 0.8rem",
   borderRadius: 6,
