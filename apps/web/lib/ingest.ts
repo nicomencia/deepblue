@@ -7,6 +7,7 @@ import {
   evaluateListing,
   extractCashPriceEur,
   extractDedupKey,
+  extractImportSignals,
   fingerprintDedupKey,
   gradeAtMost,
   sanitizePowerCv,
@@ -17,7 +18,7 @@ import {
   type NormalizedListing,
 } from "@deepblue/core";
 import { briefs, events, jobs, leads, listings, users, type Db } from "@deepblue/db";
-import { and, eq, ne } from "drizzle-orm";
+import { and, eq, ne, sql } from "drizzle-orm";
 import { sendEmail } from "./email";
 import { leadUrl } from "./links";
 import { getBenchmark, getDossier } from "./lookups";
@@ -108,6 +109,11 @@ async function ingestOne(
   // pattern: same unit from many city accounts, no REF anywhere).
   const cashPriceEur = item.cashPriceEur ?? extractCashPriceEur(item.description, item.priceEur);
   const dedupKey = extractDedupKey(item.platform, item.description) ?? fingerprintDedupKey(item);
+  // Import facts: only explicit statements are stored (assumed RHD stays an
+  // inference in the verdict); never overwrite a user-verified value.
+  const imp = extractImportSignals(item.title, item.description);
+  const rhdFact = item.rhd ?? (imp.rhd && !imp.rhdAssumed ? true : undefined);
+  const foreignPlatesFact = item.foreignPlates ?? (imp.foreignPlate ? true : undefined);
 
   // Upsert into the global corpus; price/mileage/title refresh on re-sighting.
   // powerCv re-sanitized here: garbage from an out-of-date runner must not
@@ -133,6 +139,8 @@ async function ingestOne(
       gearbox: item.gearbox,
       powerCv: sanitizePowerCv(item.powerCv),
       ecoLabel: item.ecoLabel,
+      rhd: rhdFact,
+      foreignPlates: foreignPlatesFact,
       sellerType: item.sellerType,
       sellerName: item.sellerName,
       locationText: item.locationText,
@@ -149,6 +157,10 @@ async function ingestOne(
         cashPriceEur,
         dedupKey,
         ...(item.imageUrl ? { imageUrl: item.imageUrl } : {}),
+        // Facts only fill gaps: a stored value (possibly the user's manual
+        // verification) always wins over re-extraction.
+        rhd: sql`coalesce(${listings.rhd}, ${rhdFact ?? null})`,
+        foreignPlates: sql`coalesce(${listings.foreignPlates}, ${foreignPlatesFact ?? null})`,
         make: item.make,
         model: item.model,
         version: item.version,
@@ -255,6 +267,13 @@ async function ingestOne(
   });
 }
 
+/** Explicit import fact from a listing's text, for gap-filling updates. */
+function detailImportFact(item: NormalizedListing, field: "rhd" | "foreignPlates"): boolean | null {
+  const imp = extractImportSignals(item.title, item.description);
+  if (field === "rhd") return imp.rhd && !imp.rhdAssumed ? true : null;
+  return imp.foreignPlate ? true : null;
+}
+
 function composeAlert(
   item: NormalizedListing,
   evaluation: EvaluationResult,
@@ -347,6 +366,8 @@ export async function ingestListingDetail(
       priceEur: item.priceEur,
       cashPriceEur: item.cashPriceEur ?? extractCashPriceEur(item.description, item.priceEur),
       dedupKey: extractDedupKey(item.platform, item.description) ?? fingerprintDedupKey(item),
+      rhd: sql`coalesce(${listings.rhd}, ${detailImportFact(item, "rhd")})`,
+      foreignPlates: sql`coalesce(${listings.foreignPlates}, ${detailImportFact(item, "foreignPlates")})`,
       make: item.make,
       model: item.model,
       version: item.version,

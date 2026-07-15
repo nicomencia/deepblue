@@ -5,7 +5,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getDb } from "../../../lib/db";
 import { fmtDate, fmtEur, fmtKm, gradeVar } from "../../../lib/ui";
-import { setIssueFinding } from "./actions";
+import { setImportFact, setIssueFinding } from "./actions";
 
 export const dynamic = "force-dynamic";
 
@@ -59,8 +59,14 @@ export default async function LeadDetail({
     .orderBy(desc(events.createdAt))
     .limit(10);
 
-  // High-signal import warnings belong next to the title, not buried in a card.
-  const imported = extractImportSignals(listing.title, listing.description ?? undefined);
+  // High-signal import warnings belong next to the title, not buried in a
+  // card. Stored facts (user-verified or ingest-detected) beat text inference.
+  const extracted = extractImportSignals(listing.title, listing.description ?? undefined);
+  const imported = {
+    rhd: listing.rhd ?? extracted.rhd,
+    rhdAssumed: listing.rhd === null && extracted.rhdAssumed,
+    foreignPlate: listing.foreignPlates ?? extracted.foreignPlate,
+  };
 
   return (
     <main style={{ maxWidth: 860, margin: "0 auto", padding: "2rem 1.5rem" }}>
@@ -74,16 +80,42 @@ export default async function LeadDetail({
         <p style={{ margin: "0.15rem 0 0.35rem", display: "flex", gap: "0.4rem", flexWrap: "wrap" }}>
           {imported.foreignPlate && (
             <span style={importChip}>
-              🇬🇧 Matrícula extranjera — rematriculación ~1.500 € (+aduanas/IVA si UK)
+              🇬🇧 Matrícula extranjera{listing.foreignPlates !== null ? " (verificado)" : ""} —
+              rematriculación ~1.500 € (+aduanas/IVA si UK)
             </span>
           )}
           {imported.rhd && (
             <span style={importChip}>
-              Volante a la derecha{imported.rhdAssumed ? " (asumido: origen inglés)" : " (RHD)"}
+              Volante a la derecha
+              {listing.rhd !== null
+                ? " (verificado)"
+                : imported.rhdAssumed
+                  ? " (asumido: origen inglés)"
+                  : " (RHD)"}
             </span>
           )}
         </p>
       )}
+      {/* Verified import facts: the photos tell what the text hides. */}
+      <details open={imported.rhd || imported.foreignPlate} style={{ margin: "0.2rem 0 0.5rem" }}>
+        <summary style={{ cursor: "pointer", fontSize: "0.82rem", color: "var(--ink-muted)" }}>
+          Verificar importación (volante / matrícula)
+        </summary>
+        <div style={{ display: "flex", gap: "1.2rem", flexWrap: "wrap", margin: "0.35rem 0 0" }}>
+          <ImportFactRow
+            leadId={lead.id}
+            field="rhd"
+            label="Volante a la derecha"
+            stored={listing.rhd}
+          />
+          <ImportFactRow
+            leadId={lead.id}
+            field="foreignPlates"
+            label="Matrícula extranjera (sin matricular en España)"
+            stored={listing.foreignPlates}
+          />
+        </div>
+      </details>
       {listing.imageUrl && (
         <a href={listing.url} target="_blank" rel="noreferrer">
           {/* eslint-disable-next-line @next/next/no-img-element -- platform CDN, unknown domains */}
@@ -277,6 +309,53 @@ export default async function LeadDetail({
         </>
       )}
     </main>
+  );
+}
+
+/** Sí / No / ¿? controls for one verified import fact on this lead's listing. */
+function ImportFactRow({
+  leadId,
+  field,
+  label,
+  stored,
+}: {
+  leadId: string;
+  field: "rhd" | "foreignPlates";
+  label: string;
+  stored: boolean | null;
+}) {
+  const options: Array<{ value: string; text: string; active: boolean }> = [
+    { value: "true", text: "Sí", active: stored === true },
+    { value: "false", text: "No", active: stored === false },
+    { value: "unknown", text: "¿?", active: stored === null },
+  ];
+  return (
+    <span style={{ display: "flex", gap: "0.35rem", alignItems: "center", fontSize: "0.83rem" }}>
+      <span style={{ color: "var(--ink-muted)" }}>{label}:</span>
+      {options.map((o) => (
+        <form key={o.value} action={setImportFact} style={{ display: "inline" }}>
+          <input type="hidden" name="leadId" value={leadId} />
+          <input type="hidden" name="field" value={field} />
+          <input type="hidden" name="value" value={o.value} />
+          <button
+            type="submit"
+            style={{
+              padding: "0.1rem 0.55rem",
+              borderRadius: 999,
+              border: "1px solid",
+              borderColor: o.active ? "var(--ink-muted)" : "var(--border)",
+              background: o.active ? "var(--card)" : "transparent",
+              color: "inherit",
+              fontWeight: o.active ? 700 : 400,
+              fontSize: "0.8rem",
+              cursor: "pointer",
+            }}
+          >
+            {o.text}
+          </button>
+        </form>
+      ))}
+    </span>
   );
 }
 

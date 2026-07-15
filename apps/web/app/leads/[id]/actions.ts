@@ -21,3 +21,20 @@ export async function setIssueFinding(formData: FormData): Promise<void> {
   revalidatePath(`/leads/${leadId}`);
   revalidatePath("/");
 }
+
+import { applyImportFact, type ImportFactField, type ImportFactValue } from "../../../lib/findings";
+
+/** Mark a verified import fact (RHD / foreign plates) and refresh the verdict. */
+export async function setImportFact(formData: FormData): Promise<void> {
+  const leadId = String(formData.get("leadId") ?? "");
+  const field = String(formData.get("field") ?? "") as ImportFactField;
+  const value = String(formData.get("value") ?? "") as ImportFactValue;
+  if (!leadId || !["rhd", "foreignPlates"].includes(field) || !["true", "false", "unknown"].includes(value)) {
+    throw new Error("marca inválida: faltan lead, campo o valor");
+  }
+
+  const db = await getDb();
+  await applyImportFact(db, leadId, field, value);
+  revalidatePath(`/leads/${leadId}`);
+  revalidatePath("/");
+}

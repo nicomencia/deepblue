@@ -42,7 +42,11 @@ export default async function BriefsPage() {
                   {fmtEur(brief.hardLimits.maxPriceEur)}
                   {c.targetPriceEur ? ` (objetivo ${fmtEur(c.targetPriceEur)})` : ""}
                   {" · riesgo "}
-                  {c.riskTolerance ?? "medium"} · {shortlisted}/{total} leads vivos
+                  {c.riskTolerance ?? "medium"}
+                  {brief.hardLimits.noRhd ? " · sin RHD" : ""}
+                  {brief.hardLimits.requireSpanishPlates ? " · solo matrícula ES" : ""}
+                  {" · "}
+                  {shortlisted}/{total} leads vivos
                 </p>
               </div>
               {/* One form per action: React server actions drop the submitter
@@ -146,6 +150,14 @@ export default async function BriefsPage() {
           Innegociables (una por línea)
           <textarea name="nonNegotiables" rows={2} placeholder={"ITV en vigor\nSin reparaciones estructurales"} style={inp} />
         </label>
+        <fieldset style={{ border: "none", padding: 0, margin: 0, gridColumn: "1 / -1", display: "flex", gap: "1.2rem", flexWrap: "wrap" }}>
+          <label style={{ fontSize: "0.85rem" }}>
+            <input type="checkbox" name="noRhd" value="1" /> Descartar volante a la derecha (RHD)
+          </label>
+          <label style={{ fontSize: "0.85rem" }}>
+            <input type="checkbox" name="requireSpanishPlates" value="1" /> Descartar sin matricular en España
+          </label>
+        </fieldset>
         <label style={{ ...lbl, gridColumn: "1 / -1" }}>
           Notas para el agente (una por línea)
           <textarea name="notes" rows={2} placeholder={"Preferible pocos propietarios"} style={inp} />

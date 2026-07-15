@@ -92,8 +92,18 @@ export function evaluateListing(
   findings?: IssueFinding[],
 ): EvaluationResult {
   // --- Hard filters: these kill the lead outright -------------------------
-  const deadReason = hardFilterReason(listing, criteria, hardLimits);
-  const verdict = buildVerdict(listing, criteria, hardLimits, benchmark, dossier, findings);
+  // Import facts: an explicit value on the listing (user-verified or set at
+  // ingest) always beats text inference; the assumption flag only survives
+  // while nothing explicit is known.
+  const extracted = extractImportSignals(listing.title, listing.description);
+  const imported: ImportSignals = {
+    rhd: listing.rhd ?? extracted.rhd,
+    rhdAssumed: listing.rhd === undefined && extracted.rhdAssumed,
+    foreignPlate: listing.foreignPlates ?? extracted.foreignPlate,
+  };
+
+  const deadReason = hardFilterReason(listing, criteria, hardLimits, imported);
+  const verdict = buildVerdict(listing, criteria, hardLimits, imported, benchmark, dossier, findings);
   if (deadReason) return { outcome: "dead", deadReason, verdict };
   return { outcome: "shortlisted", verdict };
 }
@@ -102,8 +112,14 @@ function hardFilterReason(
   listing: NormalizedListing,
   criteria: BriefCriteria,
   hardLimits: HardLimits,
+  imported: ImportSignals,
 ): string | undefined {
   if (!matchesVehicle(listing, criteria)) return "different_vehicle";
+  // Import hard limits kill on FACTS (explicit text or user-verified), never
+  // on the RHD assumption alone — dead leads don't resurrect, and the open
+  // question resolves the assumption first.
+  if (hardLimits.noRhd && imported.rhd && !imported.rhdAssumed) return "rhd_not_accepted";
+  if (hardLimits.requireSpanishPlates && imported.foreignPlate) return "foreign_plates_not_accepted";
   if (listing.year !== undefined) {
     if (criteria.yearMin !== undefined && listing.year < criteria.yearMin) return "year_below_minimum";
     if (criteria.yearMax !== undefined && listing.year > criteria.yearMax) return "year_above_maximum";
@@ -523,6 +539,7 @@ function buildVerdict(
   listing: NormalizedListing,
   criteria: BriefCriteria,
   hardLimits: HardLimits,
+  imported: ImportSignals,
   benchmark?: PriceBenchmark,
   dossier?: ModelDossier,
   findings?: IssueFinding[],
@@ -535,7 +552,6 @@ function buildVerdict(
 
   // Import signals (RHD / foreign plates) hit the price factor and always
   // deserve a direct question — sellers rarely volunteer the paperwork cost.
-  const imported = extractImportSignals(listing.title, listing.description);
   if (imported.rhdAssumed) {
     openQuestions.unshift("¿El volante está a la derecha o a la izquierda?");
   }

@@ -53,3 +53,47 @@ export async function applyIssueFinding(
 
   return { overall: result.overall };
 }
+
+export type ImportFactField = "rhd" | "foreignPlates";
+export type ImportFactValue = "true" | "false" | "unknown";
+
+/**
+ * Mark a verified import fact on the lead's LISTING (the fact belongs to the
+ * car, so every brief watching it benefits), then re-evaluate. "unknown"
+ * clears the mark and text inference takes over again.
+ */
+export async function applyImportFact(
+  db: Db,
+  leadId: string,
+  field: ImportFactField,
+  value: ImportFactValue,
+): Promise<{ overall: string }> {
+  const [row] = await db
+    .select({ lead: leads, listing: listings, brief: briefs })
+    .from(leads)
+    .innerJoin(listings, eq(leads.listingId, listings.id))
+    .innerJoin(briefs, eq(leads.briefId, briefs.id))
+    .where(eq(leads.id, leadId))
+    .limit(1);
+  if (!row) throw new Error(`lead ${leadId} not found`);
+
+  const stored = value === "unknown" ? null : value === "true";
+  await db.update(listings).set({ [field]: stored }).where(eq(listings.id, row.listing.id));
+
+  const result = await reevaluateLead(
+    db,
+    row.lead,
+    { ...row.listing, [field]: stored },
+    row.brief,
+    newEvalCaches(),
+  );
+
+  await db.insert(events).values({
+    userId: row.lead.userId,
+    leadId,
+    type: "import_fact",
+    payload: { field, value, overall: result.overall },
+  });
+
+  return { overall: result.overall };
+}

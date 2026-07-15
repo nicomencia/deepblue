@@ -67,6 +67,8 @@ export async function createBrief(formData: FormData): Promise<void> {
   const hardLimits: HardLimits = {
     maxPriceEur,
     nonNegotiables: lines(formData.get("nonNegotiables")),
+    ...(formData.get("noRhd") ? { noRhd: true } : {}),
+    ...(formData.get("requireSpanishPlates") ? { requireSpanishPlates: true } : {}),
   };
 
   const name =

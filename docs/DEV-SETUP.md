@@ -120,6 +120,18 @@ anuncios, digest con suelo de nota + alertas A/B sin duplicados, dossiers
 en la página del lead), tabs por búsqueda, página Actividad, descubrimiento de
 modelos y adopción manual de anuncios con dossier-first. 77 tests verdes.
 
+**Cambio 2026-07-15 — hechos de importación verificables + límites duros.**
+Los flags dejan de ser solo texto: `listings.rhd` y `listings.foreign_plates`
+(booleanos, null = desconocido, migración 0012) se rellenan desde texto
+explícito en ingesta/backfill y se marcan a mano en la ficha del lead
+(Sí/No/¿?) — las fotos cuentan lo que el texto calla; el valor explícito gana
+siempre a la inferencia y un valor guardado nunca se machaca (COALESCE).
+Nuevos límites duros por búsqueda (checkboxes al crearla): `noRhd` («no
+acepto RHD a ningún precio») y `requireSpanishPlates` (hay importados que ni
+se pueden homologar) — matan en código (`rhd_not_accepted` /
+`foreign_plates_not_accepted`), pero NUNCA sobre la asunción de RHD sola: los
+leads muertos no resucitan y la pregunta al vendedor la resuelve antes.
+
 **Cambio 2026-07-15 — señales de importación (RHD / matrícula extranjera).**
 Caso real (Boxster RHD a 11.999 € y Boxster S con «matricula inglesa» a
 16.300 €): los deportivos importados de UK parecen gangas. `extractImportSignals`

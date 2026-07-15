@@ -10,6 +10,7 @@ import {
   extractCashPriceEur,
   extractDedupKey,
   extractFirstImageUrl,
+  extractImportSignals,
   fingerprintDedupKey,
 } from "@deepblue/core";
 import { events, leads, listings, type Db } from "@deepblue/db";
@@ -20,6 +21,7 @@ export async function backfillExtraction(db: Db): Promise<number> {
     .select({
       id: listings.id,
       platform: listings.platform,
+      title: listings.title,
       description: listings.description,
       priceEur: listings.priceEur,
       make: listings.make,
@@ -28,10 +30,20 @@ export async function backfillExtraction(db: Db): Promise<number> {
       year: listings.year,
       km: listings.km,
       imageUrl: listings.imageUrl,
+      rhd: listings.rhd,
+      foreignPlates: listings.foreignPlates,
       raw: listings.raw,
     })
     .from(listings)
-    .where(or(isNull(listings.cashPriceEur), isNull(listings.dedupKey), isNull(listings.imageUrl)));
+    .where(
+      or(
+        isNull(listings.cashPriceEur),
+        isNull(listings.dedupKey),
+        isNull(listings.imageUrl),
+        isNull(listings.rhd),
+        isNull(listings.foreignPlates),
+      ),
+    );
 
   let updated = 0;
   for (const row of rows) {
@@ -52,13 +64,27 @@ export async function backfillExtraction(db: Db): Promise<number> {
       row.imageUrl === null && row.platform === "wallapop"
         ? extractFirstImageUrl(row.raw)
         : undefined;
-    if (cashPriceEur === undefined && dedupKey === undefined && imageUrl === undefined) continue;
+    // Import facts from explicit text only; existing values (user) are kept.
+    const imp = extractImportSignals(row.title, row.description ?? undefined);
+    const rhd = row.rhd === null && imp.rhd && !imp.rhdAssumed ? true : undefined;
+    const foreignPlates = row.foreignPlates === null && imp.foreignPlate ? true : undefined;
+    if (
+      cashPriceEur === undefined &&
+      dedupKey === undefined &&
+      imageUrl === undefined &&
+      rhd === undefined &&
+      foreignPlates === undefined
+    ) {
+      continue;
+    }
     await db
       .update(listings)
       .set({
         ...(cashPriceEur !== undefined ? { cashPriceEur } : {}),
         ...(dedupKey !== undefined ? { dedupKey } : {}),
         ...(imageUrl !== undefined ? { imageUrl } : {}),
+        ...(rhd !== undefined ? { rhd } : {}),
+        ...(foreignPlates !== undefined ? { foreignPlates } : {}),
       })
       .where(eq(listings.id, row.id));
     updated += 1;

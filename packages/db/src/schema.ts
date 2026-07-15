@@ -81,6 +81,9 @@ export const listings = pgTable(
     ecoLabel: text("eco_label"),
     /** First ad photo (platform CDN URL) — email thumbnails, dashboard cards. */
     imageUrl: text("image_url"),
+    /** Verified import facts: null = unknown, set by ad text or by the user. */
+    rhd: boolean("rhd"),
+    foreignPlates: boolean("foreign_plates"),
     sellerType: text("seller_type").$type<"private" | "dealer" | "unknown">(),
     sellerName: text("seller_name"),
     sellerRating: real("seller_rating"),

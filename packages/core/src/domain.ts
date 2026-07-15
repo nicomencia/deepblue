@@ -74,6 +74,10 @@ export type AutonomyMode = (typeof AUTONOMY_MODES)[number];
 export interface HardLimits {
   maxPriceEur: number;
   nonNegotiables: string[];
+  /** RHD at no price: confirmed right-hand drive is dead on arrival. */
+  noRhd?: boolean;
+  /** Some imports can't be homologated at all: foreign plates are dead on arrival. */
+  requireSpanishPlates?: boolean;
 }
 
 export interface BriefCriteria {
@@ -142,6 +146,13 @@ export const normalizedListingSchema = z.object({
   ecoLabel: z.string().optional(),
   /** First ad photo (platform CDN URL): email thumbnails and dashboard cards. */
   imageUrl: z.string().optional(),
+  /**
+   * Verified import facts. undefined = unknown; set true by explicit ad text
+   * at ingest, and either way by the user from the lead page (photos tell
+   * what the text hides). An explicit value always beats text inference.
+   */
+  rhd: z.boolean().optional(),
+  foreignPlates: z.boolean().optional(),
   /** ISO country of the listing's market. Prices are only comparable within one market. */
   countryCode: z.string().optional(),
   sellerType: z.enum(["private", "dealer", "unknown"]).optional(),

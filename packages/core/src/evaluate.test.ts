@@ -452,3 +452,58 @@ describe("import signals", () => {
     );
   });
 });
+
+// --- Verified import facts and hard limits -------------------------------------
+
+describe("import facts and hard limits", () => {
+  const ukAd = listing({ description: "Vehiculo con papeles y matricula inglesa." });
+
+  it("a verified listing flag beats text inference in both directions", () => {
+    // Seller confirmed LHD: the UK-origin assumption must not penalize.
+    const lhdVerified = evaluateListing(
+      { ...ukAd, rhd: false },
+      criteria(),
+      hardLimits,
+      benchmark,
+    );
+    const assumed = evaluateListing(ukAd, criteria(), hardLimits, benchmark);
+    expect(lhdVerified.verdict.factors.priceFairness.score).toBeGreaterThan(
+      assumed.verdict.factors.priceFairness.score,
+    );
+
+    // User verified RHD from the photos on an ad whose text says nothing.
+    const marked = evaluateListing(
+      listing({ rhd: true }),
+      criteria(),
+      hardLimits,
+      benchmark,
+    );
+    const plain = evaluateListing(listing(), criteria(), hardLimits, benchmark);
+    expect(marked.verdict.factors.priceFairness.score).toBeLessThan(
+      plain.verdict.factors.priceFairness.score,
+    );
+  });
+
+  it("noRhd kills confirmed RHD but never the assumption alone", () => {
+    const noRhd = { ...hardLimits, noRhd: true };
+    expect(
+      evaluateListing(listing({ rhd: true }), criteria(), noRhd, benchmark).deadReason,
+    ).toBe("rhd_not_accepted");
+    expect(
+      evaluateListing(listing({ title: "Golf RHD" }), criteria(), noRhd, benchmark).deadReason,
+    ).toBe("rhd_not_accepted");
+    // UK plates without stated wheel side: assumed RHD stays alive (question pending).
+    expect(evaluateListing(ukAd, criteria(), noRhd, benchmark).outcome).toBe("shortlisted");
+  });
+
+  it("requireSpanishPlates kills foreign-plated cars", () => {
+    const esOnly = { ...hardLimits, requireSpanishPlates: true };
+    expect(evaluateListing(ukAd, criteria(), esOnly, benchmark).deadReason).toBe(
+      "foreign_plates_not_accepted",
+    );
+    expect(
+      evaluateListing(listing({ foreignPlates: true }), criteria(), esOnly, benchmark).deadReason,
+    ).toBe("foreign_plates_not_accepted");
+    expect(evaluateListing(listing(), criteria(), esOnly, benchmark).outcome).toBe("shortlisted");
+  });
+});

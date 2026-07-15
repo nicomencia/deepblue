@@ -52,6 +52,8 @@ export function listingRowToNormalized(
     gearbox: listing.gearbox ?? undefined,
     powerCv: listing.powerCv ?? undefined,
     ecoLabel: listing.ecoLabel ?? undefined,
+    rhd: listing.rhd ?? undefined,
+    foreignPlates: listing.foreignPlates ?? undefined,
     countryCode: listing.countryCode ?? undefined,
     sellerType: listing.sellerType ?? undefined,
     sellerName: listing.sellerName ?? undefined,
