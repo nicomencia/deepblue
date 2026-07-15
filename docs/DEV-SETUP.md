@@ -94,6 +94,7 @@ pnpm dev:runner
 | `GET /api/dev/jobs?status=queued` | cola del runner |
 | `GET /api/dev/listing-raw?id=…` o `?latest=wallapop` | payload raw de un listing |
 | `POST /api/dev/brief-status` | cambiar estado de una búsqueda `{briefId, status}` |
+| `POST /api/dev/brief-delete` | eliminar búsqueda + leads (cascada; corpus intacto) `{briefId}` |
 | `POST /api/dev/sweep` | disparar sweep de todos los briefs activos |
 | `POST /api/dev/reap` | sondas de vida (reaper) |
 | `POST /api/dev/reevaluate` | backfill + retire + dedup + reevaluar todo |
@@ -118,6 +119,14 @@ anuncios, digest con suelo de nota + alertas A/B sin duplicados, dossiers
 (207/THP, Golf, Elise) con verificación manual de riesgos (Confirmar/Descartar
 en la página del lead), tabs por búsqueda, página Actividad, descubrimiento de
 modelos y adopción manual de anuncios con dossier-first. 77 tests verdes.
+
+**Cambio 2026-07-15 — Eliminar búsquedas.** «Archivar» solo cambiaba el
+estado y la búsqueda seguía en la lista. Sustituido por Eliminar con
+confirmación: borrado en cascada (leads + eventos/mensajes/aprobaciones de
+esos leads + jobs pendientes del runner para esa búsqueda) vía
+`deleteBriefCascade`. Los listings NUNCA se tocan — el corpus es conocimiento
+global (benchmarks) que sobrevive a cualquier búsqueda. Evento `brief_deleted`
+en el audit log. El estado `archived` sigue en el schema por compatibilidad.
 
 **Cambio 2026-07-15 — teoría se cotiza, no se capa (PROJECT.md enmendado) +
 fotos en descubrimiento.** La regla «teoría sin confirmar capa fiabilidad del

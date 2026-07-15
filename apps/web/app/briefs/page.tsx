@@ -2,7 +2,8 @@ import { briefs, leads } from "@deepblue/db";
 import { desc, eq, sql } from "drizzle-orm";
 import { getDb } from "../../lib/db";
 import { fmtEur } from "../../lib/ui";
-import { createBrief, setBriefStatus } from "./actions";
+import { createBrief, deleteBrief, setBriefStatus } from "./actions";
+import { ConfirmDelete } from "./confirm-delete";
 
 export const dynamic = "force-dynamic";
 
@@ -58,12 +59,12 @@ export default async function BriefsPage() {
                     {brief.status === "active" ? "Pausar" : "Activar"}
                   </button>
                 </form>
-                <form action={setBriefStatus}>
+                <form action={deleteBrief}>
                   <input type="hidden" name="id" value={brief.id} />
-                  <input type="hidden" name="status" value="archived" />
-                  <button type="submit" style={btn}>
-                    Archivar
-                  </button>
+                  <ConfirmDelete
+                    style={btn}
+                    message={`¿Eliminar «${brief.name}» y sus ${total} leads? Los anuncios del corpus se conservan. No se puede deshacer.`}
+                  />
                 </form>
               </span>
             </div>

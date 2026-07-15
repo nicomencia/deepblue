@@ -1,10 +1,11 @@
 "use server";
 
 import type { BriefCriteria, HardLimits } from "@deepblue/core";
-import { briefs, users } from "@deepblue/db";
+import { briefs, events, users } from "@deepblue/db";
 import { eq } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
+import { deleteBriefCascade } from "../../lib/brief-admin";
 import { getDb } from "../../lib/db";
 
 const num = (v: FormDataEntryValue | null): number | undefined => {
@@ -83,4 +84,27 @@ export async function setBriefStatus(formData: FormData): Promise<void> {
     .parse(String(formData.get("status") ?? ""));
   await db.update(briefs).set({ status }).where(eq(briefs.id, id));
   revalidatePath("/briefs");
+}
+
+/**
+ * Hard delete: the brief, its leads and their history go; the listings stay
+ * (global corpus). The UI asks for confirmation before submitting this.
+ */
+export async function deleteBrief(formData: FormData): Promise<void> {
+  const db = await getDb();
+  const id = String(formData.get("id") ?? "");
+
+  const [brief] = await db.select().from(briefs).where(eq(briefs.id, id)).limit(1);
+  if (!brief) return;
+
+  const deleted = await deleteBriefCascade(db, id);
+  await db.insert(events).values({
+    userId: brief.userId,
+    type: "brief_deleted",
+    payload: { briefId: id, name: brief.name, ...deleted },
+  });
+
+  revalidatePath("/briefs");
+  revalidatePath("/discovery");
+  revalidatePath("/");
 }
