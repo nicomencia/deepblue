@@ -126,7 +126,7 @@ export async function buildDiscoveryReport(db: Db, discoveryId: string): Promise
 /** Canonical brief name for a recommendation — also how the UI and the
  * accept action recognize "this rec already became a brief". */
 export function briefNameForRecommendation(rec: Pick<ModelRecommendation, "make" | "model">): string {
-  return `${rec.make} ${rec.model} (descubierto)`;
+  return `Descubrimiento: ${rec.make} ${rec.model}`;
 }
 
 /**
