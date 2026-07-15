@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { extractCashPriceEur, extractDedupKey, extractFirstImageUrl, fingerprintDedupKey, sanitizePowerCv } from "./extract.js";
+import { extractCashPriceEur, extractDedupKey, extractFirstImageUrl, extractImportSignals, fingerprintDedupKey, sanitizePowerCv } from "./extract.js";
 
 // Real Flexicar boilerplate, abridged — the pattern that motivated the rule.
 const FLEXICAR_AD = `Llegan las mejores ofertas
@@ -183,5 +183,43 @@ describe("sanitizePowerCv", () => {
     expect(sanitizePowerCv(NaN)).toBeUndefined();
     expect(sanitizePowerCv(Infinity)).toBeUndefined();
     expect(sanitizePowerCv(undefined)).toBeUndefined();
+  });
+});
+
+describe("extractImportSignals", () => {
+  it("detects the real case: RHD in the title", () => {
+    expect(extractImportSignals("Porsche Boxster 2005 Manual RHD", undefined)).toEqual({
+      rhd: true,
+      foreignPlate: false,
+    });
+  });
+
+  it("detects RHD phrasings in Spanish", () => {
+    expect(extractImportSignals(undefined, "volante a la derecha, muy cuidado").rhd).toBe(true);
+    expect(extractImportSignals(undefined, "coche con volante inglés").rhd).toBe(true);
+    expect(extractImportSignals(undefined, "conducción a la derecha").rhd).toBe(true);
+  });
+
+  it("detects foreign plates and pending re-registration", () => {
+    expect(extractImportSignals(undefined, "matrícula inglesa, se vende por mudanza").foreignPlate).toBe(true);
+    expect(extractImportSignals(undefined, "matrícula francesa").foreignPlate).toBe(true);
+    expect(extractImportSignals(undefined, "pendiente de matricular en España").foreignPlate).toBe(true);
+    expect(extractImportSignals(undefined, "rematriculación a cargo del comprador").foreignPlate).toBe(true);
+  });
+
+  it("an explicit Spanish registration wins over import mentions", () => {
+    expect(
+      extractImportSignals(undefined, "importado de Alemania, ya matriculado en España").foreignPlate,
+    ).toBe(false);
+    expect(
+      extractImportSignals(undefined, "matrícula española, fue matrícula francesa").foreignPlate,
+    ).toBe(false);
+  });
+
+  it("stays quiet on ordinary ads", () => {
+    expect(extractImportSignals("Golf VII 1.4 TSI", "coche nacional, único dueño")).toEqual({
+      rhd: false,
+      foreignPlate: false,
+    });
   });
 });

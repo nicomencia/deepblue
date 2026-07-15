@@ -120,6 +120,15 @@ anuncios, digest con suelo de nota + alertas A/B sin duplicados, dossiers
 en la página del lead), tabs por búsqueda, página Actividad, descubrimiento de
 modelos y adopción manual de anuncios con dossier-first. 77 tests verdes.
 
+**Cambio 2026-07-15 — señales de importación (RHD / matrícula extranjera).**
+Caso real (Boxster RHD a 11.999 €): los deportivos importados de UK parecen
+gangas. `extractImportSignals` en core detecta RHD y matrícula extranjera en
+el texto del anuncio («matriculado en España» explícito gana a cualquier
+mención); el factor precio compara sumando ~1.500 € de rematriculación y resta
+20 puntos al RHD (los comparables LHD lo sobrevaloran), y el veredicto abre
+con la pregunta de quién asume papeles/aduanas. El lead RHD pasó de C 60 a
+D 52 con precio E.
+
 **Cambio 2026-07-15 — backup automático de la BD.** `pnpm dev:web` ejecuta
 `scripts/backup-db.mjs` antes de arrancar: snapshot .tgz fechado de
 `apps/web/.data/pglite` (momento garantizado-consistente: nadie escribe), en

@@ -407,3 +407,48 @@ describe("applyEnrichment", () => {
     expect(applyEnrichment(before, e).score).toBe(applyEnrichment(before, e).score);
   });
 });
+
+// --- Import signals: RHD and foreign plates hit the price factor ---------------
+
+describe("import signals", () => {
+  it("penalizes RHD against an otherwise identical listing", () => {
+    const base = evaluateListing(listing(), criteria(), hardLimits, benchmark);
+    const rhd = evaluateListing(
+      listing({ title: "Volkswagen Golf 1.4 TSI RHD" }),
+      criteria(),
+      hardLimits,
+      benchmark,
+    );
+    expect(rhd.verdict.factors.priceFairness.score).toBeLessThan(
+      base.verdict.factors.priceFairness.score,
+    );
+    expect(rhd.verdict.openQuestions.join(" ")).toMatch(/matriculado en España/i);
+  });
+
+  it("compares foreign-plated cars with the re-registration cost added", () => {
+    const base = evaluateListing(listing(), criteria(), hardLimits, benchmark);
+    const foreign = evaluateListing(
+      listing({ description: "Coche con matrícula inglesa, perfecto estado" }),
+      criteria(),
+      hardLimits,
+      benchmark,
+    );
+    expect(foreign.verdict.factors.priceFairness.score).toBeLessThan(
+      base.verdict.factors.priceFairness.score,
+    );
+    expect(foreign.verdict.openQuestions[0]).toMatch(/rematriculación/i);
+  });
+
+  it("does not penalize an import already on Spanish plates", () => {
+    const base = evaluateListing(listing(), criteria(), hardLimits, benchmark);
+    const nationalized = evaluateListing(
+      listing({ description: "Importado de Alemania, ya matriculado en España" }),
+      criteria(),
+      hardLimits,
+      benchmark,
+    );
+    expect(nationalized.verdict.factors.priceFairness.score).toBe(
+      base.verdict.factors.priceFairness.score,
+    );
+  });
+});

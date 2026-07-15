@@ -12,6 +12,7 @@
  */
 
 import { MIN_BENCHMARK_SAMPLE, type PriceBenchmark } from "./benchmark.js";
+import { extractImportSignals, type ImportSignals } from "./extract.js";
 import type {
   BriefCriteria,
   ConfidenceGrade,
@@ -373,12 +374,20 @@ function assessUnit(
 // Price fairness vs own market-scoped benchmark
 // ---------------------------------------------------------------------------
 
+/** Re-registering a foreign-plated car in Spain: ITV homologación, tasas,
+ * gestoría. Conservative — a post-Brexit UK import can add VAT + duty on top. */
+const REMATRICULATION_COST_EUR = 1500;
+/** RHD trades at a heavy discount here; LHD comparables flatter its price. */
+const RHD_PRICE_PENALTY = 20;
+
 function assessPrice(
   listing: NormalizedListing,
   criteria: BriefCriteria,
+  imported: ImportSignals,
   benchmark?: PriceBenchmark,
 ): { factor: VerdictFactor; scamSignal: boolean } {
-  const price = effectivePrice(listing);
+  let price = effectivePrice(listing);
+  if (price !== undefined && imported.foreignPlate) price += REMATRICULATION_COST_EUR;
   if (price === undefined || !benchmark || benchmark.sampleSize < MIN_BENCHMARK_SAMPLE) {
     return {
       factor: {
@@ -411,6 +420,17 @@ function assessPrice(
   if (ratio < 0.7) {
     score = Math.min(score, 45);
     known.push("Descuento inusualmente profundo: verificar antes de ilusionarse");
+  }
+  if (imported.foreignPlate) {
+    known.push(
+      `Matrícula extranjera: comparado sumando ~${REMATRICULATION_COST_EUR.toLocaleString("es-ES")} € de rematriculación (ITV, homologación, tasas — y si viene de UK, posible IVA y arancel encima)`,
+    );
+  }
+  if (imported.rhd) {
+    score = clamp(score - RHD_PRICE_PENALTY);
+    known.push(
+      "Volante a la derecha (RHD): el mercado español lo descuenta con fuerza y la mediana de comparables LHD sobrevalora este anuncio",
+    );
   }
   if (criteria.targetPriceEur !== undefined && price <= criteria.targetPriceEur) {
     score = clamp(score + 5);
@@ -505,7 +525,21 @@ function buildVerdict(
   const unitEvidence = assessUnit(listing, criteria, openQuestions);
   const reliability = assessModelReliability(listing, dossier, findings);
   openQuestions.push(...reliability.questions);
-  const price = assessPrice(listing, criteria, benchmark);
+
+  // Import signals (RHD / foreign plates) hit the price factor and always
+  // deserve a direct question — sellers rarely volunteer the paperwork cost.
+  const imported = extractImportSignals(listing.title, listing.description);
+  if (imported.foreignPlate) {
+    openQuestions.unshift(
+      "¿Quién asume la rematriculación en España (y aduanas/IVA si viene de UK)? ¿Qué documentación de importación tiene?",
+    );
+  } else if (imported.rhd) {
+    openQuestions.unshift(
+      "¿El coche está ya matriculado en España o sigue con matrícula extranjera?",
+    );
+  }
+
+  const price = assessPrice(listing, criteria, imported, benchmark);
   const sellerCredibility = price.scamSignal
     ? {
         grade: "E" as ConfidenceGrade,

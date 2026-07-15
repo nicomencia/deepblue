@@ -124,3 +124,37 @@ export function sanitizePowerCv(value: number | undefined): number | undefined {
   if (cv !== value || cv < 20 || cv > 1500) return undefined;
   return cv;
 }
+
+/**
+ * UK/foreign-import signals from the ad text. Very common on enthusiast
+ * models (Boxster, MX-5...): the car is cheap because it wears foreign
+ * plates (re-registration in Spain costs real money — plus customs/VAT if
+ * it comes from post-Brexit UK) and/or is RHD (right-hand drive), which
+ * the Spanish resale market heavily discounts. Signals are independent:
+ * an RHD car may already be on Spanish plates. An explicit "matriculado
+ * en España" wins over plate mentions (sellers preempt the question).
+ */
+export interface ImportSignals {
+  rhd: boolean;
+  foreignPlate: boolean;
+}
+
+const RHD_RE =
+  /\bRHD\b|volante\s+(?:a\s+la\s+)?derecha|volante\s+ingl[eé]s|conducci[oó]n\s+(?:a\s+la\s+)?derecha/i;
+
+const FOREIGN_PLATE_RE =
+  /matr[ií]cula\s+(?:inglesa|brit[aá]nica|extranjera|francesa|alemana|italiana|portuguesa|belga|holandesa|uk\b)|matr[ií]cula\s+de\s+(?:uk|inglaterra|reino\s+unido|francia|alemania|italia|portugal)|papeles\s+(?:ingleses|brit[aá]nicos|franceses|alemanes|extranjeros)|(?:pendiente|falta)\s+de\s+(?:re)?matricular|sin\s+matricular|(?:re)?matriculaci[oó]n\s+(?:no\s+incluida|a\s+cargo\s+del\s+comprador)/i;
+
+const SPANISH_PLATE_RE = /matriculad[oa]\s+en\s+espa[ñn]a|matr[ií]cula\s+espa[ñn]ola/i;
+
+export function extractImportSignals(
+  title: string | undefined,
+  description: string | undefined,
+): ImportSignals {
+  const text = [title, description].filter(Boolean).join("\n");
+  if (!text) return { rhd: false, foreignPlate: false };
+  return {
+    rhd: RHD_RE.test(text),
+    foreignPlate: FOREIGN_PLATE_RE.test(text) && !SPANISH_PLATE_RE.test(text),
+  };
+}
