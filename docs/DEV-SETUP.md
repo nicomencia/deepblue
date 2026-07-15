@@ -49,7 +49,7 @@ corepack enable          # pnpm via corepack
 pnpm install
 # (colocar .env.local y .data/pglite como arriba)
 pnpm typecheck && pnpm test
-pnpm dev:web             # aplica migraciones pendientes al arrancar
+pnpm dev:web             # backup de la BD + migraciones pendientes al arrancar
 ```
 
 Runner (segunda terminal; no tiene .env propio, hereda del entorno):
@@ -119,6 +119,16 @@ anuncios, digest con suelo de nota + alertas A/B sin duplicados, dossiers
 (207/THP, Golf, Elise) con verificación manual de riesgos (Confirmar/Descartar
 en la página del lead), tabs por búsqueda, página Actividad, descubrimiento de
 modelos y adopción manual de anuncios con dossier-first. 77 tests verdes.
+
+**Cambio 2026-07-15 — backup automático de la BD.** `pnpm dev:web` ejecuta
+`scripts/backup-db.mjs` antes de arrancar: snapshot .tgz fechado de
+`apps/web/.data/pglite` (momento garantizado-consistente: nadie escribe), en
+`DEEPBLUE_BACKUP_DIR` o `~/deepblue-backups`, retención 14. Con el servidor
+encendido el script se niega a copiar (un solo escritor). Manual:
+`pnpm backup:db`. Deliberadamente NO va a OneDrive por defecto (el de esta
+máquina es corporativo); apunta `DEEPBLUE_BACKUP_DIR` a una carpeta
+sincronizada PERSONAL para copias fuera de la máquina. La BD sigue fuera de
+git a propósito (binaria, viva, una sola fuente de verdad).
 
 **Cambio 2026-07-15 — Eliminar búsquedas.** «Archivar» solo cambiaba el
 estado y la búsqueda seguía en la lista. Sustituido por Eliminar con
