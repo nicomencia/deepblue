@@ -37,7 +37,8 @@ same token plus `CORE_API_URL=http://localhost:3000`.
 
 With `ENABLE_LOCAL_SCHEDULER=1`, the web server sweeps every brief every
 `SWEEP_INTERVAL_MINUTES` (jittered, only 08–23h Madrid) and sends a daily email
-digest each morning (Resend; without `RESEND_API_KEY` emails print to the log).
+digest on the first tick of each day — normally in the morning, or whenever the
+machine boots (Resend; without `RESEND_API_KEY` emails print to the log).
 Top-grade finds trigger instant alert emails at ingest. Keep `pnpm dev:runner`
 running and deepblue scouts by itself.
 

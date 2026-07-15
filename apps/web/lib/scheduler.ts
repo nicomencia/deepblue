@@ -41,7 +41,7 @@ async function trigger(path: string): Promise<string> {
 
 export function startScheduler(): void {
   console.log(
-    `[scheduler] on — sweeps every ~${Math.round(SWEEP_INTERVAL_MS / 60000)} min (08–23h Madrid), digest 08–10h`,
+    `[scheduler] on — sweeps every ~${Math.round(SWEEP_INTERVAL_MS / 60000)} min (08–23h Madrid), digest on first tick of the day`,
   );
   const loop = async () => {
     try {
@@ -63,10 +63,10 @@ async function tick(): Promise<void> {
     console.log("[scheduler]", await trigger("/api/cron/sweep"));
   }
 
-  if (hour < 10) {
-    // runDigest has its own durable once-per-day guard.
-    console.log("[scheduler]", await trigger("/api/cron/digest"));
-  }
+  // Every tick, not a fixed morning window: runDigest's durable once-per-day
+  // guard makes extra triggers no-ops, and a machine that boots after 10:00
+  // still gets its digest that day (it used to silently skip to tomorrow).
+  console.log("[scheduler]", await trigger("/api/cron/digest"));
 
   // Liveness probes for stale shortlisted listings — bounded per tick, no-op
   // when nothing is due. Runs alongside sweeps so probes ride the same runner.

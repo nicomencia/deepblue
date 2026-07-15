@@ -118,6 +118,13 @@ anuncios, digest con suelo de nota + alertas A/B sin duplicados, dossiers
 en la página del lead), tabs por búsqueda, página Actividad, descubrimiento de
 modelos y adopción manual de anuncios con dossier-first. 77 tests verdes.
 
+**Cambio 2026-07-15 — digest en el primer tick del día.** El scheduler ya no
+limita el digest a la ventana 08–10h: lo dispara en cada tick (dentro de las
+horas activas) y el guard durable de una-vez-por-día de runDigest hace no-op
+los repetidos. Antes, un PC apagado a esas horas se quedaba sin digest hasta
+el día siguiente; ahora lo envía al arrancar. Verificado en vivo: trigger a
+las 16:35 → composed 0 (el de hoy ya había salido de madrugada).
+
 **Cambio 2026-07-15 — ingesta blindada contra datos basura.** Caso real: un
 vendedor escribió «1.4» (la cilindrada) en el campo de caballos de Wallapop y
 el float tumbó la columna integer — y con ella el batch entero del sweep
