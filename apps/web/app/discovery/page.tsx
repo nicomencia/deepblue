@@ -1,6 +1,8 @@
-import { discoveries } from "@deepblue/db";
+import { briefs, discoveries } from "@deepblue/db";
 import { desc, ne } from "drizzle-orm";
+import Link from "next/link";
 import { getDb } from "../../lib/db";
+import { briefNameForRecommendation } from "../../lib/discovery";
 import { isLlmConfigured } from "../../lib/llm";
 import { fmtDate, fmtEur } from "../../lib/ui";
 import {
@@ -20,6 +22,14 @@ export default async function DiscoveryPage() {
     .from(discoveries)
     .where(ne(discoveries.status, "archived"))
     .orderBy(desc(discoveries.createdAt));
+
+  // Live brief names → mark recommendations that already became a búsqueda
+  // ("Crear búsqueda" turns into a link; re-clicks can't duplicate).
+  const liveBriefs = await db
+    .select({ name: briefs.name })
+    .from(briefs)
+    .where(ne(briefs.status, "archived"));
+  const liveBriefNames = new Set(liveBriefs.map((b) => b.name));
 
   return (
     <main style={{ maxWidth: 860, margin: "0 auto", padding: "2rem 1.5rem" }}>
@@ -151,11 +161,17 @@ export default async function DiscoveryPage() {
                   <List label="Evitar" items={rec.avoidVersions} />
                   <List label="Por qué encaja" items={rec.whyFits} />
                   <List label="Vigilar" items={rec.watchouts} />
-                  <form action={createBriefFromRecommendation} style={{ marginTop: "0.5rem" }}>
-                    <input type="hidden" name="discoveryId" value={s.id} />
-                    <input type="hidden" name="index" value={i} />
-                    <button type="submit" style={btn}>Crear búsqueda</button>
-                  </form>
+                  {liveBriefNames.has(briefNameForRecommendation(rec)) ? (
+                    <p style={{ margin: "0.5rem 0 0", fontSize: "0.85rem", color: "var(--grade-a)", fontWeight: 600 }}>
+                      ✓ Búsqueda creada — <Link href="/briefs">ver búsquedas</Link>
+                    </p>
+                  ) : (
+                    <form action={createBriefFromRecommendation} style={{ marginTop: "0.5rem" }}>
+                      <input type="hidden" name="discoveryId" value={s.id} />
+                      <input type="hidden" name="index" value={i} />
+                      <button type="submit" style={btn}>Crear búsqueda</button>
+                    </form>
+                  )}
                 </div>
               ))}
               {s.report.discarded.length > 0 && (

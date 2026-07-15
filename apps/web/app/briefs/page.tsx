@@ -44,21 +44,28 @@ export default async function BriefsPage() {
                   {c.riskTolerance ?? "medium"} · {shortlisted}/{total} leads vivos
                 </p>
               </div>
-              <form action={setBriefStatus} style={{ display: "flex", gap: "0.4rem", alignItems: "start" }}>
-                <input type="hidden" name="id" value={brief.id} />
-                {brief.status === "active" ? (
-                  <button name="status" value="paused" style={btn}>
-                    Pausar
+              {/* One form per action: React server actions drop the submitter
+                  button's own name/value, so status must be a hidden input. */}
+              <span style={{ display: "flex", gap: "0.4rem", alignItems: "start" }}>
+                <form action={setBriefStatus}>
+                  <input type="hidden" name="id" value={brief.id} />
+                  <input
+                    type="hidden"
+                    name="status"
+                    value={brief.status === "active" ? "paused" : "active"}
+                  />
+                  <button type="submit" style={btn}>
+                    {brief.status === "active" ? "Pausar" : "Activar"}
                   </button>
-                ) : (
-                  <button name="status" value="active" style={btn}>
-                    Activar
+                </form>
+                <form action={setBriefStatus}>
+                  <input type="hidden" name="id" value={brief.id} />
+                  <input type="hidden" name="status" value="archived" />
+                  <button type="submit" style={btn}>
+                    Archivar
                   </button>
-                )}
-                <button name="status" value="archived" style={btn}>
-                  Archivar
-                </button>
-              </form>
+                </form>
+              </span>
             </div>
           </div>
         );

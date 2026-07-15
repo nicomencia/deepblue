@@ -116,6 +116,12 @@ export async function buildDiscoveryReport(db: Db, discoveryId: string): Promise
   await saveDiscoveryReport(db, discoveryId, report, DISCOVERY_MODEL);
 }
 
+/** Canonical brief name for a recommendation — also how the UI and the
+ * accept action recognize "this rec already became a brief". */
+export function briefNameForRecommendation(rec: Pick<ModelRecommendation, "make" | "model">): string {
+  return `${rec.make} ${rec.model} (descubierto)`;
+}
+
 /**
  * A recommendation becomes a hunting brief: recommendation narrows the what,
  * profile caps the money. Location defaults are editable in /briefs later.
@@ -139,7 +145,7 @@ export function recommendationToBrief(
     notes: [...rec.versions.map((v) => `Buscar versión: ${v}`), ...rec.watchouts],
   };
   return {
-    name: `${rec.make} ${rec.model} (descubierto)`,
+    name: briefNameForRecommendation(rec),
     criteria,
     hardLimits: { maxPriceEur, nonNegotiables: ["ITV en vigor"] },
   };

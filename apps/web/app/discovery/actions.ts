@@ -2,7 +2,7 @@
 
 import { discoveryProfileSchema, type DiscoveryProfile } from "@deepblue/core";
 import { briefs, discoveries, events, users } from "@deepblue/db";
-import { eq } from "drizzle-orm";
+import { and, eq, ne } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { getDb } from "../../lib/db";
@@ -97,16 +97,28 @@ export async function createBriefFromRecommendation(formData: FormData): Promise
   if (!row || !rec) throw new Error("recomendación no encontrada");
 
   const draft = recommendationToBrief(row.profile, rec);
-  const [created] = await db
-    .insert(briefs)
-    .values({ userId, ...draft })
-    .returning({ id: briefs.id });
 
-  await db.insert(events).values({
-    userId,
-    type: "brief_from_discovery",
-    payload: { discoveryId, briefId: created?.id, make: rec.make, model: rec.model },
-  });
+  // Idempotent: a double click (or re-click) must not spawn a second brief.
+  // A live brief with this rec's canonical name already answers the intent.
+  const [existing] = await db
+    .select({ id: briefs.id })
+    .from(briefs)
+    .where(
+      and(eq(briefs.userId, userId), eq(briefs.name, draft.name), ne(briefs.status, "archived")),
+    )
+    .limit(1);
+  if (!existing) {
+    const [created] = await db
+      .insert(briefs)
+      .values({ userId, ...draft })
+      .returning({ id: briefs.id });
+
+    await db.insert(events).values({
+      userId,
+      type: "brief_from_discovery",
+      payload: { discoveryId, briefId: created?.id, make: rec.make, model: rec.model },
+    });
+  }
   revalidatePath("/discovery");
   revalidatePath("/briefs");
   revalidatePath("/");
