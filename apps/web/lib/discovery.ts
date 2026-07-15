@@ -45,6 +45,10 @@ Reglas estrictas:
   inventes fuentes. Pocas recomendaciones bien fundadas valen más que muchas.
 - "imageUrl": una foto representativa de la generación recomendada, con URL REAL
   hallada en tus búsquedas (preferible Wikimedia Commons: estable y enlazable).
+  Calidad de prensa: tres cuartos frontal, coche limpio, buena luz — evita fotos
+  de aparcamiento cutres, interiores o traseras. Las notas de prensa oficiales
+  suelen estar detrás de logins o romper el hotlink: Commons tiene fotos de
+  salones y ruedas de prensa que dan el mismo resultado y no caducan.
   Si no encuentras una fiable, omite el campo — nunca inventes la URL.
 - Todos los textos visibles en español.`;
 }
