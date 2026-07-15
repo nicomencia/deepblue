@@ -43,6 +43,9 @@ Reglas estrictas:
   (ej. "Mini Cooper S R56: mismo motor Prince con peor acceso a mecánica barata").
 - Cada recomendación lleva al menos una URL real encontrada en tus búsquedas; no
   inventes fuentes. Pocas recomendaciones bien fundadas valen más que muchas.
+- "imageUrl": una foto representativa de la generación recomendada, con URL REAL
+  hallada en tus búsquedas (preferible Wikimedia Commons: estable y enlazable).
+  Si no encuentras una fiable, omite el campo — nunca inventes la URL.
 - Todos los textos visibles en español.`;
 }
 

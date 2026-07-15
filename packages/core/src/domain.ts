@@ -359,6 +359,12 @@ export type DiscoveryProfile = z.infer<typeof discoveryProfileSchema>;
 export const modelRecommendationSchema = z.object({
   make: z.string(),
   model: z.string(),
+  /**
+   * Representative photo of the recommended generation (real URL found during
+   * research — Wikimedia preferred for hotlink stability). Buyers who don't
+   * know the model by heart decide with their eyes first.
+   */
+  imageUrl: z.string().optional(),
   /** Trims/engines worth hunting ("1.6 THP 175", "GTI Performance DSG"). */
   versions: z.array(z.string()),
   /** Trims/engines to avoid, each with the reason inline. */

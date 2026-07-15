@@ -157,6 +157,21 @@ export default async function DiscoveryPage() {
                       {fmtEur(rec.priceBandEur.min)}–{fmtEur(rec.priceBandEur.max)}
                     </span>
                   </div>
+                  {rec.imageUrl && (
+                    // eslint-disable-next-line @next/next/no-img-element -- external research URL, unknown domains
+                    <img
+                      src={rec.imageUrl}
+                      alt={`${rec.make} ${rec.model}`}
+                      loading="lazy"
+                      style={{
+                        maxWidth: "100%",
+                        width: 340,
+                        borderRadius: 6,
+                        display: "block",
+                        margin: "0.5rem 0 0.25rem",
+                      }}
+                    />
+                  )}
                   <List label="Buscar" items={rec.versions} />
                   <List label="Evitar" items={rec.avoidVersions} />
                   <List label="Por qué encaja" items={rec.whyFits} />

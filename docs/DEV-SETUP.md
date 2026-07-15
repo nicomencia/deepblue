@@ -119,6 +119,17 @@ anuncios, digest con suelo de nota + alertas A/B sin duplicados, dossiers
 en la página del lead), tabs por búsqueda, página Actividad, descubrimiento de
 modelos y adopción manual de anuncios con dossier-first. 77 tests verdes.
 
+**Cambio 2026-07-15 — teoría se cotiza, no se capa (PROJECT.md enmendado) +
+fotos en descubrimiento.** La regla «teoría sin confirmar capa fiabilidad del
+modelo en C» de PROJECT.md era anterior al scoring continuo y contradecía el
+código: se enmienda el doc — la exposición esperada de reparación se descuenta
+del precio y puede dar D/E sin confirmar (caso real: Boxster S 3.4 2007 con
+bore scoring sin verificar ≈ el precio del coche). El lead sigue vivo (peso
+0,15). Además `imageUrl` opcional en las recomendaciones de descubrimiento
+(foto real hallada en la investigación, Wikimedia preferido; el prompt de la
+vía API lo pide y prohíbe inventarla) — la página la muestra y el informe
+MX-5/Boxster/MR2 quedó retro-alimentado con fotos verificadas.
+
 **Cambio 2026-07-15 — descubrimiento idempotente y botones de búsqueda
 arreglados.** «Crear búsqueda» no daba feedback y un doble clic creaba dos
 búsquedas idénticas: ahora la acción es idempotente (una búsqueda viva con el

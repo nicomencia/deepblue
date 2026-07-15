@@ -177,12 +177,17 @@ to the same grade and differentiates nothing.
 
 **Theory never kills a lead.** Dossier issues are *verification work*, not verdicts. Each
 applicable issue carries a per-unit status (unconfirmed → confirmed / ruled_out via seller
-answers) and an estimated likelihood for this unit. Unconfirmed theory caps model
-reliability at C — only confirmed issues (or hard data like scam pricing) grade worse. The
-verdict quantifies the gamble instead of forbidding it: summed repair exposure and a plain
-budget note ("price + worst case still inside your budget"), because low-budget buyers
-knowingly betting on an unverified unit is a valid strategy — the user always makes the
-final call. Briefs carry a riskTolerance (low/medium/high) for ranking and phrasing.
+answers) and an estimated likelihood for this unit. Unconfirmed theory is *priced, not
+capped* (amended 2026-07-15; supersedes the earlier "caps at C" rule): the model factor
+subtracts likelihood-weighted expected repair cost relative to the asking price, and may
+grade D/E when the unverified exposure rivals what the car costs (e.g. possible bore
+scoring worth ~16.000 € on a 16.300 € Boxster S) — hiding that behind a C-floor would
+sound more confident than we are. The lead still lives: model weight is 0.15, so a
+well-priced unit stays shortlisted with its verification steps attached. The verdict
+quantifies the gamble instead of forbidding it: summed repair exposure and a plain budget
+note ("price + worst case still inside your budget"), because low-budget buyers knowingly
+betting on an unverified unit is a valid strategy — the user always makes the final call.
+Briefs carry a riskTolerance (low/medium/high) for ranking and phrasing.
 
 **Markets are not comparable.** A Spanish Golf and a German Golf differ in price and
 condition; price benchmarks are computed strictly within the listing's market
