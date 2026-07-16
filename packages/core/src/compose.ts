@@ -57,7 +57,9 @@ export function composeOpeningMessage(input: OpeningMessageInput): string {
     // No open questions (fully verified unit): keep the opener meaningful.
     lines[2] = "Me interesa el coche. ¿Sigue disponible?";
   } else {
-    lines.push("", "¿Sigue disponible? ¡Gracias!");
+    // No "¿sigue disponible?" here: the questions already presuppose it,
+    // and asking both reads redundant (user feedback, 2026-07-16).
+    lines.push("", "¡Gracias!");
   }
   return lines.join("\n");
 }

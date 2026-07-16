@@ -147,6 +147,10 @@ anuncio es un `walla-button` y hay que clicar el HOST del web component (el
 bandeja sin campo de mensaje; y el chat se abre en una PESTAÑA NUEVA
 (`/app/chat?itemId=…`), así que el composer (placeholder «Empieza a
 chatear») se busca en todas las páginas del contexto, no en la actual.
+Primer envío real confirmado 2026-07-16 (mensaje `sent`, lead
+`shortlisted→contacted`). Ajuste de copy tras estrenarlo: el opener con
+preguntas ya no cierra con «¿Sigue disponible?» — las preguntas lo
+presuponen y quedaba redundante; solo el opener sin preguntas lo mantiene.
 
 **Cambio 2026-07-16 — límites de importación editables en búsquedas
 existentes.** Los checkboxes de `noRhd`/`requireSpanishPlates` solo existían

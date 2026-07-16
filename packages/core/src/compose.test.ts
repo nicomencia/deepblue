@@ -10,7 +10,9 @@ describe("composeOpeningMessage", () => {
     });
     expect(msg).toContain("Hola, Juan:");
     expect(msg).toContain("- ¿Tiene el mantenimiento al día con facturas?");
-    expect(msg).toContain("¿Sigue disponible? ¡Gracias!");
+    // Questions presuppose availability — no redundant "¿sigue disponible?".
+    expect(msg).toContain("¡Gracias!");
+    expect(msg).not.toContain("¿Sigue disponible?");
   });
 
   it("caps the opener at three questions", () => {
