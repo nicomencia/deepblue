@@ -129,6 +129,9 @@ del vendedor» y NO sugiere más preguntas encima de las no contestadas
 recordatorio suave de una línea (`composeNudgeMessage`, sin preguntas
 nuevas). Cuando el vendedor responde, vuelve la sugerencia de seguimiento
 con las preguntas pendientes. El cuadro de respuesta manual queda siempre.
+Además, las burbujas del hilo van coloreadas: las nuestras con tinte azul
+(`--chat-out`), las del vendedor neutras (`--chat-in`), tokens con alfa
+válidos en tema claro y oscuro.
 
 **Cambio 2026-07-17 — Fase 2 etapa 3: las respuestas actualizan el lead.**
 Interpretación automática de conversaciones: un LLM lee el hilo completo

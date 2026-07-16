@@ -14,6 +14,9 @@ const tokens = `
   --grade-d: #bc4c00; --grade-e: #cf222e;
   --ink-muted: #656d76; --border: #8884; --card: #8881;
   --track: #8883;
+  /* Chat bubbles: ours blue-tinted, the seller's neutral — alpha keeps both themes honest. */
+  --chat-out: #388bfd1a; --chat-out-border: #388bfd55;
+  --chat-in: #8881; --chat-in-border: #8884;
 }
 @media (prefers-color-scheme: dark) {
   :root {

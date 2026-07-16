@@ -392,6 +392,10 @@ export default async function LeadDetail({
                 style={{
                   ...card,
                   marginLeft: m.direction === "inbound" ? 0 : "2rem",
+                  marginRight: m.direction === "inbound" ? "2rem" : 0,
+                  background: m.direction === "inbound" ? "var(--chat-in)" : "var(--chat-out)",
+                  borderColor:
+                    m.direction === "inbound" ? "var(--chat-in-border)" : "var(--chat-out-border)",
                   whiteSpace: "pre-wrap",
                   fontSize: "0.9rem",
                 }}
