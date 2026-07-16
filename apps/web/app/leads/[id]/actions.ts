@@ -23,7 +23,7 @@ export async function setIssueFinding(formData: FormData): Promise<void> {
 }
 
 import { applyImportFact, type ImportFactField, type ImportFactValue } from "../../../lib/findings";
-import { decideLeadApproval, draftOutreach, updateDraftBody } from "../../../lib/outreach";
+import { decideLeadApproval, draftOutreach, sendUserMessage, updateDraftBody } from "../../../lib/outreach";
 
 /** Mark a verified import fact (RHD / foreign plates) and refresh the verdict. */
 export async function setImportFact(formData: FormData): Promise<void> {
@@ -65,6 +65,18 @@ export async function approveSellerMessage(formData: FormData): Promise<void> {
   if (!result.ok) throw new Error(result.error);
   revalidatePath(`/leads/${leadId}`);
   revalidatePath("/");
+}
+
+/** Send a user-written reply — typing it is the approval, it queues directly. */
+export async function replySellerMessage(formData: FormData): Promise<void> {
+  const leadId = String(formData.get("leadId") ?? "");
+  const body = String(formData.get("body") ?? "");
+  if (!leadId) throw new Error("falta leadId");
+
+  const db = await getDb();
+  const result = await sendUserMessage(db, leadId, body);
+  if (!result.ok) throw new Error(result.error);
+  revalidatePath(`/leads/${leadId}`);
 }
 
 /** Reject the pending draft — it stays in the timeline as an inert draft. */

@@ -121,6 +121,17 @@ anuncios, digest con suelo de nota + alertas A/B sin duplicados, dossiers
 en la página del lead), tabs por búsqueda, página Actividad, descubrimiento de
 modelos y adopción manual de anuncios con dossier-first. 77 tests verdes.
 
+**Cambio 2026-07-16 — Fase 2: responder al vendedor (conversación).**
+Con conversación abierta, la ficha del lead cambia el botón de borrador por
+un cuadro «Responder al vendedor…»: el usuario escribe y «Enviar al
+vendedor» encola el `send_message` directamente (`sendUserMessage`) — un
+mensaje escrito a mano ES su propia aprobación, el gate de approvals queda
+para los borradores generados por el sistema. Mismas garantías: un solo
+outbound en vuelo por lead, at-most-once, timeline y evento
+`message_queued {authored:"user"}`. Dev: `POST /api/dev/outreach {leadId,
+action:"send", body}`. El botón «Redactar mensaje» (opener automático) solo
+aparece cuando aún no hay conversación.
+
 **Cambio 2026-07-16 — Fase 2 etapa 2: leer respuestas del vendedor.**
 `fetch_replies` implementado de punta a punta y estrenado con una respuesta
 real: el runner abre el deep link del chat (`/app/chat?itemId=…`, aterriza

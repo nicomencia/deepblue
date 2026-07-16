@@ -220,6 +220,75 @@ export async function decideApproval(
   return { ok: true, leadId: approval.leadId, decision };
 }
 
+/**
+ * User-authored reply in an ongoing conversation: queued for the runner
+ * directly — the user typing and clicking send IS the approval, no extra
+ * gate. Same in-flight guard as drafts: one outbound at a time per lead.
+ */
+export async function sendUserMessage(db: Db, leadId: string, body: string): Promise<OutreachResult> {
+  const text = body.trim();
+  if (!text) return { ok: false, error: "el mensaje no puede ir vacío" };
+
+  const [row] = await db
+    .select({ lead: leads, listing: listings })
+    .from(leads)
+    .innerJoin(listings, eq(leads.listingId, listings.id))
+    .where(eq(leads.id, leadId))
+    .limit(1);
+  if (!row) return { ok: false, error: "lead no encontrado" };
+  const { lead, listing } = row;
+
+  if (!(CONTACTABLE_STATES as readonly string[]).includes(lead.state)) {
+    return { ok: false, error: `el lead está en estado ${lead.state}, no contactable` };
+  }
+  if (listing.platform !== "wallapop" || !isPlatformActive(listing.platform)) {
+    return { ok: false, error: `mensajería no disponible en ${listing.platform}` };
+  }
+  const [inFlight] = await db
+    .select({ id: messages.id })
+    .from(messages)
+    .where(
+      and(
+        eq(messages.leadId, leadId),
+        eq(messages.direction, "outbound"),
+        inArray(messages.status, ["pending_approval", "queued"]),
+      ),
+    )
+    .limit(1);
+  if (inFlight) return { ok: false, error: "ya hay un mensaje pendiente de aprobar o enviar" };
+
+  const [message] = await db
+    .insert(messages)
+    .values({
+      userId: lead.userId,
+      leadId,
+      direction: "outbound",
+      channel: "wallapop_chat",
+      status: "queued",
+      body: text,
+    })
+    .returning();
+  if (!message) return { ok: false, error: "no se pudo crear el mensaje" };
+
+  const payload: JobPayload = {
+    type: "send_message",
+    platform: listing.platform,
+    platformListingId: listing.platformListingId,
+    url: listing.url,
+    body: text,
+    messageId: message.id,
+  };
+  await db.insert(jobs).values({ userId: lead.userId, type: payload.type, payload });
+  await db.insert(events).values({
+    userId: lead.userId,
+    leadId,
+    type: "message_queued",
+    payload: { messageId: message.id, authored: "user" },
+  });
+
+  return { ok: true, messageId: message.id };
+}
+
 /** Dashboard path: resolve the lead's single pending approval and decide it. */
 export async function decideLeadApproval(
   db: Db,

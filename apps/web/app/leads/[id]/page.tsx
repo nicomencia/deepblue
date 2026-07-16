@@ -9,6 +9,7 @@ import {
   approveSellerMessage,
   draftSellerMessage,
   rejectSellerMessage,
+  replySellerMessage,
   setImportFact,
   setIssueFinding,
 } from "./actions";
@@ -383,14 +384,40 @@ export default async function LeadDetail({
             </div>
           ) : (
             contactable &&
-            !conversation.some((m) => m.status === "queued") && (
+            !conversation.some((m) => m.status === "queued") &&
+            (conversation.some((m) => m.status === "sent" || m.direction === "inbound") ? (
+              // Ongoing conversation: the user writes, writing IS the approval.
+              <form action={replySellerMessage} style={{ marginTop: "0.5rem" }}>
+                <input type="hidden" name="leadId" value={lead.id} />
+                <textarea
+                  name="body"
+                  rows={4}
+                  required
+                  placeholder="Responder al vendedor…"
+                  style={{
+                    width: "100%",
+                    boxSizing: "border-box",
+                    padding: "0.5rem 0.7rem",
+                    borderRadius: 6,
+                    border: "1px solid var(--border)",
+                    background: "transparent",
+                    color: "inherit",
+                    font: "inherit",
+                    fontSize: "0.9rem",
+                  }}
+                />
+                <button type="submit" style={{ ...btn, marginTop: "0.4rem" }}>
+                  Enviar al vendedor
+                </button>
+              </form>
+            ) : (
               <form action={draftSellerMessage}>
                 <input type="hidden" name="leadId" value={lead.id} />
                 <button type="submit" style={btn}>
                   Redactar mensaje al vendedor
                 </button>
               </form>
-            )
+            ))
           )}
         </>
       )}

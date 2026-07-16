@@ -2,7 +2,7 @@ import type { JobPayload } from "@deepblue/core";
 import { approvals, jobs, leads, listings, messages } from "@deepblue/db";
 import { desc, eq } from "drizzle-orm";
 import { getDb } from "../../../../lib/db";
-import { decideLeadApproval, draftOutreach } from "../../../../lib/outreach";
+import { decideLeadApproval, draftOutreach, sendUserMessage } from "../../../../lib/outreach";
 
 /**
  * Dev-only outreach driver (same code paths as the lead page buttons).
@@ -10,6 +10,7 @@ import { decideLeadApproval, draftOutreach } from "../../../../lib/outreach";
  * POST { leadId, action: "draft" }        → compose a draft + approval
  * POST { leadId, action: "approve"|"reject" } → decide the pending approval
  * POST { leadId, action: "fetch" }        → enqueue fetch_replies now
+ * POST { leadId, action: "send", body }   → queue a user-authored reply
  */
 export async function GET(req: Request): Promise<Response> {
   if (process.env.NODE_ENV === "production") return new Response(null, { status: 404 });
@@ -35,7 +36,8 @@ export async function POST(req: Request): Promise<Response> {
 
   const body = (await req.json().catch(() => null)) as {
     leadId?: string;
-    action?: "draft" | "approve" | "reject" | "fetch";
+    action?: "draft" | "approve" | "reject" | "fetch" | "send";
+    body?: string;
   } | null;
   if (!body?.leadId || !body.action) {
     return Response.json({ ok: false, error: "leadId y action son obligatorios" }, { status: 400 });
@@ -65,6 +67,8 @@ export async function POST(req: Request): Promise<Response> {
   const result =
     body.action === "draft"
       ? await draftOutreach(db, body.leadId)
-      : await decideLeadApproval(db, body.leadId, body.action);
+      : body.action === "send"
+        ? await sendUserMessage(db, body.leadId, body.body ?? "")
+        : await decideLeadApproval(db, body.leadId, body.action);
   return Response.json(result, { status: result.ok ? 200 : 409 });
 }
