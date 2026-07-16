@@ -47,15 +47,52 @@ async function dismissCookieBanner(page: Page): Promise<void> {
   }
 }
 
-/** First visible locator among the candidates, or null. */
+/**
+ * First visible locator among the candidates, or null. Checks every match of
+ * each selector, not just the first: Wallapop renders invisible duplicates
+ * of its CTAs (responsive variants), and DOM order puts them first.
+ */
 async function firstVisible(page: Page, selectors: string[], timeoutMs: number): Promise<Locator | null> {
   const deadline = Date.now() + timeoutMs;
   while (Date.now() < deadline) {
     for (const selector of selectors) {
-      const loc = page.locator(selector).first();
-      if (await loc.isVisible().catch(() => false)) return loc;
+      const matches = page.locator(selector);
+      const count = Math.min(await matches.count().catch(() => 0), 10);
+      for (let i = 0; i < count; i++) {
+        const loc = matches.nth(i);
+        if (await loc.isVisible().catch(() => false)) return loc;
+      }
     }
     await sleep(300);
+  }
+  return null;
+}
+
+const COMPOSER_SELECTORS = [
+  "textarea",
+  '[contenteditable="true"]',
+  'input[placeholder*="chatear" i]',
+  'input[placeholder*="mensaje" i]',
+];
+
+/** The chat composer, wherever it appeared — Wallapop opens chat in a new tab. */
+async function findComposer(
+  context: BrowserContext,
+  timeoutMs: number,
+): Promise<{ page: Page; composer: Locator } | null> {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    for (const p of context.pages()) {
+      for (const selector of COMPOSER_SELECTORS) {
+        const matches = p.locator(selector);
+        const count = Math.min(await matches.count().catch(() => 0), 10);
+        for (let i = 0; i < count; i++) {
+          const loc = matches.nth(i);
+          if (await loc.isVisible().catch(() => false)) return { page: p, composer: loc };
+        }
+      }
+    }
+    await sleep(400);
   }
   return null;
 }
@@ -85,14 +122,17 @@ export async function sendWallapopMessage(
     await dismissCookieBanner(page);
     await pause(1200, 2800); // read the ad like a person would
 
+    // The ad's own CTA is a walla-button web component; click the HOST (its
+    // handler lives there, verified 2026-07-16 — clicking the inner shadow
+    // button does nothing). Never match on href: the header's "Buzón" inbox
+    // link also goes to /app/chat but opens an inbox with no composer.
     const chatButton = await firstVisible(
       page,
       [
-        'a[href*="/app/chat"]',
+        'walla-button:has-text("Chat")',
         'button:has-text("Chat")',
         'a:has-text("Chat")',
         '[data-testid*="chat" i]',
-        'walla-button[text="Chat" i]',
       ],
       15_000,
     );
@@ -101,13 +141,10 @@ export async function sendWallapopMessage(
     }
     await chatButton.click();
 
-    // A login wall here means the session died: fail with the fix, not a timeout.
-    const composer = await firstVisible(
-      page,
-      ["textarea", '[contenteditable="true"]', 'input[placeholder*="mensaje" i]'],
-      20_000,
-    );
-    if (!composer) {
+    // The chat opens in a NEW TAB (/app/chat?itemId=…) — scan every page in
+    // the context for the composer instead of assuming the current one.
+    const found = await findComposer(context, 25_000);
+    if (!found) {
       const loginWall = await firstVisible(
         page,
         ['button:has-text("Inicia sesión")', 'a:has-text("Inicia sesión")', '[href*="login"]'],
@@ -116,19 +153,22 @@ export async function sendWallapopMessage(
       throw new Error(
         loginWall
           ? "Wallapop pide iniciar sesión — la sesión del perfil caducó; ejecuta `pnpm runner:login`"
-          : `no aparece el campo de mensaje en ${page.url()}`,
+          : `no aparece el campo de mensaje tras abrir el chat (última url: ${page.url()})`,
       );
     }
+    const { page: chatPage, composer } = found;
 
     await composer.click();
     await pause(600, 1500);
     // fill(), never keystrokes: the draft has newlines and a typed Enter
-    // would fire a half-written message at a real person.
-    await composer.fill(body);
+    // would fire a half-written message at a real person. A single-line
+    // <input> composer can't hold newlines, so flatten for that case.
+    const isInput = (await composer.evaluate((el) => el.tagName).catch(() => "")) === "INPUT";
+    await composer.fill(isInput ? body.replace(/\s*\r?\n+\s*/g, " ") : body);
     await pause(700, 1600);
 
     const sendButton = await firstVisible(
-      page,
+      chatPage,
       [
         'button[type="submit"]:visible',
         '[aria-label*="enviar" i]',

@@ -140,6 +140,14 @@ con aviso de comprobar el chat a mano. Endpoint dev: `/api/dev/outreach`
 (GET conversación, POST draft/approve/reject). Falta (etapa 2):
 `fetch_replies` para leer respuestas. 108 tests verdes.
 
+Lecciones del primer envío real (falló limpio, sin mandar nada): el CTA del
+anuncio es un `walla-button` y hay que clicar el HOST del web component (el
+`<button>` interno del shadow DOM no dispara nada); jamás seleccionar por
+`href*="/app/chat"` porque el «Buzón» de la cabecera apunta ahí y abre una
+bandeja sin campo de mensaje; y el chat se abre en una PESTAÑA NUEVA
+(`/app/chat?itemId=…`), así que el composer (placeholder «Empieza a
+chatear») se busca en todas las páginas del contexto, no en la actual.
+
 **Cambio 2026-07-16 — límites de importación editables en búsquedas
 existentes.** Los checkboxes de `noRhd`/`requireSpanishPlates` solo existían
 al crear la búsqueda; ahora cada tarjeta en /briefs lleva dos chips-toggle
