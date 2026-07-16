@@ -67,6 +67,22 @@ export function listingRowToNormalized(
   };
 }
 
+/** Re-evaluate a brief's shortlisted leads — e.g. after its hard limits change. */
+export async function reevaluateBriefLeads(db: Db, briefId: string): Promise<number> {
+  const rows = await db
+    .select({ lead: leads, listing: listings, brief: briefs })
+    .from(leads)
+    .innerJoin(listings, eq(leads.listingId, listings.id))
+    .innerJoin(briefs, eq(leads.briefId, briefs.id))
+    .where(and(eq(leads.briefId, briefId), eq(leads.state, "shortlisted")));
+
+  const caches = newEvalCaches();
+  for (const row of rows) {
+    await reevaluateLead(db, row.lead, row.listing, row.brief, caches);
+  }
+  return rows.length;
+}
+
 /**
  * Re-evaluate every shortlisted lead on a make+model — the step that makes a
  * dossier change (created, disabled, re-enabled) land on verdicts immediately.

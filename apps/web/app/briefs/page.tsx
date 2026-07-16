@@ -2,7 +2,7 @@ import { briefs, leads } from "@deepblue/db";
 import { desc, eq, sql } from "drizzle-orm";
 import { getDb } from "../../lib/db";
 import { fmtEur } from "../../lib/ui";
-import { createBrief, deleteBrief, setBriefStatus } from "./actions";
+import { createBrief, deleteBrief, setBriefStatus, toggleBriefLimit } from "./actions";
 import { ConfirmDelete } from "./confirm-delete";
 
 export const dynamic = "force-dynamic";
@@ -42,11 +42,22 @@ export default async function BriefsPage() {
                   {fmtEur(brief.hardLimits.maxPriceEur)}
                   {c.targetPriceEur ? ` (objetivo ${fmtEur(c.targetPriceEur)})` : ""}
                   {" · riesgo "}
-                  {c.riskTolerance ?? "medium"}
-                  {brief.hardLimits.noRhd ? " · sin RHD" : ""}
-                  {brief.hardLimits.requireSpanishPlates ? " · solo matrícula ES" : ""}
-                  {" · "}
-                  {shortlisted}/{total} leads vivos
+                  {c.riskTolerance ?? "medium"} · {shortlisted}/{total} leads vivos
+                </p>
+                {/* Import hard limits: toggling re-evaluates the brief's leads. */}
+                <p style={{ margin: "0.4rem 0 0", display: "flex", gap: "0.4rem", flexWrap: "wrap" }}>
+                  <LimitToggle
+                    briefId={brief.id}
+                    field="noRhd"
+                    enabled={brief.hardLimits.noRhd === true}
+                    label="RHD"
+                  />
+                  <LimitToggle
+                    briefId={brief.id}
+                    field="requireSpanishPlates"
+                    enabled={brief.hardLimits.requireSpanishPlates === true}
+                    label="Sin matricular en España"
+                  />
                 </p>
               </div>
               {/* One form per action: React server actions drop the submitter
@@ -169,6 +180,43 @@ export default async function BriefsPage() {
         </div>
       </form>
     </main>
+  );
+}
+
+/** One import hard limit as a toggle chip: enabled = veto active (red). */
+function LimitToggle({
+  briefId,
+  field,
+  enabled,
+  label,
+}: {
+  briefId: string;
+  field: "noRhd" | "requireSpanishPlates";
+  enabled: boolean;
+  label: string;
+}) {
+  return (
+    <form action={toggleBriefLimit} style={{ display: "inline" }}>
+      <input type="hidden" name="id" value={briefId} />
+      <input type="hidden" name="field" value={field} />
+      <button
+        type="submit"
+        title={enabled ? "Veto activo — clic para aceptar" : "Se acepta — clic para vetar"}
+        style={{
+          padding: "0.1rem 0.6rem",
+          borderRadius: 999,
+          border: "1px solid",
+          borderColor: enabled ? "var(--grade-e)" : "var(--border)",
+          background: "transparent",
+          color: enabled ? "var(--grade-e)" : "var(--ink-muted)",
+          fontWeight: enabled ? 700 : 400,
+          fontSize: "0.78rem",
+          cursor: "pointer",
+        }}
+      >
+        {enabled ? `✕ ${label}: vetado` : `${label}: se acepta`}
+      </button>
+    </form>
   );
 }
 

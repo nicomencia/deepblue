@@ -120,6 +120,14 @@ anuncios, digest con suelo de nota + alertas A/B sin duplicados, dossiers
 en la página del lead), tabs por búsqueda, página Actividad, descubrimiento de
 modelos y adopción manual de anuncios con dossier-first. 77 tests verdes.
 
+**Cambio 2026-07-16 — límites de importación editables en búsquedas
+existentes.** Los checkboxes de `noRhd`/`requireSpanishPlates` solo existían
+al crear la búsqueda; ahora cada tarjeta en /briefs lleva dos chips-toggle
+(«RHD: se acepta» ⇄ «✕ RHD: vetado»). Al cambiar un límite se re-evalúan los
+leads vivos de esa búsqueda al momento (`reevaluateBriefLeads`), así los
+recién vetados mueren sin esperar al siguiente sweep. Evento
+`brief_limits_changed` en el audit log.
+
 **Cambio 2026-07-15 — hechos de importación verificables + límites duros.**
 Los flags dejan de ser solo texto: `listings.rhd` y `listings.foreign_plates`
 (booleanos, null = desconocido, migración 0012) se rellenan desde texto

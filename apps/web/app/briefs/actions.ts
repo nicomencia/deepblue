@@ -7,6 +7,7 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { deleteBriefCascade } from "../../lib/brief-admin";
 import { getDb } from "../../lib/db";
+import { reevaluateBriefLeads } from "../../lib/reevaluate";
 
 const num = (v: FormDataEntryValue | null): number | undefined => {
   const n = Number(String(v ?? "").replace(/[.\s]/g, ""));
@@ -86,6 +87,35 @@ export async function setBriefStatus(formData: FormData): Promise<void> {
     .parse(String(formData.get("status") ?? ""));
   await db.update(briefs).set({ status }).where(eq(briefs.id, id));
   revalidatePath("/briefs");
+}
+
+/**
+ * Toggle an import hard limit (noRhd / requireSpanishPlates) on an existing
+ * brief, then re-evaluate its shortlisted leads so the filter bites now —
+ * newly-vetoed leads die (rhd_not_accepted / foreign_plates_not_accepted).
+ */
+export async function toggleBriefLimit(formData: FormData): Promise<void> {
+  const db = await getDb();
+  const id = String(formData.get("id") ?? "");
+  const field = z.enum(["noRhd", "requireSpanishPlates"]).parse(String(formData.get("field") ?? ""));
+
+  const [brief] = await db.select().from(briefs).where(eq(briefs.id, id)).limit(1);
+  if (!brief) throw new Error(`brief ${id} not found`);
+
+  const hardLimits = { ...brief.hardLimits };
+  if (hardLimits[field]) delete hardLimits[field];
+  else hardLimits[field] = true;
+  await db.update(briefs).set({ hardLimits }).where(eq(briefs.id, id));
+
+  const reevaluated = await reevaluateBriefLeads(db, id);
+  await db.insert(events).values({
+    userId: brief.userId,
+    type: "brief_limits_changed",
+    payload: { briefId: id, field, enabled: hardLimits[field] === true, reevaluated },
+  });
+
+  revalidatePath("/briefs");
+  revalidatePath("/");
 }
 
 /**
