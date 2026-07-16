@@ -122,6 +122,14 @@ anuncios, digest con suelo de nota + alertas A/B sin duplicados, dossiers
 en la página del lead), tabs por búsqueda, página Actividad, descubrimiento de
 modelos y adopción manual de anuncios con dossier-first. 77 tests verdes.
 
+**Cambio 2026-07-17 — turno de conversación: esperando al vendedor.** Si el
+último mensaje del hilo es nuestro, la ficha marca «⏳ Esperando respuesta
+del vendedor» y NO sugiere más preguntas encima de las no contestadas
+(regla del usuario). Tras ≥2 días de silencio la única sugerencia es un
+recordatorio suave de una línea (`composeNudgeMessage`, sin preguntas
+nuevas). Cuando el vendedor responde, vuelve la sugerencia de seguimiento
+con las preguntas pendientes. El cuadro de respuesta manual queda siempre.
+
 **Cambio 2026-07-17 — Fase 2 etapa 3: las respuestas actualizan el lead.**
 Interpretación automática de conversaciones: un LLM lee el hilo completo
 contra el veredicto y produce un `conversationReading` validado

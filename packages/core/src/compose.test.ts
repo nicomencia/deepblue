@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { composeFollowUpMessage, composeOpeningMessage } from "./compose.js";
+import { composeFollowUpMessage, composeNudgeMessage, composeOpeningMessage } from "./compose.js";
 
 describe("composeOpeningMessage", () => {
   it("greets the seller by first name and asks the questions informally", () => {
@@ -60,6 +60,15 @@ describe("composeOpeningMessage", () => {
       openQuestions: [],
     });
     expect(msg).toMatch(/^(Hola|Buenas)! /);
+  });
+});
+
+describe("composeNudgeMessage", () => {
+  it("is a short question-free reminder, deterministic per seed", () => {
+    const a = composeNudgeMessage("lead-1");
+    expect(a).toBe(composeNudgeMessage("lead-1"));
+    expect(a).not.toMatch(/[¿¡]/);
+    expect(a.split("\n")).toHaveLength(1);
   });
 });
 

@@ -78,6 +78,21 @@ export function composeOpeningMessage(input: OpeningMessageInput): string {
   ].join("\n");
 }
 
+const NUDGES = [
+  "Buenas! Pudiste mirar lo que te pregunté?",
+  "Hola! Le pudiste echar un ojo a lo que te comenté?",
+  "Buenas! Sabes algo de lo del otro día?",
+];
+
+/**
+ * Waiting on the seller: the only acceptable message is a gentle reminder —
+ * never a new batch of questions on top of unanswered ones (user rule,
+ * 2026-07-17). Seeded like everything else: same lead, same nudge.
+ */
+export function composeNudgeMessage(seed: string): string {
+  return seedPick(NUDGES, `${seed}|nudge`);
+}
+
 export interface FollowUpInput {
   /** Verdict open questions, best first. */
   openQuestions: string[];

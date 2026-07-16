@@ -1,5 +1,6 @@
 import {
   composeFollowUpMessage,
+  composeNudgeMessage,
   extractImportSignals,
   type IssueAssessment,
   type IssueFinding,
@@ -96,13 +97,34 @@ export default async function LeadDetail({
     listing.platform === "wallapop" &&
     lead.autonomyMode !== "paused";
 
-  // Deterministic follow-up: the open questions not yet put to the seller.
-  const followUpSuggestion = composeFollowUpMessage({
-    openQuestions: lead.verdict?.openQuestions ?? [],
-    alreadyAsked: conversation
-      .filter((m) => m.direction === "outbound" && (m.status === "sent" || m.status === "queued"))
-      .map((m) => m.body),
-  });
+  // Whose turn is it? If the last word in the thread is ours, we're waiting
+  // on the seller: no new questions get suggested on top of unanswered ones —
+  // after a couple of quiet days the only suggestion is a gentle nudge.
+  const lastExchange = [...conversation]
+    .reverse()
+    .find(
+      (m) =>
+        (m.direction === "outbound" && m.status === "sent") ||
+        (m.direction === "inbound" && m.status === "received"),
+    );
+  const waitingForSeller = lastExchange?.direction === "outbound";
+  const quietMs = waitingForSeller
+    ? Date.now() - new Date(lastExchange.sentAt ?? lastExchange.createdAt).getTime()
+    : 0;
+  const NUDGE_AFTER_MS = 2 * 24 * 60 * 60 * 1000;
+
+  // Deterministic suggestion, by conversation turn: seller answered → the
+  // open questions not yet asked; we're waiting → a nudge (quiet ≥2 days).
+  const followUpSuggestion = waitingForSeller
+    ? quietMs >= NUDGE_AFTER_MS
+      ? composeNudgeMessage(lead.id)
+      : null
+    : composeFollowUpMessage({
+        openQuestions: lead.verdict?.openQuestions ?? [],
+        alreadyAsked: conversation
+          .filter((m) => m.direction === "outbound" && (m.status === "sent" || m.status === "queued"))
+          .map((m) => m.body),
+      });
 
   // High-signal import warnings belong next to the title, not buried in a
   // card. Stored facts (user-verified or ingest-detected) beat text inference.
@@ -343,7 +365,25 @@ export default async function LeadDetail({
       {/* Conversation with the seller — every send passes a human approval */}
       {(conversation.length > 0 || contactable) && (
         <>
-          <h2 style={h2}>Conversación con el vendedor</h2>
+          <h2 style={h2}>
+            Conversación con el vendedor
+            {waitingForSeller && (
+              <span
+                style={{
+                  marginLeft: "0.6rem",
+                  padding: "0.1rem 0.6rem",
+                  borderRadius: 999,
+                  border: "1px solid var(--border)",
+                  color: "var(--ink-muted)",
+                  fontSize: "0.75rem",
+                  fontWeight: 400,
+                  verticalAlign: "middle",
+                }}
+              >
+                ⏳ Esperando respuesta del vendedor
+              </span>
+            )}
+          </h2>
           {conversation
             .filter((m) => m.id !== pendingDraft?.id)
             .map((m) => (
@@ -432,8 +472,9 @@ export default async function LeadDetail({
                 {followUpSuggestion && !sugerir && (
                   <p style={{ margin: "0.5rem 0 0", fontSize: "0.83rem" }}>
                     <Link href={`/leads/${lead.id}?sugerir=1`} style={{ color: "var(--ink-muted)" }}>
-                      💡 Sugerir seguimiento con las preguntas aún sin hacer (
-                      {followUpSuggestion.match(/^- /gm)?.length ?? 0})
+                      {waitingForSeller
+                        ? "💡 Sugerir un recordatorio suave (sin preguntas nuevas)"
+                        : `💡 Sugerir seguimiento con las preguntas aún sin hacer (${followUpSuggestion.split("\n").filter((l) => l.endsWith("?")).length})`}
                     </Link>
                   </p>
                 )}
