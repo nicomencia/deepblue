@@ -121,6 +121,14 @@ anuncios, digest con suelo de nota + alertas A/B sin duplicados, dossiers
 en la página del lead), tabs por búsqueda, página Actividad, descubrimiento de
 modelos y adopción manual de anuncios con dossier-first. 77 tests verdes.
 
+**Cambio 2026-07-17 — tono informal en los borradores.** Feedback del
+usuario tras estrenar el chat: los mensajes compuestos ahora suenan a
+Wallapop — sin ¿¡, sin listas con guiones (una pregunta por línea), saludos
+y cierres variados («Hola/Buenas», «Gracias!/Un saludo!/…») elegidos con
+semilla determinista (mismo lead ⇒ mismo borrador, tests reproducibles).
+El filtro de seguimientos normaliza ¿¡ en ambos lados para seguir
+deduplicando contra mensajes enviados con el estilo formal antiguo.
+
 **Cambio 2026-07-16 — Fase 2: seguimientos sugeridos.**
 Bajo el cuadro de respuesta aparece «💡 Sugerir seguimiento» cuando quedan
 preguntas del veredicto sin hacer: `composeFollowUpMessage` (core,
