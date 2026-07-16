@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { composeOpeningMessage } from "./compose.js";
+import { composeFollowUpMessage, composeOpeningMessage } from "./compose.js";
 
 describe("composeOpeningMessage", () => {
   it("greets the seller by first name and lists questions", () => {
@@ -36,6 +36,32 @@ describe("composeOpeningMessage", () => {
     const msg = composeOpeningMessage({ title: "Golf", openQuestions: [] });
     expect(msg).toContain("¿Sigue disponible?");
     expect(msg).not.toContain("- ");
+  });
+
+  it("follow-up carries only the questions not yet asked", () => {
+    const sent = composeOpeningMessage({
+      title: "Boxster",
+      openQuestions: ["¿Quién asume la rematriculación en España?"],
+    });
+    const followUp = composeFollowUpMessage({
+      openQuestions: [
+        "¿Quién asume la rematriculación en España?",
+        "¿Tiene el libro de mantenimiento al día?",
+        "¿Cuántos propietarios ha tenido?",
+      ],
+      alreadyAsked: [sent],
+    });
+    expect(followUp).toContain("- ¿Tiene el libro de mantenimiento al día?");
+    expect(followUp).toContain("- ¿Cuántos propietarios ha tenido?");
+    expect(followUp).not.toContain("rematriculación");
+  });
+
+  it("follow-up is null when everything was already asked", () => {
+    const followUp = composeFollowUpMessage({
+      openQuestions: ["¿una cosa?"],
+      alreadyAsked: ["Hola:\n- ¿Una cosa?\n¡Gracias!"],
+    });
+    expect(followUp).toBeNull();
   });
 
   it("ignores non-name seller display names", () => {

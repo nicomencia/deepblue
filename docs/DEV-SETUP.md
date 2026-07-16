@@ -121,6 +121,14 @@ anuncios, digest con suelo de nota + alertas A/B sin duplicados, dossiers
 en la página del lead), tabs por búsqueda, página Actividad, descubrimiento de
 modelos y adopción manual de anuncios con dossier-first. 77 tests verdes.
 
+**Cambio 2026-07-16 — Fase 2: seguimientos sugeridos.**
+Bajo el cuadro de respuesta aparece «💡 Sugerir seguimiento» cuando quedan
+preguntas del veredicto sin hacer: `composeFollowUpMessage` (core,
+determinista) filtra las `openQuestions` ya enviadas comparándolas con los
+outbound `sent/queued` del timeline y pre-rellena el textarea vía
+`?sugerir=1` (sin JS de cliente) con hasta 3 pendientes — editable antes de
+enviar, como siempre. Si no queda nada por preguntar, el enlace no aparece.
+
 **Cambio 2026-07-16 — Fase 2: responder al vendedor (conversación).**
 Con conversación abierta, la ficha del lead cambia el botón de borrador por
 un cuadro «Responder al vendedor…»: el usuario escribe y «Enviar al

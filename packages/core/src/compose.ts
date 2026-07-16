@@ -63,3 +63,31 @@ export function composeOpeningMessage(input: OpeningMessageInput): string {
   }
   return lines.join("\n");
 }
+
+export interface FollowUpInput {
+  /** Verdict open questions, best first. */
+  openQuestions: string[];
+  /** Bodies of outbound messages already sent/queued — never re-ask these. */
+  alreadyAsked: string[];
+}
+
+/**
+ * Mid-conversation follow-up: the open questions not yet put to the seller,
+ * as a pre-filled suggestion the user edits before sending. Returns null
+ * when everything has been asked — no button, no empty nag.
+ */
+export function composeFollowUpMessage(input: FollowUpInput): string | null {
+  const asked = input.alreadyAsked.join("\n").toLowerCase();
+  const remaining = input.openQuestions
+    .map(asQuestion)
+    .filter((q) => q && !asked.includes(q.toLowerCase()))
+    .slice(0, MAX_OPENING_QUESTIONS);
+  if (remaining.length === 0) return null;
+
+  return [
+    "Gracias por la respuesta. Aprovecho para preguntarte alguna cosa más:",
+    ...remaining.map((q) => `- ${q}`),
+    "",
+    "¡Gracias!",
+  ].join("\n");
+}

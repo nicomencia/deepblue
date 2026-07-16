@@ -1,4 +1,10 @@
-import { extractImportSignals, type IssueAssessment, type IssueFinding, type VerdictFactor } from "@deepblue/core";
+import {
+  composeFollowUpMessage,
+  extractImportSignals,
+  type IssueAssessment,
+  type IssueFinding,
+  type VerdictFactor,
+} from "@deepblue/core";
 import { briefs, events, leads, listings, messages } from "@deepblue/db";
 import { asc, desc, eq } from "drizzle-orm";
 import Link from "next/link";
@@ -50,10 +56,13 @@ const MESSAGE_STATUS_ES: Record<string, string> = {
 
 export default async function LeadDetail({
   params,
+  searchParams,
 }: {
   params: Promise<{ id: string }>;
+  searchParams: Promise<{ sugerir?: string }>;
 }) {
   const { id } = await params;
+  const { sugerir } = await searchParams;
   const db = await getDb();
 
   const [row] = await db
@@ -86,6 +95,14 @@ export default async function LeadDetail({
     ["shortlisted", "contacted", "negotiating"].includes(lead.state) &&
     listing.platform === "wallapop" &&
     lead.autonomyMode !== "paused";
+
+  // Deterministic follow-up: the open questions not yet put to the seller.
+  const followUpSuggestion = composeFollowUpMessage({
+    openQuestions: lead.verdict?.openQuestions ?? [],
+    alreadyAsked: conversation
+      .filter((m) => m.direction === "outbound" && (m.status === "sent" || m.status === "queued"))
+      .map((m) => m.body),
+  });
 
   // High-signal import warnings belong next to the title, not buried in a
   // card. Stored facts (user-verified or ingest-detected) beat text inference.
@@ -387,29 +404,40 @@ export default async function LeadDetail({
             !conversation.some((m) => m.status === "queued") &&
             (conversation.some((m) => m.status === "sent" || m.direction === "inbound") ? (
               // Ongoing conversation: the user writes, writing IS the approval.
-              <form action={replySellerMessage} style={{ marginTop: "0.5rem" }}>
-                <input type="hidden" name="leadId" value={lead.id} />
-                <textarea
-                  name="body"
-                  rows={4}
-                  required
-                  placeholder="Responder al vendedor…"
-                  style={{
-                    width: "100%",
-                    boxSizing: "border-box",
-                    padding: "0.5rem 0.7rem",
-                    borderRadius: 6,
-                    border: "1px solid var(--border)",
-                    background: "transparent",
-                    color: "inherit",
-                    font: "inherit",
-                    fontSize: "0.9rem",
-                  }}
-                />
-                <button type="submit" style={{ ...btn, marginTop: "0.4rem" }}>
-                  Enviar al vendedor
-                </button>
-              </form>
+              <div style={{ marginTop: "0.5rem" }}>
+                <form action={replySellerMessage}>
+                  <input type="hidden" name="leadId" value={lead.id} />
+                  <textarea
+                    name="body"
+                    rows={sugerir && followUpSuggestion ? 7 : 4}
+                    required
+                    placeholder="Responder al vendedor…"
+                    defaultValue={sugerir && followUpSuggestion ? followUpSuggestion : undefined}
+                    style={{
+                      width: "100%",
+                      boxSizing: "border-box",
+                      padding: "0.5rem 0.7rem",
+                      borderRadius: 6,
+                      border: "1px solid var(--border)",
+                      background: "transparent",
+                      color: "inherit",
+                      font: "inherit",
+                      fontSize: "0.9rem",
+                    }}
+                  />
+                  <button type="submit" style={{ ...btn, marginTop: "0.4rem" }}>
+                    Enviar al vendedor
+                  </button>
+                </form>
+                {followUpSuggestion && !sugerir && (
+                  <p style={{ margin: "0.5rem 0 0", fontSize: "0.83rem" }}>
+                    <Link href={`/leads/${lead.id}?sugerir=1`} style={{ color: "var(--ink-muted)" }}>
+                      💡 Sugerir seguimiento con las preguntas aún sin hacer (
+                      {followUpSuggestion.match(/^- /gm)?.length ?? 0})
+                    </Link>
+                  </p>
+                )}
+              </div>
             ) : (
               <form action={draftSellerMessage}>
                 <input type="hidden" name="leadId" value={lead.id} />
