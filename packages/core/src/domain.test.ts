@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { conversationReadingPayloadSchema } from "./domain.js";
 import {
   ACTIVE_PLATFORMS,
   canTransition,
@@ -123,6 +124,36 @@ describe("LLM trust-boundary schemas", () => {
     expect(modelDossierSchema.safeParse({
       make: "VW", model: "Golf", knownIssues: [noSources], recalls: [], generalNotes: [], sources: [],
     }).success).toBe(false);
+  });
+
+  it("conversationReadingPayloadSchema validates a full reading and rejects bad bases", () => {
+    const reading = {
+      summary: "El vendedor confirma libro de mantenimiento y matrícula UK.",
+      factorAdjustments: {
+        sellerCredibility: { delta: 4, reasons: ["Responde rápido y con datos concretos"] },
+      },
+      redFlags: [],
+      greenFlags: ["Dice tener todas las facturas"],
+      scamSuspicion: false,
+      extraOpenQuestions: [],
+      issueUpdates: [
+        {
+          title: "Rodamiento IMS",
+          status: "ruled_out",
+          basis: "evidence_shared",
+          quote: "te paso la factura del cambio de IMS",
+        },
+      ],
+      importFacts: { foreignPlates: true, quote: "tiene contrato de compra venta + el V5" },
+      escalate: false,
+    };
+    expect(conversationReadingPayloadSchema.parse(reading).issueUpdates).toHaveLength(1);
+
+    const bad = {
+      ...reading,
+      issueUpdates: [{ ...reading.issueUpdates[0], basis: "trust_me" }],
+    };
+    expect(conversationReadingPayloadSchema.safeParse(bad).success).toBe(false);
   });
 
   it("discoveryReportSchema demands 1–5 concrete recommendations", () => {

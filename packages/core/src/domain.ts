@@ -441,6 +441,50 @@ export type LlmEnrichmentPayload = z.infer<typeof llmEnrichmentPayloadSchema>;
 export type LlmEnrichment = LlmEnrichmentPayload & { model: string; at: string };
 
 // ---------------------------------------------------------------------------
+// Conversation reading — seller replies become data, automatically
+// ---------------------------------------------------------------------------
+
+/**
+ * One dossier issue moved by what the seller said. `basis` keeps the claim
+ * honest: a seller's word and a shared document are both recorded, but the
+ * note on the finding says which one it was — and findings stay reversible
+ * from the lead page (Reabrir).
+ */
+export const conversationIssueUpdateSchema = z.object({
+  /** Must match a verdict issue title exactly; unknown titles are dropped. */
+  title: z.string(),
+  status: z.enum(["confirmed", "ruled_out"]),
+  basis: z.enum(["seller_stated", "evidence_shared"]),
+  /** The seller's words that justify this, quoted from the conversation. */
+  quote: z.string(),
+});
+export type ConversationIssueUpdate = z.infer<typeof conversationIssueUpdateSchema>;
+
+/**
+ * What a conversation read may contribute. Extends the ad-enrichment payload
+ * (same bounded factorAdjustments, flags, summary — applyEnrichment merges
+ * both identically) with conversation-only outcomes: issue findings, import
+ * facts, and an escalation flag for the topics the agent must never handle
+ * alone (payments, documents, off-platform moves — see ESCALATION_TRIGGERS).
+ */
+export const conversationReadingPayloadSchema = llmEnrichmentPayloadSchema.extend({
+  issueUpdates: z.array(conversationIssueUpdateSchema),
+  importFacts: z
+    .object({
+      rhd: z.boolean().optional(),
+      foreignPlates: z.boolean().optional(),
+      quote: z.string().optional(),
+    })
+    .optional(),
+  escalate: z.boolean(),
+  escalateReason: z.string().optional(),
+});
+export type ConversationReadingPayload = z.infer<typeof conversationReadingPayloadSchema>;
+
+/** Stored on the lead; structurally an LlmEnrichment so re-merges reuse applyEnrichment. */
+export type ConversationReading = ConversationReadingPayload & { model: string; at: string };
+
+// ---------------------------------------------------------------------------
 // Messaging
 // ---------------------------------------------------------------------------
 

@@ -95,7 +95,8 @@ pnpm dev:runner
 | `GET /api/dev/listing-raw?id=…` o `?latest=wallapop` | payload raw de un listing |
 | `POST /api/dev/brief-status` | cambiar estado de una búsqueda `{briefId, status}` |
 | `POST /api/dev/brief-delete` | eliminar búsqueda + leads (cascada; corpus intacto) `{briefId}` |
-| `GET/POST /api/dev/outreach` | conversación de un lead / `{leadId, action: draft\|approve\|reject}` |
+| `GET/POST /api/dev/outreach` | conversación de un lead / `{leadId, action: draft\|approve\|reject\|fetch\|send}` |
+| `GET/POST /api/dev/chat-reads` | conversaciones pendientes de interpretar / importar `{leadId, reading}` |
 | `POST /api/dev/sweep` | disparar sweep de todos los briefs activos |
 | `POST /api/dev/reap` | sondas de vida (reaper) |
 | `POST /api/dev/reevaluate` | backfill + retire + dedup + reevaluar todo |
@@ -120,6 +121,23 @@ anuncios, digest con suelo de nota + alertas A/B sin duplicados, dossiers
 (207/THP, Golf, Elise) con verificación manual de riesgos (Confirmar/Descartar
 en la página del lead), tabs por búsqueda, página Actividad, descubrimiento de
 modelos y adopción manual de anuncios con dossier-first. 77 tests verdes.
+
+**Cambio 2026-07-17 — Fase 2 etapa 3: las respuestas actualizan el lead.**
+Interpretación automática de conversaciones: un LLM lee el hilo completo
+contra el veredicto y produce un `conversationReading` validado
+(`conversationReadingPayloadSchema`, extiende el payload de enriquecimiento)
+que EL CÓDIGO aplica: issueUpdates con título exacto del riesgo y quote del
+vendedor (basis `evidence_shared` vs `seller_stated`, la nota del finding lo
+dice) van por el mismo camino que los botones manuales; importFacts solo
+fijan valores desconocidos del listing; los factorAdjustments acotados se
+re-mergen en cada re-evaluación igual que el enrichment del anuncio
+(columnas `chat_reading`/`chat_read_at`, migración 0013, applyEnrichment en
+cadena). `escalate` manda email cuando el vendedor pide algo que decide el
+humano (pagos, documentos, salir de la plataforma). Enviar sigue con humano;
+leer ya no lo necesita: todo queda eventado (`conversation_read`), citado y
+reversible (Reabrir). Lanes: cron `/api/cron/chat-reads` por tick (con API
+key) o sesión Claude Code vía `GET /api/dev/chat-reads` (pendientes+prompt)
+y `POST` `{leadId, reading}`. Estrenado con la conversación real del Boxster.
 
 **Cambio 2026-07-17 — tono informal en los borradores.** Feedback del
 usuario tras estrenar el chat: los mensajes compuestos ahora suenan a

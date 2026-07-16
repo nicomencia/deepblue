@@ -76,9 +76,10 @@ async function tick(): Promise<void> {
   // sweepReplies keeps browser visits to Wallapop rare.
   console.log("[scheduler]", await trigger("/api/cron/replies"));
 
-  // LLM verdict enrichment: bounded batch per tick, no-op when nothing is
-  // pending — a post-sweep backlog drains steadily without a cost spike.
+  // LLM lanes: bounded batches per tick, no-op when nothing is pending.
   if (process.env.ANTHROPIC_API_KEY) {
     console.log("[scheduler]", await trigger("/api/cron/enrich"));
+    // Fresh seller replies become findings/facts/deltas automatically.
+    console.log("[scheduler]", await trigger("/api/cron/chat-reads"));
   }
 }

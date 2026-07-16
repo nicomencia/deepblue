@@ -20,6 +20,7 @@ import type {
   AutonomyMode,
   BriefCriteria,
   ConfidenceVerdict,
+  ConversationReading,
   DiscoveryProfile,
   DiscoveryReport,
   HardLimits,
@@ -126,6 +127,10 @@ export const leads = pgTable(
     /** LLM read of the ad, stored raw so re-evaluations can re-merge it. */
     enrichment: jsonb("enrichment").$type<LlmEnrichment>(),
     enrichedAt: timestamp("enriched_at", { withTimezone: true }),
+    /** LLM read of the seller CONVERSATION — re-merged like the ad enrichment. */
+    chatReading: jsonb("chat_reading").$type<ConversationReading>(),
+    /** Inbound messages after this instant still await interpretation. */
+    chatReadAt: timestamp("chat_read_at", { withTimezone: true }),
     /** Human-verified issue outcomes (seller evidence); reapplied on every re-evaluation. */
     issueFindings: jsonb("issue_findings").$type<IssueFinding[]>(),
     /** Set when an instant alert email fired — the digest labels these as recap. */

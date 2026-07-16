@@ -92,6 +92,13 @@
       "when": 1784149143013,
       "tag": "0012_abandoned_blue_blade",
       "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "7",
+      "when": 1784240572825,
+      "tag": "0013_empty_stick",
+      "breakpoints": true
     }
   ]
 }

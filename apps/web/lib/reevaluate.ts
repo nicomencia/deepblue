@@ -149,11 +149,16 @@ export async function reevaluateLead(
     lead.issueFindings ?? undefined,
   );
 
-  // Rules rebuild the verdict from scratch; a stored LLM enrichment is
-  // re-merged on top (bounded deltas, vetoes reapplied inside).
-  const verdict = lead.enrichment
-    ? applyEnrichment(evaluation.verdict, lead.enrichment, brief.criteria.riskTolerance ?? "medium")
+  // Rules rebuild the verdict from scratch; stored LLM layers are re-merged
+  // on top in order — ad enrichment, then the conversation reading — each
+  // with bounded deltas and veto caps reapplied inside applyEnrichment.
+  const risk = brief.criteria.riskTolerance ?? "medium";
+  let verdict = lead.enrichment
+    ? applyEnrichment(evaluation.verdict, lead.enrichment, risk)
     : evaluation.verdict;
+  if (lead.chatReading) {
+    verdict = applyEnrichment(verdict, lead.chatReading, risk);
+  }
 
   // Manual (adopted) leads never die on hard filters — the user explicitly
   // wants this ad tracked; the reason stays visible as a warning instead.
