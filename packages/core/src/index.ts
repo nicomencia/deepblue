@@ -5,3 +5,4 @@ export * from "./benchmark.js";
 export * from "./evaluate.js";
 export * from "./extract.js";
 export * from "./lifecycle.js";
+export * from "./compose.js";

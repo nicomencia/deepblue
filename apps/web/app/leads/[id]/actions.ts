@@ -23,6 +23,7 @@ export async function setIssueFinding(formData: FormData): Promise<void> {
 }
 
 import { applyImportFact, type ImportFactField, type ImportFactValue } from "../../../lib/findings";
+import { decideLeadApproval, draftOutreach, updateDraftBody } from "../../../lib/outreach";
 
 /** Mark a verified import fact (RHD / foreign plates) and refresh the verdict. */
 export async function setImportFact(formData: FormData): Promise<void> {
@@ -37,4 +38,42 @@ export async function setImportFact(formData: FormData): Promise<void> {
   await applyImportFact(db, leadId, field, value);
   revalidatePath(`/leads/${leadId}`);
   revalidatePath("/");
+}
+
+/** Draft the approval-gated opening message for this lead's seller. */
+export async function draftSellerMessage(formData: FormData): Promise<void> {
+  const leadId = String(formData.get("leadId") ?? "");
+  if (!leadId) throw new Error("falta leadId");
+
+  const db = await getDb();
+  const result = await draftOutreach(db, leadId);
+  if (!result.ok) throw new Error(result.error);
+  revalidatePath(`/leads/${leadId}`);
+}
+
+/** Approve the pending draft: save the (possibly edited) text, then queue the send. */
+export async function approveSellerMessage(formData: FormData): Promise<void> {
+  const leadId = String(formData.get("leadId") ?? "");
+  const messageId = String(formData.get("messageId") ?? "");
+  const body = String(formData.get("body") ?? "");
+  if (!leadId || !messageId) throw new Error("faltan leadId o messageId");
+
+  const db = await getDb();
+  const saved = await updateDraftBody(db, messageId, body);
+  if (!saved.ok) throw new Error(saved.error);
+  const result = await decideLeadApproval(db, leadId, "approve");
+  if (!result.ok) throw new Error(result.error);
+  revalidatePath(`/leads/${leadId}`);
+  revalidatePath("/");
+}
+
+/** Reject the pending draft — it stays in the timeline as an inert draft. */
+export async function rejectSellerMessage(formData: FormData): Promise<void> {
+  const leadId = String(formData.get("leadId") ?? "");
+  if (!leadId) throw new Error("falta leadId");
+
+  const db = await getDb();
+  const result = await decideLeadApproval(db, leadId, "reject");
+  if (!result.ok) throw new Error(result.error);
+  revalidatePath(`/leads/${leadId}`);
 }

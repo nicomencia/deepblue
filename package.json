@@ -11,6 +11,7 @@
     "test": "pnpm -r test",
     "dev:web": "node scripts/backup-db.mjs && pnpm --filter @deepblue/web dev",
     "dev:runner": "pnpm --filter @deepblue/runner dev",
+    "runner:login": "pnpm --filter @deepblue/runner login",
     "backup:db": "node scripts/backup-db.mjs",
     "db:generate": "pnpm --filter @deepblue/db generate",
     "db:migrate": "pnpm --filter @deepblue/db migrate"

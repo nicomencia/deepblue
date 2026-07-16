@@ -81,11 +81,19 @@ export const sendMessagePayload = z.object({
   type: z.literal("send_message"),
   platform: platformSchema,
   platformListingId: z.string(),
+  /** Listing web URL — the browser opens the chat from the ad page. */
+  url: z.string().optional(),
   platformConversationId: z.string().optional(),
   /** The exact text to send — composed and approved in the Core. */
   body: z.string(),
   /** Core-side message row this send belongs to. */
   messageId: z.string(),
+});
+
+/** What the Runner reports back from a send_message job (a trust boundary). */
+export const sendResultSchema = z.object({
+  externalId: z.string().optional(),
+  sentAt: z.string(),
 });
 
 export const fetchRepliesPayload = z.object({

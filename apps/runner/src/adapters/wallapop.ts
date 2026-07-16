@@ -152,11 +152,17 @@ export const wallapopAdapter: PlatformAdapter = {
     return { platform: "wallapop", platformListingId: ref.platformListingId, status };
   },
 
-  async sendMessage() {
-    throw new Error("wallapop messaging arrives in Phase 2");
+  async sendMessage(ref, body) {
+    // The one browser-bound operation: rides the logged-in persistent
+    // profile (pnpm runner:login). Config is read here, not injected —
+    // the adapter object stays a plain const.
+    const { loadConfig } = await import("../config.js");
+    const { sendWallapopMessage } = await import("../wallapop-chat.js");
+    const config = loadConfig();
+    return sendWallapopMessage(config.browserProfileDir, config.chatHeadless, ref, body);
   },
   async fetchReplies() {
-    throw new Error("wallapop messaging arrives in Phase 2");
+    throw new Error("wallapop inbound arrives in Phase 2 stage 2");
   },
 };
 

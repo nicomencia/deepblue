@@ -95,6 +95,7 @@ pnpm dev:runner
 | `GET /api/dev/listing-raw?id=…` o `?latest=wallapop` | payload raw de un listing |
 | `POST /api/dev/brief-status` | cambiar estado de una búsqueda `{briefId, status}` |
 | `POST /api/dev/brief-delete` | eliminar búsqueda + leads (cascada; corpus intacto) `{briefId}` |
+| `GET/POST /api/dev/outreach` | conversación de un lead / `{leadId, action: draft\|approve\|reject}` |
 | `POST /api/dev/sweep` | disparar sweep de todos los briefs activos |
 | `POST /api/dev/reap` | sondas de vida (reaper) |
 | `POST /api/dev/reevaluate` | backfill + retire + dedup + reevaluar todo |
@@ -119,6 +120,25 @@ anuncios, digest con suelo de nota + alertas A/B sin duplicados, dossiers
 (207/THP, Golf, Elise) con verificación manual de riesgos (Confirmar/Descartar
 en la página del lead), tabs por búsqueda, página Actividad, descubrimiento de
 modelos y adopción manual de anuncios con dossier-first. 77 tests verdes.
+
+**Cambio 2026-07-16 — Fase 2 etapa 1: mensajes al vendedor con aprobación.**
+El sistema ya puede hablar con vendedores de Wallapop, con un humano en el
+gatillo siempre: «Redactar mensaje al vendedor» en la ficha del lead compone
+un borrador determinista (saludo + las 3 mejores `openQuestions` del
+veredicto, `composeOpeningMessage` en core, sin LLM) y lo aparca en
+`messages(pending_approval)` + `approvals` con token de un clic. Llega email
+con el texto y enlaces Aprobar/Rechazar (`/api/approvals/[token]`); en la
+ficha se puede editar el texto antes de aprobar. Aprobar encola un job
+`send_message` que el runner ejecuta con Playwright sobre el perfil
+persistente logueado (`pnpm runner:login`, una sola vez, la sesión queda en
+`.browser-profile/` fuera del repo; ventana visible por defecto,
+`CHAT_HEADLESS=1` para ocultarla). Éxito ⇒ mensaje `sent` + lead
+`shortlisted→contacted`; fallo ⇒ mensaje `failed` visible en la ficha.
+Envíos son at-most-once: un lease caducado de `send_message` nunca se
+reintenta (el runner pudo haber enviado antes de morir) — se marca fallido
+con aviso de comprobar el chat a mano. Endpoint dev: `/api/dev/outreach`
+(GET conversación, POST draft/approve/reject). Falta (etapa 2):
+`fetch_replies` para leer respuestas. 108 tests verdes.
 
 **Cambio 2026-07-16 — límites de importación editables en búsquedas
 existentes.** Los checkboxes de `noRhd`/`requireSpanishPlates` solo existían

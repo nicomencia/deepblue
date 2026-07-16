@@ -1,4 +1,4 @@
-import { listingCheckResultSchema, normalizedListingSchema } from "@deepblue/core";
+import { listingCheckResultSchema, normalizedListingSchema, sendResultSchema } from "@deepblue/core";
 import { events, jobs, users } from "@deepblue/db";
 import { eq } from "drizzle-orm";
 import { z } from "zod";
@@ -6,6 +6,7 @@ import { completeAdoption } from "../../../../../../lib/adopt";
 import { getDb } from "../../../../../../lib/db";
 import { sendEmail } from "../../../../../../lib/email";
 import { ingestListingDetail, ingestSearchResults } from "../../../../../../lib/ingest";
+import { applySendResult } from "../../../../../../lib/outreach";
 import { applyListingCheck } from "../../../../../../lib/reaper";
 import { isAuthorizedRunner } from "../../../../../../lib/runner-auth";
 
@@ -43,6 +44,18 @@ export async function POST(
   } else if (report.status === "succeeded" && job.payload.type === "check_listing") {
     const check = listingCheckResultSchema.parse(report.result);
     ingestStats = await applyListingCheck(db, check);
+  } else if (job.payload.type === "send_message") {
+    // Success and failure both land on the message row — a failed send must
+    // surface on the lead page, not die silently in the jobs table.
+    if (report.status === "succeeded") {
+      const sent = sendResultSchema.parse(report.result);
+      await applySendResult(db, job.payload.messageId, { ok: true, ...sent });
+    } else {
+      await applySendResult(db, job.payload.messageId, {
+        ok: false,
+        error: report.error ?? "unknown send failure",
+      });
+    }
   }
 
   await db

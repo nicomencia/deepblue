@@ -1,11 +1,17 @@
 import { extractImportSignals, type IssueAssessment, type IssueFinding, type VerdictFactor } from "@deepblue/core";
-import { briefs, events, leads, listings } from "@deepblue/db";
-import { desc, eq } from "drizzle-orm";
+import { briefs, events, leads, listings, messages } from "@deepblue/db";
+import { asc, desc, eq } from "drizzle-orm";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getDb } from "../../../lib/db";
 import { fmtDate, fmtEur, fmtKm, gradeVar } from "../../../lib/ui";
-import { setImportFact, setIssueFinding } from "./actions";
+import {
+  approveSellerMessage,
+  draftSellerMessage,
+  rejectSellerMessage,
+  setImportFact,
+  setIssueFinding,
+} from "./actions";
 
 export const dynamic = "force-dynamic";
 
@@ -31,6 +37,14 @@ const LIKELIHOOD_ES: Record<string, string> = {
   low: "baja",
   medium: "media",
   high: "alta",
+};
+const MESSAGE_STATUS_ES: Record<string, string> = {
+  draft: "borrador (no enviado)",
+  pending_approval: "pendiente de aprobación",
+  queued: "en cola de envío",
+  sent: "enviado",
+  received: "recibido",
+  failed: "fallo al enviar",
 };
 
 export default async function LeadDetail({
@@ -58,6 +72,19 @@ export default async function LeadDetail({
     .where(eq(events.leadId, lead.id))
     .orderBy(desc(events.createdAt))
     .limit(10);
+
+  const conversation = await db
+    .select()
+    .from(messages)
+    .where(eq(messages.leadId, lead.id))
+    .orderBy(asc(messages.createdAt));
+  const pendingDraft = conversation.find(
+    (m) => m.direction === "outbound" && m.status === "pending_approval",
+  );
+  const contactable =
+    ["shortlisted", "contacted", "negotiating"].includes(lead.state) &&
+    listing.platform === "wallapop" &&
+    lead.autonomyMode !== "paused";
 
   // High-signal import warnings belong next to the title, not buried in a
   // card. Stored facts (user-verified or ingest-detected) beat text inference.
@@ -293,6 +320,79 @@ export default async function LeadDetail({
         </>
       ) : (
         <p style={{ color: "var(--ink-muted)" }}>Sin veredicto todavía.</p>
+      )}
+
+      {/* Conversation with the seller — every send passes a human approval */}
+      {(conversation.length > 0 || contactable) && (
+        <>
+          <h2 style={h2}>Conversación con el vendedor</h2>
+          {conversation
+            .filter((m) => m.id !== pendingDraft?.id)
+            .map((m) => (
+              <div
+                key={m.id}
+                style={{
+                  ...card,
+                  marginLeft: m.direction === "inbound" ? 0 : "2rem",
+                  whiteSpace: "pre-wrap",
+                  fontSize: "0.9rem",
+                }}
+              >
+                <p style={{ margin: "0 0 0.4rem", fontSize: "0.78rem", color: "var(--ink-muted)" }}>
+                  {m.direction === "inbound" ? "Vendedor" : "deepblue"} ·{" "}
+                  {MESSAGE_STATUS_ES[m.status] ?? m.status} · {fmtDate(m.sentAt ?? m.createdAt)}
+                </p>
+                {m.body}
+              </div>
+            ))}
+
+          {pendingDraft ? (
+            <div style={{ ...card, borderColor: "var(--grade-c)" }}>
+              <strong style={{ fontSize: "0.9rem" }}>
+                Borrador pendiente de tu aprobación — nada se envía sin ella
+              </strong>
+              <form action={approveSellerMessage} style={{ marginTop: "0.6rem" }}>
+                <input type="hidden" name="leadId" value={lead.id} />
+                <input type="hidden" name="messageId" value={pendingDraft.id} />
+                <textarea
+                  name="body"
+                  rows={8}
+                  defaultValue={pendingDraft.body}
+                  style={{
+                    width: "100%",
+                    boxSizing: "border-box",
+                    padding: "0.5rem 0.7rem",
+                    borderRadius: 6,
+                    border: "1px solid var(--border)",
+                    background: "transparent",
+                    color: "inherit",
+                    font: "inherit",
+                    fontSize: "0.9rem",
+                  }}
+                />
+                <button type="submit" style={{ ...btn, color: "var(--grade-a)", marginTop: "0.5rem" }}>
+                  Aprobar y enviar
+                </button>
+              </form>
+              <form action={rejectSellerMessage} style={{ display: "inline" }}>
+                <input type="hidden" name="leadId" value={lead.id} />
+                <button type="submit" style={{ ...btn, color: "var(--grade-e)", marginTop: "0.5rem" }}>
+                  Rechazar
+                </button>
+              </form>
+            </div>
+          ) : (
+            contactable &&
+            !conversation.some((m) => m.status === "queued") && (
+              <form action={draftSellerMessage}>
+                <input type="hidden" name="leadId" value={lead.id} />
+                <button type="submit" style={btn}>
+                  Redactar mensaje al vendedor
+                </button>
+              </form>
+            )
+          )}
+        </>
       )}
 
       {/* History */}

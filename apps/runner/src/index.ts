@@ -61,8 +61,17 @@ async function executeJob(job: LeasedJob): Promise<unknown> {
         url: job.payload.url,
       });
     case "send_message":
+      return adapter.sendMessage(
+        {
+          platform: job.payload.platform,
+          platformListingId: job.payload.platformListingId,
+          url: job.payload.url,
+          platformConversationId: job.payload.platformConversationId,
+        },
+        job.payload.body,
+      );
     case "fetch_replies":
-      throw new Error(`'${job.payload.type}' arrives in Phase 2`);
+      throw new Error("'fetch_replies' arrives in Phase 2 stage 2");
   }
 }
 

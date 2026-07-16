@@ -30,6 +30,8 @@ export interface ListingRef {
 export interface ConversationRef {
   platform: Platform;
   platformListingId: string;
+  /** Listing web URL, when the chat UI is reached through the ad page. */
+  url?: string;
   /** Platform-native conversation/thread id once one exists. */
   platformConversationId?: string;
 }
