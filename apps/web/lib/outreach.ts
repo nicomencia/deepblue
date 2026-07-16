@@ -6,9 +6,16 @@
  */
 
 import { randomBytes } from "node:crypto";
-import { canTransition, composeOpeningMessage, isPlatformActive, type JobPayload } from "@deepblue/core";
+import {
+  canTransition,
+  composeOpeningMessage,
+  isPlatformActive,
+  type InboundMessage,
+  type JobPayload,
+  type Platform,
+} from "@deepblue/core";
 import { approvals, briefs, events, jobs, leads, listings, messages, users, type Db } from "@deepblue/db";
-import { and, eq, inArray } from "drizzle-orm";
+import { and, desc, eq, gt, inArray, sql } from "drizzle-orm";
 import { sendEmail } from "./email";
 import { dashboardUrl, leadUrl } from "./links";
 
@@ -280,4 +287,139 @@ export async function applySendResult(
     type: "message_sent",
     payload: { messageId, externalId: outcome.externalId },
   });
+}
+
+/**
+ * Store the seller's replies on the lead's timeline. Dedup by externalId per
+ * lead (re-fetches see the whole visible thread every time); new replies
+ * trigger one email so the user reads the seller without opening Wallapop.
+ */
+export async function applyInboundMessages(
+  db: Db,
+  platform: Platform,
+  platformListingId: string,
+  inbound: InboundMessage[],
+): Promise<{ stored: number; skipped: number }> {
+  if (inbound.length === 0) return { stored: 0, skipped: 0 };
+
+  // The conversation belongs to the newest lead that has ever sent outbound
+  // on this listing — the one whose questions the seller is answering.
+  const [row] = await db
+    .select({ lead: leads, listing: listings })
+    .from(messages)
+    .innerJoin(leads, eq(messages.leadId, leads.id))
+    .innerJoin(listings, eq(leads.listingId, listings.id))
+    .where(
+      and(
+        eq(listings.platform, platform),
+        eq(listings.platformListingId, platformListingId),
+        eq(messages.direction, "outbound"),
+        eq(messages.status, "sent"),
+      ),
+    )
+    .orderBy(desc(messages.createdAt))
+    .limit(1);
+  if (!row) throw new Error(`no lead with sent outreach for ${platform}:${platformListingId}`);
+  const { lead } = row;
+
+  const known = await db
+    .select({ externalId: messages.externalId })
+    .from(messages)
+    .where(and(eq(messages.leadId, lead.id), eq(messages.direction, "inbound")));
+  const knownIds = new Set(known.map((k) => k.externalId));
+
+  const fresh = inbound.filter((m) => !knownIds.has(m.externalId));
+  for (const m of fresh) {
+    await db.insert(messages).values({
+      userId: lead.userId,
+      leadId: lead.id,
+      direction: "inbound",
+      channel: "wallapop_chat",
+      status: "received",
+      body: m.body,
+      externalId: m.externalId,
+      sentAt: new Date(m.receivedAt),
+    });
+    await db.insert(events).values({
+      userId: lead.userId,
+      leadId: lead.id,
+      type: "message_received",
+      payload: { externalId: m.externalId },
+    });
+  }
+
+  if (fresh.length > 0) {
+    const [owner] = await db.select().from(users).where(eq(users.id, lead.userId)).limit(1);
+    if (owner) {
+      await sendEmail({
+        to: owner.email,
+        subject: `deepblue · el vendedor ha respondido — «${row.listing.title}»`,
+        text:
+          fresh.map((m) => `--- vendedor ---\n${m.body}`).join("\n\n") +
+          `\n\nVer la conversación y responder: ${leadUrl(lead.id)}`,
+      });
+    }
+  }
+
+  return { stored: fresh.length, skipped: inbound.length - fresh.length };
+}
+
+/**
+ * Poll for replies on every conversation that awaits them: leads with sent
+ * outreach whose last fetch was a while ago. Called by the scheduler tick;
+ * conservative pacing — each fetch opens a browser against Wallapop.
+ */
+export async function sweepReplies(
+  db: Db,
+  opts: { cooldownMinutes?: number; maxJobs?: number } = {},
+): Promise<{ enqueued: number }> {
+  const cooldownMs = (opts.cooldownMinutes ?? 45) * 60_000;
+  const maxJobs = opts.maxJobs ?? 3;
+
+  const rows = await db
+    .selectDistinct({
+      leadId: leads.id,
+      userId: leads.userId,
+      platform: listings.platform,
+      platformListingId: listings.platformListingId,
+    })
+    .from(messages)
+    .innerJoin(leads, eq(messages.leadId, leads.id))
+    .innerJoin(listings, eq(leads.listingId, listings.id))
+    .where(
+      and(
+        eq(messages.direction, "outbound"),
+        eq(messages.status, "sent"),
+        inArray(leads.state, ["contacted", "negotiating", "agreement", "visit_proposed"]),
+      ),
+    );
+
+  let enqueued = 0;
+  for (const row of rows) {
+    if (enqueued >= maxJobs) break;
+    if (row.platform !== "wallapop") continue;
+
+    // Cooldown + in-flight guard, straight from the jobs table.
+    const [recent] = await db
+      .select({ id: jobs.id })
+      .from(jobs)
+      .where(
+        and(
+          eq(jobs.type, "fetch_replies"),
+          sql`${jobs.payload}->>'platformListingId' = ${row.platformListingId}`,
+          gt(jobs.createdAt, new Date(Date.now() - cooldownMs)),
+        ),
+      )
+      .limit(1);
+    if (recent) continue;
+
+    const payload: JobPayload = {
+      type: "fetch_replies",
+      platform: row.platform,
+      platformListingId: row.platformListingId,
+    };
+    await db.insert(jobs).values({ userId: row.userId, type: payload.type, payload });
+    enqueued += 1;
+  }
+  return { enqueued };
 }

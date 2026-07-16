@@ -161,8 +161,11 @@ export const wallapopAdapter: PlatformAdapter = {
     const config = loadConfig();
     return sendWallapopMessage(config.browserProfileDir, config.chatHeadless, ref, body);
   },
-  async fetchReplies() {
-    throw new Error("wallapop inbound arrives in Phase 2 stage 2");
+  async fetchReplies(ref) {
+    const { loadConfig } = await import("../config.js");
+    const { fetchWallapopReplies } = await import("../wallapop-chat.js");
+    const config = loadConfig();
+    return fetchWallapopReplies(config.browserProfileDir, config.chatHeadless, ref);
   },
 };
 

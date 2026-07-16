@@ -104,6 +104,23 @@ export const fetchRepliesPayload = z.object({
   sinceExternalId: z.string().optional(),
 });
 
+/** What the Runner reports back from a fetch_replies job (a trust boundary). */
+export const inboundMessageSchema = z.object({
+  conversation: z.object({
+    platform: platformSchema,
+    platformListingId: z.string(),
+    platformConversationId: z.string().optional(),
+  }),
+  /**
+   * Stable identity for dedup. Wallapop's chat DOM carries no message ids,
+   * so the adapter derives one (hash of direction+text+HH:MM); the Core
+   * skips externalIds it has already stored for the lead.
+   */
+  externalId: z.string(),
+  body: z.string(),
+  receivedAt: z.string(),
+});
+
 export const jobPayloadSchema = z.discriminatedUnion("type", [
   searchSweepPayload,
   fetchListingPayload,

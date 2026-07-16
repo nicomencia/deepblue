@@ -1,4 +1,9 @@
-import { listingCheckResultSchema, normalizedListingSchema, sendResultSchema } from "@deepblue/core";
+import {
+  inboundMessageSchema,
+  listingCheckResultSchema,
+  normalizedListingSchema,
+  sendResultSchema,
+} from "@deepblue/core";
 import { events, jobs, users } from "@deepblue/db";
 import { eq } from "drizzle-orm";
 import { z } from "zod";
@@ -6,7 +11,7 @@ import { completeAdoption } from "../../../../../../lib/adopt";
 import { getDb } from "../../../../../../lib/db";
 import { sendEmail } from "../../../../../../lib/email";
 import { ingestListingDetail, ingestSearchResults } from "../../../../../../lib/ingest";
-import { applySendResult } from "../../../../../../lib/outreach";
+import { applyInboundMessages, applySendResult } from "../../../../../../lib/outreach";
 import { applyListingCheck } from "../../../../../../lib/reaper";
 import { isAuthorizedRunner } from "../../../../../../lib/runner-auth";
 
@@ -56,6 +61,14 @@ export async function POST(
         error: report.error ?? "unknown send failure",
       });
     }
+  } else if (report.status === "succeeded" && job.payload.type === "fetch_replies") {
+    const inbound = z.array(inboundMessageSchema).parse(report.result ?? []);
+    ingestStats = await applyInboundMessages(
+      db,
+      job.payload.platform,
+      job.payload.platformListingId,
+      inbound,
+    );
   }
 
   await db

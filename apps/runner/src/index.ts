@@ -71,7 +71,14 @@ async function executeJob(job: LeasedJob): Promise<unknown> {
         job.payload.body,
       );
     case "fetch_replies":
-      throw new Error("'fetch_replies' arrives in Phase 2 stage 2");
+      return adapter.fetchReplies(
+        {
+          platform: job.payload.platform,
+          platformListingId: job.payload.platformListingId,
+          platformConversationId: job.payload.platformConversationId,
+        },
+        job.payload.sinceExternalId,
+      );
   }
 }
 

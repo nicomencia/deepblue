@@ -9,8 +9,12 @@
  * clicking the wrong thing.
  */
 
+/// <reference lib="dom" />
+// ^ page.evaluate callbacks run in the browser; only this module needs DOM types.
+
+import { createHash } from "node:crypto";
 import { setTimeout as sleep } from "node:timers/promises";
-import type { ConversationRef, SendResult } from "@deepblue/core";
+import type { ConversationRef, InboundMessage, SendResult } from "@deepblue/core";
 import { chromium, type BrowserContext, type Locator, type Page } from "playwright";
 
 const WALLAPOP_HOME = "https://es.wallapop.com";
@@ -192,6 +196,108 @@ export async function sendWallapopMessage(
 
     await pause(1500, 3000); // linger like a person; never slam the window shut
     return { sentAt: new Date().toISOString() };
+  } finally {
+    await context.close();
+  }
+}
+
+/** One thread bubble as scraped from the chat DOM. */
+interface RawBubble {
+  direction: "incoming" | "outgoing";
+  text: string;
+  /** "HH:MM" from the bubble; Wallapop shows no full datetime. */
+  time: string;
+}
+
+/**
+ * "HH:MM" → ISO, assuming today (or yesterday when the time lies in the
+ * future). Honest enough for fresh replies, which is what polling catches.
+ */
+function timeToIso(hhmm: string): string {
+  const m = /^(\d{1,2}):(\d{2})$/.exec(hhmm);
+  if (!m) return new Date().toISOString();
+  const d = new Date();
+  d.setHours(Number(m[1]), Number(m[2]), 0, 0);
+  if (d.getTime() > Date.now()) d.setDate(d.getDate() - 1);
+  return d.toISOString();
+}
+
+/**
+ * Read the seller's messages for one listing. The chat deep link
+ * (/app/chat?itemId=…) lands straight in the conversation — verified
+ * 2026-07-16; bubble structure: tsl-chat-bubble > .ChatBubble--incoming/
+ * --outgoing > .ChatBubble__content + .ChatBubble__timestamp.
+ */
+export async function fetchWallapopReplies(
+  profileDir: string,
+  headless: boolean,
+  ref: ConversationRef,
+): Promise<InboundMessage[]> {
+  const context = await openWallapopProfile(profileDir, headless);
+  try {
+    if (!(await hasWallapopSession(context))) {
+      throw new Error(
+        "no hay sesión de Wallapop en el perfil del navegador — ejecuta `pnpm runner:login` una vez",
+      );
+    }
+
+    const page = await context.newPage();
+    await page.goto(
+      `https://es.wallapop.com/app/chat?itemId=${encodeURIComponent(ref.platformListingId)}`,
+      { waitUntil: "domcontentloaded", timeout: 45_000 },
+    );
+    await dismissCookieBanner(page);
+
+    // Bubbles or composer prove the thread rendered; neither means trouble.
+    const bubbleOrComposer = await firstVisible(
+      page,
+      ["tsl-chat-bubble", ...COMPOSER_SELECTORS],
+      25_000,
+    );
+    if (!bubbleOrComposer) {
+      throw new Error(`el chat no cargó para el item ${ref.platformListingId} (${page.url()})`);
+    }
+    await pause(1500, 3000); // let the thread finish hydrating
+
+    const bubbles: RawBubble[] = await page.evaluate(() => {
+      return Array.from(document.querySelectorAll("tsl-chat-bubble")).flatMap((b) => {
+        const inner = b.querySelector(".ChatBubble");
+        const content = b.querySelector(".ChatBubble__content");
+        if (!inner || !content) return [];
+        const cls = inner.className;
+        const direction = cls.includes("ChatBubble--incoming")
+          ? ("incoming" as const)
+          : cls.includes("ChatBubble--outgoing")
+            ? ("outgoing" as const)
+            : null;
+        if (!direction) return [];
+        return [
+          {
+            direction,
+            text: (content.textContent ?? "").trim(),
+            time: (b.querySelector(".ChatBubble__timestamp")?.textContent ?? "").trim(),
+          },
+        ];
+      });
+    });
+
+    return bubbles
+      .filter((b) => b.direction === "incoming" && b.text)
+      .map((b) => ({
+        conversation: {
+          platform: ref.platform,
+          platformListingId: ref.platformListingId,
+          platformConversationId: ref.platformConversationId,
+        },
+        // No DOM message ids: hash of identity fields. Same seller text at
+        // the same HH:MM dedups as one — acceptable for chat reality.
+        externalId: createHash("sha256")
+          .update(`${ref.platformListingId}|in|${b.text}|${b.time}`)
+          .digest("hex")
+          .slice(0, 32),
+        body: b.text,
+        receivedAt: timeToIso(b.time),
+      }));
   } finally {
     await context.close();
   }

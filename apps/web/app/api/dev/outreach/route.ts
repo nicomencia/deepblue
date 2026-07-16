@@ -1,4 +1,5 @@
-import { approvals, messages } from "@deepblue/db";
+import type { JobPayload } from "@deepblue/core";
+import { approvals, jobs, leads, listings, messages } from "@deepblue/db";
 import { desc, eq } from "drizzle-orm";
 import { getDb } from "../../../../lib/db";
 import { decideLeadApproval, draftOutreach } from "../../../../lib/outreach";
@@ -8,6 +9,7 @@ import { decideLeadApproval, draftOutreach } from "../../../../lib/outreach";
  * GET  ?leadId=…                          → conversation + pending approvals
  * POST { leadId, action: "draft" }        → compose a draft + approval
  * POST { leadId, action: "approve"|"reject" } → decide the pending approval
+ * POST { leadId, action: "fetch" }        → enqueue fetch_replies now
  */
 export async function GET(req: Request): Promise<Response> {
   if (process.env.NODE_ENV === "production") return new Response(null, { status: 404 });
@@ -33,13 +35,33 @@ export async function POST(req: Request): Promise<Response> {
 
   const body = (await req.json().catch(() => null)) as {
     leadId?: string;
-    action?: "draft" | "approve" | "reject";
+    action?: "draft" | "approve" | "reject" | "fetch";
   } | null;
   if (!body?.leadId || !body.action) {
     return Response.json({ ok: false, error: "leadId y action son obligatorios" }, { status: 400 });
   }
 
   const db = await getDb();
+  if (body.action === "fetch") {
+    const [row] = await db
+      .select({ userId: leads.userId, platform: listings.platform, platformListingId: listings.platformListingId })
+      .from(leads)
+      .innerJoin(listings, eq(leads.listingId, listings.id))
+      .where(eq(leads.id, body.leadId))
+      .limit(1);
+    if (!row) return Response.json({ ok: false, error: "lead no encontrado" }, { status: 404 });
+    const payload: JobPayload = {
+      type: "fetch_replies",
+      platform: row.platform,
+      platformListingId: row.platformListingId,
+    };
+    const [job] = await db
+      .insert(jobs)
+      .values({ userId: row.userId, type: payload.type, payload })
+      .returning({ id: jobs.id });
+    return Response.json({ ok: true, jobId: job?.id });
+  }
+
   const result =
     body.action === "draft"
       ? await draftOutreach(db, body.leadId)

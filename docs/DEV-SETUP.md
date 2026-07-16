@@ -121,6 +121,21 @@ anuncios, digest con suelo de nota + alertas A/B sin duplicados, dossiers
 en la página del lead), tabs por búsqueda, página Actividad, descubrimiento de
 modelos y adopción manual de anuncios con dossier-first. 77 tests verdes.
 
+**Cambio 2026-07-16 — Fase 2 etapa 2: leer respuestas del vendedor.**
+`fetch_replies` implementado de punta a punta y estrenado con una respuesta
+real: el runner abre el deep link del chat (`/app/chat?itemId=…`, aterriza
+directo en la conversación), extrae las burbujas (`tsl-chat-bubble`,
+`ChatBubble--incoming/--outgoing`, hora en `ChatBubble__timestamp`; el DOM
+no trae ids de mensaje, así que el externalId es un hash de
+item+texto+hora) y el Core valida (`inboundMessageSchema`), deduplica por
+externalId contra el lead con outreach enviado más reciente del listing,
+guarda `messages(received)` y avisa por email con el texto del vendedor y
+enlace a la ficha. Sondeo automático: `/api/cron/replies` en cada tick del
+scheduler para leads en estados de conversación, cooldown de 45 min por
+listing y máx. 3 jobs por barrido (cada fetch es una visita de navegador).
+Dev: `POST /api/dev/outreach {leadId, action:"fetch"}`. Falta (etapa 3):
+convertir respuestas en findings y redactar seguimientos.
+
 **Cambio 2026-07-16 — Fase 2 etapa 1: mensajes al vendedor con aprobación.**
 El sistema ya puede hablar con vendedores de Wallapop, con un humano en el
 gatillo siempre: «Redactar mensaje al vendedor» en la ficha del lead compone

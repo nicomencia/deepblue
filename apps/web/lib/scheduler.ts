@@ -72,6 +72,10 @@ async function tick(): Promise<void> {
   // when nothing is due. Runs alongside sweeps so probes ride the same runner.
   console.log("[scheduler]", await trigger("/api/cron/reap"));
 
+  // Seller replies for active conversations — per-listing cooldown inside
+  // sweepReplies keeps browser visits to Wallapop rare.
+  console.log("[scheduler]", await trigger("/api/cron/replies"));
+
   // LLM verdict enrichment: bounded batch per tick, no-op when nothing is
   // pending — a post-sweep backlog drains steadily without a cost spike.
   if (process.env.ANTHROPIC_API_KEY) {
