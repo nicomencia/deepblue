@@ -54,6 +54,15 @@ const MESSAGE_STATUS_ES: Record<string, string> = {
   received: "recibido",
   failed: "fallo al enviar",
 };
+/** Status colors: delivered = good, in-flight = attention, failed = bad. */
+const MESSAGE_STATUS_COLOR: Record<string, string> = {
+  draft: "var(--ink-muted)",
+  pending_approval: "var(--grade-c)",
+  queued: "var(--grade-c)",
+  sent: "var(--grade-a)",
+  received: "var(--grade-a)",
+  failed: "var(--grade-e)",
+};
 
 export default async function LeadDetail({
   params,
@@ -402,7 +411,10 @@ export default async function LeadDetail({
               >
                 <p style={{ margin: "0 0 0.4rem", fontSize: "0.78rem", color: "var(--ink-muted)" }}>
                   {m.direction === "inbound" ? "Vendedor" : "deepblue"} ·{" "}
-                  {MESSAGE_STATUS_ES[m.status] ?? m.status} · {fmtDate(m.sentAt ?? m.createdAt)}
+                  <span style={{ color: MESSAGE_STATUS_COLOR[m.status] ?? "inherit", fontWeight: 600 }}>
+                    {MESSAGE_STATUS_ES[m.status] ?? m.status}
+                  </span>{" "}
+                  · {fmtDate(m.sentAt ?? m.createdAt)}
                 </p>
                 {m.body}
               </div>
