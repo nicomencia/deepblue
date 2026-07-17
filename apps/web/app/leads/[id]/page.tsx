@@ -1,7 +1,9 @@
 import {
   composeFollowUpMessage,
   composeNudgeMessage,
+  composeOfferMessage,
   composeOpeningMessage,
+  computeOfferEur,
   extractImportSignals,
   type IssueAssessment,
   type IssueFinding,
@@ -123,10 +125,32 @@ export default async function LeadDetail({
   const NUDGE_AFTER_MS = 2 * 24 * 60 * 60 * 1000;
 
   // Deterministic suggestion, by conversation turn: nothing exchanged yet →
-  // the opening message; seller answered → the open questions not yet asked;
-  // we're waiting → a nudge (quiet ≥2 days). Always behind the same button:
+  // the opening message; seller answered → the open questions not yet asked,
+  // or a data-justified price proposal once everything has been asked; we're
+  // waiting → a nudge (quiet ≥2 days). Always behind the same button:
   // nothing is pre-composed until the user asks for it.
   const hasExchange = lastExchange !== undefined;
+  const followUp =
+    hasExchange && !waitingForSeller
+      ? composeFollowUpMessage({
+          openQuestions: lead.verdict?.openQuestions ?? [],
+          alreadyAsked: conversation
+            .filter((m) => m.direction === "outbound" && (m.status === "sent" || m.status === "queued"))
+            .map((m) => m.body),
+          sellerReplies: conversation.filter(
+            (m) => m.direction === "inbound" && m.status === "received",
+          ).length,
+        })
+      : null;
+  const askingPriceEur = listing.cashPriceEur ?? listing.priceEur;
+  const offerEur =
+    hasExchange && !waitingForSeller && !followUp && askingPriceEur != null
+      ? computeOfferEur({
+          askingPriceEur,
+          maxBudgetEur: brief.hardLimits.maxPriceEur,
+          repairExposureEur: lead.verdict?.repairExposureEur,
+        })
+      : null;
   const suggestion = !hasExchange
     ? composeOpeningMessage({
         title: listing.title,
@@ -137,21 +161,26 @@ export default async function LeadDetail({
       ? quietMs >= NUDGE_AFTER_MS
         ? composeNudgeMessage(lead.id)
         : null
-      : composeFollowUpMessage({
-          openQuestions: lead.verdict?.openQuestions ?? [],
-          alreadyAsked: conversation
-            .filter((m) => m.direction === "outbound" && (m.status === "sent" || m.status === "queued"))
-            .map((m) => m.body),
-          sellerReplies: conversation.filter(
-            (m) => m.direction === "inbound" && m.status === "received",
-          ).length,
-        });
+      : (followUp ??
+        (offerEur !== null && askingPriceEur != null
+          ? composeOfferMessage({
+              askingPriceEur,
+              maxBudgetEur: brief.hardLimits.maxPriceEur,
+              repairExposureEur: lead.verdict?.repairExposureEur,
+              pendingRisks: lead.verdict?.issues
+                ?.filter((i) => i.status === "unconfirmed")
+                .map((i) => i.title),
+              seed: lead.id,
+            })
+          : null));
   const suggestionQuestions = suggestion?.split("\n").filter((l) => l.trim().endsWith("?")).length ?? 0;
   const suggestLabel = !hasExchange
     ? `✍️ Generar mensaje inicial${suggestionQuestions > 0 ? ` (${suggestionQuestions} pregunta${suggestionQuestions === 1 ? "" : "s"})` : ""}`
     : waitingForSeller
       ? "✍️ Generar recordatorio suave (sin preguntas nuevas)"
-      : `✍️ Generar seguimiento (${suggestionQuestions} pregunta${suggestionQuestions === 1 ? "" : "s"} sin hacer)`;
+      : followUp
+        ? `✍️ Generar seguimiento (${suggestionQuestions} pregunta${suggestionQuestions === 1 ? "" : "s"} sin hacer)`
+        : `✍️ Generar propuesta de precio (${offerEur?.toLocaleString("es-ES")} €)`;
 
   // High-signal import warnings belong next to the title, not buried in a
   // card. Stored facts (user-verified or ingest-detected) beat text inference.

@@ -122,6 +122,22 @@ anuncios, digest con suelo de nota + alertas A/B sin duplicados, dossiers
 en la página del lead), tabs por búsqueda, página Actividad, descubrimiento de
 modelos y adopción manual de anuncios con dossier-first. 77 tests verdes.
 
+**Cambio 2026-07-17 — propuesta de precio justificada con datos.** Cuando ya
+no quedan preguntas por hacer y es nuestro turno, el botón del compositor
+pasa a «✍️ Generar propuesta de precio (N €)». `computeOfferEur` (core,
+determinista): parte del precio anunciado (contado si difiere), pide al
+vendedor absorber la MITAD de la exposición esperada (punto medio de la
+banda de reparaciones sin descartar), capa SIEMPRE al `hardLimits.maxPriceEur`
+del brief (límite duro, no prompt), redondea a centenas y nunca baja del 80%
+del anuncio (un lowball mata la conversación); null si no hay nada que
+negociar (anuncio ya en precio). `composeOfferMessage` redacta informal:
+elogio del coche, justificación con los riesgos aún sin descartar (título
+corto, sin prefijo de motor ni consecuencia) y su banda de coste — o con el
+presupuesto si no quedan riesgos — y la cifra sobre la mesa con variantes
+seedeadas. Cascada del botón: inicial → seguimiento → propuesta → nudge.
+Ejemplo real Focus: 15.000 € anuncio, 14.500 tope, exposición 2.150–4.950 →
+propone 13.200 €. Testeado en `compose.test.ts` (129 tests).
+
 **Cambio 2026-07-17 — `GET /api/dev/leads?id=<leadId>`.** El endpoint dev de
 leads acepta ahora `?id=` y devuelve ese lead con su veredicto completo sea
 cual sea su estado — la forma de inspeccionar un lead `contacted`/

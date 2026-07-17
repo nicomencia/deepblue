@@ -2,8 +2,10 @@ import { describe, expect, it } from "vitest";
 import {
   composeFollowUpMessage,
   composeNudgeMessage,
+  composeOfferMessage,
   composeOpeningMessage,
   composeTriageLine,
+  computeOfferEur,
 } from "./compose.js";
 import type { ConfidenceVerdict } from "./domain.js";
 
@@ -93,6 +95,84 @@ describe("composeTriageLine", () => {
 
   it("vetoes override everything", () => {
     expect(composeTriageLine(verdict({ overall: "B", vetoes: ["scam_price"] }))).toContain("Descártalo");
+  });
+});
+
+describe("computeOfferEur", () => {
+  it("asks the seller to absorb half the expected repairs, capped at budget", () => {
+    // Focus case: 15.000 asking, 14.500 budget, 2.150-4.950 exposure.
+    expect(
+      computeOfferEur({
+        askingPriceEur: 15000,
+        maxBudgetEur: 14500,
+        repairExposureEur: { min: 2150, max: 4950 },
+      }),
+    ).toBe(13200);
+  });
+
+  it("never exceeds the user's budget even without exposure", () => {
+    expect(computeOfferEur({ askingPriceEur: 16000, maxBudgetEur: 14500 })).toBe(14500);
+  });
+
+  it("is null when there is nothing to negotiate", () => {
+    expect(computeOfferEur({ askingPriceEur: 13000, maxBudgetEur: 14500 })).toBeNull();
+  });
+
+  it("never lowballs under 80% of asking", () => {
+    expect(
+      computeOfferEur({
+        askingPriceEur: 10000,
+        maxBudgetEur: 14500,
+        repairExposureEur: { min: 8000, max: 12000 },
+      }),
+    ).toBe(8000);
+  });
+});
+
+describe("composeOfferMessage", () => {
+  const input = {
+    askingPriceEur: 15000,
+    maxBudgetEur: 14500,
+    repairExposureEur: { min: 2150, max: 4950 },
+    pendingRisks: [
+      "1.0 EcoBoost: pérdida de refrigerante por el manguito degas → sobrecalentamiento y culata agrietada",
+      "Silentblocks y bieletas del tren trasero/delantero gastados",
+    ],
+    seed: "lead-focus",
+  };
+
+  it("puts a justified number on the table, informally", () => {
+    const msg = composeOfferMessage(input);
+    expect(msg).toContain("13.200");
+    expect(msg).toContain("pérdida de refrigerante por el manguito degas");
+    // es-ES only groups 5+ digits: 2150 stays ungrouped.
+    expect(msg).toContain("entre 2150 y 4950 €");
+    expect(msg).not.toMatch(/[¿¡]/);
+    expect(msg).not.toMatch(/^- /m);
+    expect(msg).toBe(composeOfferMessage(input));
+  });
+
+  it("strips the engine prefix and consequence tail from risk titles", () => {
+    const msg = composeOfferMessage(input);
+    expect(msg).not.toContain("1.0 EcoBoost:");
+    expect(msg).not.toContain("culata agrietada");
+  });
+
+  it("justifies with budget when no risks remain", () => {
+    const msg = composeOfferMessage({
+      askingPriceEur: 16000,
+      maxBudgetEur: 14500,
+      seed: "x",
+    });
+    expect(msg).toContain("14.500");
+    expect(msg).toContain("16.000");
+    expect(msg).toMatch(/presupuesto|gastarme/);
+  });
+
+  it("is null when the asking price is already right", () => {
+    expect(
+      composeOfferMessage({ askingPriceEur: 13000, maxBudgetEur: 14500, seed: "x" }),
+    ).toBeNull();
   });
 });
 

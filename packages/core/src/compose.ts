@@ -204,3 +204,95 @@ export function composeFollowUpMessage(input: FollowUpInput): string | null {
   const closing = seedPick(warm ? FOLLOWUP_CLOSINGS_WARM : FOLLOWUP_CLOSINGS_EARLY, `${seed}|followup-closing`);
   return [`${intro} ${link}`, ...remaining, "", closing].join("\n");
 }
+
+// ---------------------------------------------------------------------------
+// Price proposal — negotiate when the data says so
+// ---------------------------------------------------------------------------
+
+export interface OfferInput {
+  /** What the seller asks (cash price when it differs from the listed one). */
+  askingPriceEur: number;
+  /** The user's hard cap — the offer NEVER exceeds it (hard limit, not vibes). */
+  maxBudgetEur: number;
+  /** Un-ruled-out repair exposure from the verdict, if any. */
+  repairExposureEur?: { min: number; max: number };
+}
+
+/**
+ * The number we put on the table, or null when there is nothing to negotiate
+ * (asking already at or under what the data supports). Deterministic: start
+ * from the asking price, ask the seller to absorb half the EXPECTED repairs
+ * (midpoint of the exposure band), cap at the user's budget, round down to
+ * hundreds, and never go under 80% of asking — lowballs end conversations.
+ */
+export function computeOfferEur(input: OfferInput): number | null {
+  const mid = input.repairExposureEur
+    ? (input.repairExposureEur.min + input.repairExposureEur.max) / 2
+    : 0;
+  let offer = Math.min(input.askingPriceEur - Math.round(mid / 2), input.maxBudgetEur);
+  offer = Math.floor(offer / 100) * 100;
+  const floor = Math.ceil((input.askingPriceEur * 0.8) / 100) * 100;
+  if (offer < floor) offer = Math.min(floor, input.maxBudgetEur);
+  return offer >= input.askingPriceEur ? null : offer;
+}
+
+const OFFER_INTROS = [
+  "Gracias por contestar a todo! La verdad es que el coche me encaja.",
+  "Pues con todo lo que me has contado el coche me convence.",
+  "Oye, gracias por las respuestas. El coche me gusta y me lo pienso en serio.",
+];
+const OFFER_LINES = [
+  "Yo te podría ofrecer {price} €. Lo ves posible?",
+  "Si nos cuadra en {price} € me acerco a verlo y lo cerramos. Qué te parece?",
+  "Te propongo {price} € y por mi parte trato hecho. Cómo lo ves?",
+];
+
+/** "Marca: defecto → consecuencia" risk titles read badly in chat — keep the defect. */
+function shortRisk(title: string): string {
+  const afterColon = title.includes(":") ? (title.split(":")[1] ?? title) : title;
+  const beforeArrow = afterColon.split("→")[0] ?? afterColon;
+  const s = beforeArrow.trim();
+  return s.charAt(0).toLowerCase() + s.slice(1);
+}
+
+export interface OfferMessageInput extends OfferInput {
+  /** Titles of still-unconfirmed tracked risks — they justify the number. */
+  pendingRisks?: string[];
+  /** Variety seed (lead id). */
+  seed: string;
+}
+
+/**
+ * A data-justified price proposal for when every question has been asked and
+ * the conversation is warm: state what the car has going for it, name what is
+ * still unverified and what it costs to fix, and put a number on the table —
+ * always inside the user's budget. Null when there is nothing to negotiate.
+ */
+export function composeOfferMessage(input: OfferMessageInput): string | null {
+  const offer = computeOfferEur(input);
+  if (offer === null) return null;
+
+  const risks = (input.pendingRisks ?? []).map(shortRisk).slice(0, 2);
+  const exposure = input.repairExposureEur;
+  const overBudget = input.askingPriceEur > input.maxBudgetEur;
+
+  let why: string;
+  if (risks.length > 0 && exposure) {
+    const list = risks.join(" y ");
+    why =
+      `Lo único que me frena es lo que queda sin comprobar (${list}): ` +
+      `por lo que suele costar arreglarlo hablamos de entre ${exposure.min.toLocaleString("es-ES")} ` +
+      `y ${exposure.max.toLocaleString("es-ES")} € que tendría que asumir yo.`;
+  } else if (overBudget) {
+    why = `Lo único es que ${input.askingPriceEur.toLocaleString("es-ES")} € se me va de lo que tenía pensado gastarme.`;
+  } else {
+    why = "Le he echado números con calma para dejarlo a punto.";
+  }
+
+  const seed = `${input.seed}|offer|${offer}`;
+  const offerLine = seedPick(OFFER_LINES, seed).replace(
+    "{price}",
+    offer.toLocaleString("es-ES"),
+  );
+  return [`${seedPick(OFFER_INTROS, `${seed}|intro`)} ${why}`, "", offerLine].join("\n");
+}
