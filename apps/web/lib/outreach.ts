@@ -10,6 +10,8 @@ import {
   canTransition,
   composeOpeningMessage,
   isPlatformActive,
+  medianSellerReplyMinutes,
+  replyPollCooldownMinutes,
   type InboundMessage,
   type JobPayload,
   type Platform,
@@ -443,13 +445,16 @@ export async function applyInboundMessages(
 /**
  * Poll for replies on every conversation that awaits them: leads with sent
  * outreach whose last fetch was a while ago. Called by the scheduler tick;
- * conservative pacing — each fetch opens a browser against Wallapop.
+ * each fetch opens a browser against Wallapop, so the cadence adapts per
+ * conversation (replyPollCooldownMinutes): fast-answering sellers get polled
+ * at half their median latency, slow ones back off to hours. With a per-sweep
+ * cap, candidates go best verdict first — the A/B conversations stay fresh
+ * and the stragglers wait their turn.
  */
 export async function sweepReplies(
   db: Db,
-  opts: { cooldownMinutes?: number; maxJobs?: number } = {},
+  opts: { maxJobs?: number } = {},
 ): Promise<{ enqueued: number }> {
-  const cooldownMs = (opts.cooldownMinutes ?? 45) * 60_000;
   const maxJobs = opts.maxJobs ?? 3;
 
   const rows = await db
@@ -458,6 +463,7 @@ export async function sweepReplies(
       userId: leads.userId,
       platform: listings.platform,
       platformListingId: listings.platformListingId,
+      score: sql<number>`coalesce((${leads.verdict}->>'score')::int, 0)`,
     })
     .from(messages)
     .innerJoin(leads, eq(messages.leadId, leads.id))
@@ -469,11 +475,39 @@ export async function sweepReplies(
         inArray(leads.state, ["contacted", "negotiating", "agreement", "visit_proposed"]),
       ),
     );
+  rows.sort((a, b) => b.score - a.score);
 
   let enqueued = 0;
   for (const row of rows) {
     if (enqueued >= maxJobs) break;
     if (row.platform !== "wallapop") continue;
+
+    // This conversation's own rhythm decides its cooldown.
+    const timeline = (
+      await db
+        .select({
+          direction: messages.direction,
+          sentAt: messages.sentAt,
+          createdAt: messages.createdAt,
+        })
+        .from(messages)
+        .where(and(eq(messages.leadId, row.leadId), inArray(messages.status, ["sent", "received"])))
+    ).map((m) => ({
+      direction: m.direction as "outbound" | "inbound",
+      at: m.sentAt ?? m.createdAt,
+    }));
+    const lastAt = (dir: "outbound" | "inbound"): Date | undefined =>
+      timeline
+        .filter((m) => m.direction === dir)
+        .map((m) => m.at)
+        .sort((a, b) => b.getTime() - a.getTime())[0];
+    const cooldownMs =
+      replyPollCooldownMinutes({
+        now: new Date(),
+        lastOutboundAt: lastAt("outbound"),
+        lastInboundAt: lastAt("inbound"),
+        medianReplyMinutes: medianSellerReplyMinutes(timeline),
+      }) * 60_000;
 
     // Cooldown + in-flight guard, straight from the jobs table.
     const [recent] = await db

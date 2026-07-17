@@ -122,6 +122,21 @@ anuncios, digest con suelo de nota + alertas A/B sin duplicados, dossiers
 en la página del lead), tabs por búsqueda, página Actividad, descubrimiento de
 modelos y adopción manual de anuncios con dossier-first. 77 tests verdes.
 
+**Cambio 2026-07-17 — polling de respuestas adaptativo + prioridad por nota.**
+El sweep de respuestas ya no usa un cooldown fijo de 45 min: cada
+conversación tiene su propio ritmo (`replyPollCooldownMinutes`, core puro).
+Esperando al vendedor, se sondea a la mitad de su latencia mediana (suelo 10
+min, techo 60) mientras la respuesta es plausible, se relaja a 90 min cuando
+tarda el doble de lo habitual, y a 6 h tras un día de silencio (ahí manda el
+flujo de nudges, no el polling). Cuando es NUESTRO turno: una comprobación a
+los 30 min de su mensaje (pilla dobles envíos) y luego cada 3 h — no se nos
+debe nada. La mediana sale de emparejar cada mensaje enviado con la PRIMERA
+respuesta posterior (`medianSellerReplyMinutes`, ignora dobles textos).
+Además, con el tope por sweep, los candidatos se ordenan por nota del
+veredicto (mejor primero): las conversaciones A/B se mantienen frescas y las
+flojas esperan turno. `sweepReplies` ya no recibe `cooldownMinutes`. Testeado
+en `polling.test.ts` (136 tests).
+
 **Cambio 2026-07-17 — propuesta de precio justificada con datos.** Cuando ya
 no quedan preguntas por hacer y es nuestro turno, el botón del compositor
 pasa a «✍️ Generar propuesta de precio (N €)». `computeOfferEur` (core,
