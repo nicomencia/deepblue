@@ -122,6 +122,17 @@ anuncios, digest con suelo de nota + alertas A/B sin duplicados, dossiers
 en la página del lead), tabs por búsqueda, página Actividad, descubrimiento de
 modelos y adopción manual de anuncios con dossier-first. 77 tests verdes.
 
+**Cambio 2026-07-17 — modelo propio para lecturas de conversación.** Las
+lecturas de chat compartían `ENRICH_MODEL` con el enriquecimiento de
+anuncios — imposible elegir modelos distintos por carril. Ahora
+`READS_MODEL` (`DEEPBLUE_READS_MODEL` ?? Opus 4.8) gobierna las lecturas.
+Guía de coste/calidad: el enriquecimiento es alto volumen y bajo riesgo
+(deltas acotados, vetos en código) → candidato a Haiku
+(`DEEPBLUE_ENRICH_MODEL=claude-haiku-4-5-20251001`); las lecturas son poco
+volumen y mucho riesgo (sus issueUpdates mueven la exposición y por tanto
+los € de las ofertas; detectan escalaciones) → mantener Opus o como mucho
+Sonnet 5.
+
 **Cambio 2026-07-17 — respuesta a contraofertas + carril LLM de prosa.** El
 compositor determinista repetía la oferta ya rechazada cuando el vendedor
 contraofertaba. Ahora: (1) la lectura de conversación OBSERVA la negociación

@@ -19,7 +19,7 @@ import { zodOutputFormat } from "@anthropic-ai/sdk/helpers/zod";
 import { and, asc, eq, gt, inArray, isNull, or } from "drizzle-orm";
 import { sendEmail } from "./email";
 import { leadUrl } from "./links";
-import { ENRICH_MODEL, getAnthropic, isLlmConfigured, messageText } from "./llm";
+import { getAnthropic, isLlmConfigured, messageText, READS_MODEL } from "./llm";
 import { newEvalCaches, reevaluateLead } from "./reevaluate";
 
 type LeadRow = typeof leads.$inferSelect;
@@ -237,14 +237,14 @@ export async function readConversation(
 ): Promise<{ before?: string; after: string }> {
   const client = getAnthropic();
   const msg = await client.messages.create({
-    model: ENRICH_MODEL,
+    model: READS_MODEL,
     max_tokens: 4000,
     output_config: { format: zodOutputFormat(conversationReadingPayloadSchema) },
     messages: [{ role: "user", content: conversationPrompt(p) }],
   });
   // Trust boundary: validate before anything touches the DB.
   const payload = conversationReadingPayloadSchema.parse(JSON.parse(messageText(msg)));
-  return saveConversationReading(db, p, payload, ENRICH_MODEL);
+  return saveConversationReading(db, p, payload, READS_MODEL);
 }
 
 export interface ChatReadBatchStats {

@@ -9,6 +9,12 @@ import Anthropic from "@anthropic-ai/sdk";
 /** Dossier research wants the strongest model; all overridable per env. */
 export const DOSSIER_MODEL = process.env.DEEPBLUE_DOSSIER_MODEL ?? "claude-opus-4-8";
 export const ENRICH_MODEL = process.env.DEEPBLUE_ENRICH_MODEL ?? "claude-opus-4-8";
+/**
+ * Conversation readings get their own dial: tiny volume, highest stakes
+ * (issue rulings move repair exposure and therefore the euros we offer;
+ * escalation detection is a safety net) — downgrade with care.
+ */
+export const READS_MODEL = process.env.DEEPBLUE_READS_MODEL ?? "claude-opus-4-8";
 export const DISCOVERY_MODEL = process.env.DEEPBLUE_DISCOVERY_MODEL ?? "claude-opus-4-8";
 
 export function isLlmConfigured(): boolean {
