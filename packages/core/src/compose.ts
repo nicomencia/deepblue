@@ -12,14 +12,56 @@ import type { ConfidenceVerdict } from "./domain.js";
 /** Wallapop chat accepts long texts, but sellers don't read them. */
 const MAX_OPENING_QUESTIONS = 3;
 
-const GREETINGS = ["Hola", "Buenas"];
-const OPENER_CLOSINGS = ["Gracias!", "Un saludo!", "Gracias de antemano!"];
-const FOLLOWUP_INTROS = [
-  "Gracias por responder!",
-  "Genial, gracias por la info!",
-  "Perfecto, gracias!",
+const GREETINGS = ["Hola", "Buenas", "Qué tal"];
+const INTEREST_LINES = [
+  "Me interesa el coche y quería preguntarte un par de cosas antes de verlo.",
+  "Me ha gustado bastante el anuncio y tengo un par de dudas.",
+  "Estoy buscando uno así y el tuyo me encaja, te pregunto un par de cosas.",
+  "Le tengo echado el ojo al coche, te importa que te pregunte un par de cosas?",
 ];
-const FOLLOWUP_CLOSINGS = ["Un saludo!", "Ya me dices, gracias!", "Mil gracias!"];
+const AVAILABILITY_LINES = [
+  "Me interesa el coche, sigue disponible?",
+  "Me interesa el coche, lo tienes todavía?",
+  "Me interesa, lo sigues vendiendo?",
+];
+const OPENER_CLOSINGS = [
+  "Gracias!",
+  "Un saludo!",
+  "Gracias de antemano!",
+  "Ya me cuentas, gracias!",
+  "Cuando puedas me dices, gracias!",
+];
+
+// Follow-ups give feedback before asking more — a seller who only receives
+// questions and zero reaction stops answering (user rule, 2026-07-17). The
+// intro always thanks them; past the second reply the tone warms up and the
+// closing points toward a visit, so the questions read as leading somewhere.
+const FOLLOWUP_INTROS_EARLY = [
+  "Gracias por responder, pinta bien!",
+  "Genial, gracias por la info!",
+  "Perfecto, gracias! Buena pinta.",
+];
+const FOLLOWUP_INTROS_WARM = [
+  "Gracias! La verdad es que el coche me está convenciendo.",
+  "Genial, me cuadra todo lo que me vas contando.",
+  "Gracias por las respuestas, cada vez me interesa más.",
+];
+const FOLLOWUP_LINKS_ONE = [
+  "Aprovecho y te pregunto una cosa más.",
+  "Solo me queda una duda.",
+  "Una última cosa.",
+];
+const FOLLOWUP_LINKS_MANY = [
+  "Aprovecho y te pregunto un par de cosas más.",
+  "Me quedan un par de dudas.",
+  "Te pregunto un par de cosas más y no te doy más la lata.",
+];
+const FOLLOWUP_CLOSINGS_EARLY = ["Un saludo!", "Ya me dices, gracias!", "Mil gracias!"];
+const FOLLOWUP_CLOSINGS_WARM = [
+  "Si me encaja esto me animo a ir a verlo. Gracias!",
+  "Con esto ya me decido y vemos cuándo puedo pasarme a verlo. Gracias!",
+  "En cuanto me confirmes esto hablamos de verlo. Un saludo!",
+];
 
 /** Stable pick from a pool: same seed, same choice — variety without RNG. */
 function seedPick(options: string[], seed: string): string {
@@ -69,11 +111,11 @@ export function composeOpeningMessage(input: OpeningMessageInput): string {
 
   if (questions.length === 0) {
     // No open questions (fully verified unit): keep the opener meaningful.
-    return `${greeting} Me interesa el coche, sigue disponible?`;
+    return `${greeting} ${seedPick(AVAILABILITY_LINES, `${seed}|availability`)}`;
   }
 
   return [
-    `${greeting} Me interesa el coche y quería preguntarte un par de cosas antes de verlo.`,
+    `${greeting} ${seedPick(INTEREST_LINES, `${seed}|interest`)}`,
     ...questions,
     "",
     seedPick(OPENER_CLOSINGS, `${seed}|opener-closing`),
@@ -116,6 +158,8 @@ const NUDGES = [
   "Buenas! Pudiste mirar lo que te pregunté?",
   "Hola! Le pudiste echar un ojo a lo que te comenté?",
   "Buenas! Sabes algo de lo del otro día?",
+  "Hola! Sigo interesado en el coche, cuando puedas me cuentas.",
+  "Buenas! Qué tal, pudiste ver lo que te comentaba?",
 ];
 
 /**
@@ -132,6 +176,8 @@ export interface FollowUpInput {
   openQuestions: string[];
   /** Bodies of outbound messages already sent/queued — never re-ask these. */
   alreadyAsked: string[];
+  /** Seller replies received so far — interest warms up as they answer. */
+  sellerReplies?: number;
 }
 
 /**
@@ -150,11 +196,11 @@ export function composeFollowUpMessage(input: FollowUpInput): string | null {
     .slice(0, MAX_OPENING_QUESTIONS);
   if (remaining.length === 0) return null;
 
-  const seed = `${asked.length}|${remaining[0] ?? ""}`;
-  return [
-    `${seedPick(FOLLOWUP_INTROS, seed)} Aprovecho y te pregunto alguna cosa más.`,
-    ...remaining,
-    "",
-    seedPick(FOLLOWUP_CLOSINGS, `${seed}|followup-closing`),
-  ].join("\n");
+  const replies = input.sellerReplies ?? 0;
+  const warm = replies >= 2;
+  const seed = `${asked.length}|${replies}|${remaining[0] ?? ""}`;
+  const intro = seedPick(warm ? FOLLOWUP_INTROS_WARM : FOLLOWUP_INTROS_EARLY, seed);
+  const link = seedPick(remaining.length === 1 ? FOLLOWUP_LINKS_ONE : FOLLOWUP_LINKS_MANY, `${seed}|link`);
+  const closing = seedPick(warm ? FOLLOWUP_CLOSINGS_WARM : FOLLOWUP_CLOSINGS_EARLY, `${seed}|followup-closing`);
+  return [`${intro} ${link}`, ...remaining, "", closing].join("\n");
 }

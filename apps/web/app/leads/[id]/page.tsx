@@ -142,6 +142,9 @@ export default async function LeadDetail({
           alreadyAsked: conversation
             .filter((m) => m.direction === "outbound" && (m.status === "sent" || m.status === "queued"))
             .map((m) => m.body),
+          sellerReplies: conversation.filter(
+            (m) => m.direction === "inbound" && m.status === "received",
+          ).length,
         });
   const suggestionQuestions = suggestion?.split("\n").filter((l) => l.trim().endsWith("?")).length ?? 0;
   const suggestLabel = !hasExchange

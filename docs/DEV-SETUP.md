@@ -122,6 +122,19 @@ anuncios, digest con suelo de nota + alertas A/B sin duplicados, dossiers
 en la página del lead), tabs por búsqueda, página Actividad, descubrimiento de
 modelos y adopción manual de anuncios con dossier-first. 77 tests verdes.
 
+**Cambio 2026-07-17 — más variedad y interés creciente en los mensajes.**
+Feedback del usuario: los textos sonaban muy automáticos y el vendedor solo
+recibía preguntas sin ningún feedback (riesgo de que deje de contestar). En
+`compose.ts`: pools ampliados (3 saludos, 4 líneas de interés del opener, 3
+variantes de disponibilidad, 5 cierres de opener, 5 nudges) y los
+seguimientos ahora SIEMPRE agradecen/reaccionan antes de preguntar. Con
+`sellerReplies >= 2` (nuevo campo de `FollowUpInput`, la ficha pasa el nº de
+mensajes recibidos) el tono sube de temperatura: intros tipo «el coche me
+está convenciendo» y cierres que apuntan a la visita («con esto ya me decido
+y vemos cuándo puedo pasarme»). El enlace intro concuerda en número con las
+preguntas restantes (una duda / un par de dudas). Todo sigue determinista y
+seedeado (el seed incluye nº de respuestas), testeado en `compose.test.ts`.
+
 **Cambio 2026-07-17 — un solo compositor de mensajes en la ficha del lead.**
 Antes había dos flujos: «Redactar mensaje al vendedor» (creaba un borrador
 pendiente de aprobación que aparecía ya escrito al recargar) y el textarea de

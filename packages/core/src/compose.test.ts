@@ -17,7 +17,7 @@ describe("composeOpeningMessage", () => {
       sellerName: "Juan M.",
       openQuestions: ["¿Tiene el mantenimiento al día con facturas?"],
     });
-    expect(msg).toMatch(/^(Hola|Buenas), Juan!/);
+    expect(msg).toMatch(/^(Hola|Buenas|Qué tal), Juan!/);
     expect(msg).toContain("Tiene el mantenimiento al día con facturas?");
   });
 
@@ -43,7 +43,7 @@ describe("composeOpeningMessage", () => {
 
   it("falls back to a plain availability opener without questions", () => {
     const msg = composeOpeningMessage({ title: "Golf", openQuestions: [] });
-    expect(msg).toContain("sigue disponible?");
+    expect(msg).toMatch(/(sigue disponible|lo tienes todavía|lo sigues vendiendo)\?$/);
   });
 
   it("varies greeting/closing across leads but stays deterministic", () => {
@@ -68,7 +68,7 @@ describe("composeOpeningMessage", () => {
       sellerName: "A. 24",
       openQuestions: [],
     });
-    expect(msg).toMatch(/^(Hola|Buenas)! /);
+    expect(msg).toMatch(/^(Hola|Buenas|Qué tal)! /);
   });
 });
 
@@ -139,6 +139,39 @@ describe("composeFollowUpMessage", () => {
       alreadyAsked: ["Hola, Robert:\n- ¿Quién asume la rematriculación? ¿Qué documentación tiene?\n¡Gracias!"],
     });
     expect(followUp).toBeNull();
+  });
+
+  it("always thanks the seller before asking more", () => {
+    const followUp = composeFollowUpMessage({
+      openQuestions: ["¿Tiene ITV en vigor?"],
+      alreadyAsked: ["Hola! Me interesa el coche."],
+      sellerReplies: 1,
+    });
+    expect(followUp).toMatch(/gracias/i);
+  });
+
+  it("warms up after a couple of seller replies and points toward a visit", () => {
+    const followUp = composeFollowUpMessage({
+      openQuestions: ["¿Está cambiada la correa de distribución?"],
+      alreadyAsked: ["Hola! Me interesa el coche."],
+      sellerReplies: 3,
+    });
+    expect(followUp).toMatch(/convenciendo|cuadra|interesa más/);
+    expect(followUp).toMatch(/verlo|pasarme/);
+    expect(followUp).not.toMatch(/[¿¡]/);
+  });
+
+  it("matches the singular/plural of the remaining questions", () => {
+    const one = composeFollowUpMessage({
+      openQuestions: ["¿Tiene ITV en vigor?"],
+      alreadyAsked: [],
+    });
+    expect(one).toMatch(/una cosa más|una duda|última cosa/i);
+    const many = composeFollowUpMessage({
+      openQuestions: ["¿Tiene ITV en vigor?", "¿Cuántos dueños?"],
+      alreadyAsked: [],
+    });
+    expect(many).toMatch(/par de cosas|par de dudas/i);
   });
 
   it("does not close with the same word as the opener's default", () => {
