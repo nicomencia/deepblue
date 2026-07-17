@@ -122,6 +122,12 @@ anuncios, digest con suelo de nota + alertas A/B sin duplicados, dossiers
 en la página del lead), tabs por búsqueda, página Actividad, descubrimiento de
 modelos y adopción manual de anuncios con dossier-first. 77 tests verdes.
 
+**Cambio 2026-07-17 — alertas de email sin lista de preguntas.** Las
+alertas instantáneas de shortlist llevan solo el resumen del lead (título,
+specs, foto, nota, exposición, enlaces) — las «preguntas clave» sobraban:
+viven en la ficha, donde el flujo de mensajería ya las usa (regla del
+usuario). El digest ya era así.
+
 **Cambio 2026-07-17 — la adopción guarda foto y hechos de importación.**
 `completeAdoption` no escribía `imageUrl` ni `rhd`/`foreignPlates` en el
 upsert del listing (el sweep sí) — por eso un lead adoptado salía sin foto.

@@ -299,9 +299,8 @@ function composeAlert(
         ]
       : []),
     ...(v.budgetNote ? [v.budgetNote] : []),
-    "",
-    "Preguntas clave para el vendedor:",
-    ...v.openQuestions.slice(0, 3).map((q) => `- ${q}`),
+    // No question list here (user rule 2026-07-17): the alert is the lead's
+    // brief; questions live on the lead page, where the outreach flow uses them.
     "",
     ...(leadId ? [`Ficha en deepblue: ${leadUrl(leadId)}`] : []),
     `Anuncio: ${item.url}`,
@@ -336,12 +335,6 @@ function composeAlertHtml(
       ? `<p><small>Riesgos sin verificar: ~${v.repairExposureEur.min.toLocaleString("es-ES")}–${v.repairExposureEur.max.toLocaleString("es-ES")} € de exposición en reparaciones</small></p>`
       : "",
     v.budgetNote ? `<p><small>${esc(v.budgetNote)}</small></p>` : "",
-    v.openQuestions.length > 0
-      ? `<p>Preguntas clave para el vendedor:</p><ul>${v.openQuestions
-          .slice(0, 3)
-          .map((q) => `<li>${esc(q)}</li>`)
-          .join("")}</ul>`
-      : "",
     `<p><a href="${href}">Ficha en deepblue</a> · <a href="${item.url}">anuncio original</a></p>`,
   ];
   return parts.filter(Boolean).join("\n");
