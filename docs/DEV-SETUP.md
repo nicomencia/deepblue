@@ -135,7 +135,8 @@ revisa, edita y pulsa «Enviar al vendedor» — enviar ES la aprobación
 pendiente de aprobación queda solo para borradores creados fuera de la página
 (API dev / automatización futura con aprobación por email, `draftOutreach`
 sigue existiendo para ese carril). Tras enviar se redirige a la URL limpia
-para que `?sugerir=1` no rellene el compositor otra vez.
+para que `?sugerir=1` no rellene el compositor otra vez. El botón «Generar»
+usa `scroll={false}` para no saltar al principio de la página al navegar.
 
 **Cambio 2026-07-17 — frase de triaje en alertas y digest.**
 `composeTriageLine(verdict)` (core, determinista, testeada): una frase por

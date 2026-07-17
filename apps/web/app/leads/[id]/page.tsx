@@ -503,6 +503,7 @@ export default async function LeadDetail({
                   {suggestion && !sugerir && (
                     <Link
                       href={`/leads/${lead.id}?sugerir=1`}
+                      scroll={false}
                       style={{
                         ...btn,
                         display: "inline-block",
