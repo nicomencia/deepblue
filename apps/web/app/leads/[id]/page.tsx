@@ -1,4 +1,5 @@
 import {
+  CHAT_MAX_CHARS,
   composeFollowUpMessage,
   composeNudgeMessage,
   composeOfferMessage,
@@ -479,6 +480,7 @@ export default async function LeadDetail({
                 <textarea
                   name="body"
                   rows={8}
+                  maxLength={CHAT_MAX_CHARS}
                   defaultValue={pendingDraft.body}
                   style={{
                     width: "100%",
@@ -516,6 +518,7 @@ export default async function LeadDetail({
                     name="body"
                     rows={sugerir && suggestion ? 8 : 4}
                     required
+                    maxLength={CHAT_MAX_CHARS}
                     placeholder={hasExchange ? "Responder al vendedor…" : "Mensaje al vendedor…"}
                     defaultValue={sugerir && suggestion ? suggestion : undefined}
                     style={{
@@ -530,6 +533,9 @@ export default async function LeadDetail({
                       fontSize: "0.9rem",
                     }}
                   />
+                  <p style={{ margin: "0.2rem 0 0", fontSize: "0.75rem", color: "var(--ink-muted)" }}>
+                    Máx. {CHAT_MAX_CHARS} caracteres (límite del chat de Wallapop)
+                  </p>
                   <button type="submit" style={{ ...btn, marginTop: "0.4rem" }}>
                     Enviar al vendedor
                   </button>

@@ -122,6 +122,20 @@ anuncios, digest con suelo de nota + alertas A/B sin duplicados, dossiers
 en la página del lead), tabs por búsqueda, página Actividad, descubrimiento de
 modelos y adopción manual de anuncios con dossier-first. 77 tests verdes.
 
+**Cambio 2026-07-17 — límite de 300 caracteres del chat de Wallapop.** El
+compositor del chat es un `<textarea maxlength="300">` (medido en vivo con
+`apps/runner/src/probe-limit.ts`): la primera propuesta de precio (409
+chars) salió CORTADA y la línea del precio nunca llegó a la vendedora.
+Defensa en tres capas: (1) core exporta `CHAT_MAX_CHARS = 300` y TODOS los
+compositores caben siempre — openers/seguimientos van soltando las últimas
+preguntas, y la justificación de la oferta baja la escalera full → compact →
+minimal → bare (la línea del precio es sagrada, lo que encoge es el porqué);
+(2) web: `sendUserMessage`/`updateDraftBody` RECHAZAN mensajes largos con
+error claro (nunca truncar una conversación humana) y los textarea de la
+ficha llevan `maxLength` + aviso; (3) runner: tras `fill()`, si el campo
+retiene menos de lo escrito, aborta ANTES de enviar («no se envía a
+medias»). Tests con los datos reales del Focus que se cortaron (144 tests).
+
 **Cambio 2026-07-17 — negociar antes de prometer la visita.** Feedback del
 usuario: el cierre cálido «Con esto ya me decido y vemos cuándo puedo pasarme
 a verlo» regala la palanca — anunciar la visita antes de negociar concede el

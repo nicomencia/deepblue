@@ -9,6 +9,14 @@
 
 import type { ConfidenceVerdict } from "./domain.js";
 
+/**
+ * Wallapop's chat composer is a <textarea maxlength="300"> (measured live,
+ * 2026-07-17): anything longer gets silently cut — our first price proposal
+ * lost its price line to this. Every composed message MUST fit, and the send
+ * path refuses anything longer instead of truncating a human conversation.
+ */
+export const CHAT_MAX_CHARS = 300;
+
 /** Wallapop chat accepts long texts, but sellers don't read them. */
 const MAX_OPENING_QUESTIONS = 3;
 
@@ -114,12 +122,22 @@ export function composeOpeningMessage(input: OpeningMessageInput): string {
     return `${greeting} ${seedPick(AVAILABILITY_LINES, `${seed}|availability`)}`;
   }
 
-  return [
-    `${greeting} ${seedPick(INTEREST_LINES, `${seed}|interest`)}`,
-    ...questions,
-    "",
-    seedPick(OPENER_CLOSINGS, `${seed}|opener-closing`),
-  ].join("\n");
+  // Fit the chat limit by dropping the LAST questions (they arrive best
+  // first); the rest wait for the follow-up.
+  const build = (qs: string[]): string =>
+    [
+      `${greeting} ${seedPick(INTEREST_LINES, `${seed}|interest`)}`,
+      ...qs,
+      "",
+      seedPick(OPENER_CLOSINGS, `${seed}|opener-closing`),
+    ].join("\n");
+  let kept = questions;
+  let msg = build(kept);
+  while (msg.length > CHAT_MAX_CHARS && kept.length > 1) {
+    kept = kept.slice(0, -1);
+    msg = build(kept);
+  }
+  return msg;
 }
 
 /**
@@ -212,11 +230,19 @@ export function composeFollowUpMessage(input: FollowUpInput): string | null {
   // is warm AND this batch asks the LAST remaining questions: anchoring a
   // price mid-interrogation is premature, and promising a visit before
   // negotiating gives the leverage away. "Me acerco a verlo" only ever
-  // appears contingent on the number.
+  // appears contingent on the number. The compact→minimal→bare ladder keeps
+  // the PRICE inside the chat limit — the number is the one part that must
+  // never be the part that gets cut.
   const lastBatch = remainingAll.length <= MAX_OPENING_QUESTIONS;
-  const offerPart =
-    input.offer && warm && lastBatch ? composeOfferClosing(input.offer, seed) : null;
-  if (offerPart) return [`${intro} ${link}`, ...remaining, "", offerPart].join("\n");
+  if (input.offer && warm && lastBatch) {
+    for (const level of ["compact", "minimal", "bare"] as const) {
+      const offerPart = composeOfferClosing(input.offer, seed, level);
+      if (!offerPart) break; // nothing to negotiate after all
+      const msg = [`${intro} ${link}`, ...remaining, "", offerPart].join("\n");
+      if (msg.length <= CHAT_MAX_CHARS) return msg;
+    }
+    // Even bare doesn't fit (many long questions): ask now, offer next turn.
+  }
 
   // Visit-promising warm closings ("con esto ya me decido y me paso a
   // verlo") only when there is NOTHING to negotiate: with an offer pending,
@@ -225,7 +251,17 @@ export function composeFollowUpMessage(input: FollowUpInput): string | null {
     warm && !input.offer ? FOLLOWUP_CLOSINGS_WARM : FOLLOWUP_CLOSINGS_EARLY,
     `${seed}|followup-closing`,
   );
-  return [`${intro} ${link}`, ...remaining, "", closing].join("\n");
+  const build = (qs: string[]): string => {
+    const l = seedPick(qs.length === 1 ? FOLLOWUP_LINKS_ONE : FOLLOWUP_LINKS_MANY, `${seed}|link`);
+    return [`${intro} ${l}`, ...qs, "", closing].join("\n");
+  };
+  let kept = remaining;
+  let msg = build(kept);
+  while (msg.length > CHAT_MAX_CHARS && kept.length > 1) {
+    kept = kept.slice(0, -1);
+    msg = build(kept);
+  }
+  return msg;
 }
 
 // ---------------------------------------------------------------------------
@@ -285,8 +321,15 @@ export interface OfferMessageInput extends OfferInput {
   seed: string;
 }
 
-/** The justification for the number, from the data at hand. */
-function offerWhy(input: Omit<OfferMessageInput, "seed">, compact: boolean): string {
+/**
+ * The justification for the number, at three lengths: "full" spells out the
+ * risks and who pays, "compact" keeps the risk list, "minimal" keeps only
+ * the cost band — the ladder the composers descend to fit CHAT_MAX_CHARS.
+ */
+function offerWhy(
+  input: Omit<OfferMessageInput, "seed">,
+  level: "full" | "compact" | "minimal",
+): string {
   const risks = (input.pendingRisks ?? []).map(shortRisk).slice(0, 2);
   const exposure = input.repairExposureEur;
   const overBudget = input.askingPriceEur > input.maxBudgetEur;
@@ -294,32 +337,39 @@ function offerWhy(input: Omit<OfferMessageInput, "seed">, compact: boolean): str
   if (risks.length > 0 && exposure) {
     const list = risks.join(" y ");
     const band = `entre ${exposure.min.toLocaleString("es-ES")} y ${exposure.max.toLocaleString("es-ES")} €`;
-    return compact
-      ? `Eso sí, con lo que queda sin comprobar (${list}) me tocaría asumir ${band} de posibles arreglos.`
-      : `Lo único que me frena es lo que queda sin comprobar (${list}): por lo que suele costar arreglarlo hablamos de ${band} que tendría que asumir yo.`;
+    if (level === "full")
+      return `Lo único que me frena es lo que queda sin comprobar (${list}): por lo que suele costar arreglarlo hablamos de ${band} que tendría que asumir yo.`;
+    if (level === "compact")
+      return `Eso sí, con lo que queda sin comprobar (${list}) me tocaría asumir ${band} de posibles arreglos.`;
+    return `Eso sí, con lo pendiente de comprobar tendría que asumir ${band} en arreglos.`;
   }
   if (overBudget) {
     const asking = input.askingPriceEur.toLocaleString("es-ES");
-    return compact
-      ? `Eso sí, ${asking} € se me va un poco de lo que tenía pensado.`
-      : `Lo único es que ${asking} € se me va de lo que tenía pensado gastarme.`;
+    if (level === "full") return `Lo único es que ${asking} € se me va de lo que tenía pensado gastarme.`;
+    if (level === "compact") return `Eso sí, ${asking} € se me va un poco de lo que tenía pensado.`;
+    return "Eso sí, se me va un poco de presupuesto.";
   }
-  return compact ? "" : "Le he echado números con calma para dejarlo a punto.";
+  return level === "full" ? "Le he echado números con calma para dejarlo a punto." : "";
 }
 
 /**
- * Compact offer paragraph used as the CLOSING of a follow-up: justification
- * plus the number, visit only contingent on it. Null when there is nothing
- * to negotiate.
+ * Offer paragraph used as the CLOSING of a follow-up: justification plus the
+ * number, visit only contingent on it. "bare" drops the justification — the
+ * price line is the one part that must NEVER be cut. Null when there is
+ * nothing to negotiate.
  */
-function composeOfferClosing(input: Omit<OfferMessageInput, "seed">, seed: string): string | null {
+function composeOfferClosing(
+  input: Omit<OfferMessageInput, "seed">,
+  seed: string,
+  level: "compact" | "minimal" | "bare",
+): string | null {
   const offer = computeOfferEur(input);
   if (offer === null) return null;
-  const why = offerWhy(input, true);
   const line = seedPick(OFFER_LINES, `${seed}|offer|${offer}`).replace(
     "{price}",
     offer.toLocaleString("es-ES"),
   );
+  const why = level === "bare" ? "" : offerWhy(input, level);
   return why ? `${why} ${line}` : line;
 }
 
@@ -338,7 +388,13 @@ export function composeOfferMessage(input: OfferMessageInput): string | null {
     "{price}",
     offer.toLocaleString("es-ES"),
   );
-  return [`${seedPick(OFFER_INTROS, `${seed}|intro`)} ${offerWhy(input, false)}`, "", offerLine].join(
-    "\n",
-  );
+  const intro = seedPick(OFFER_INTROS, `${seed}|intro`);
+  // Longest justification that still fits the chat limit; the price line is
+  // sacred, the "why" is what shrinks.
+  for (const level of ["full", "compact", "minimal"] as const) {
+    const why = offerWhy(input, level);
+    const msg = [why ? `${intro} ${why}` : intro, "", offerLine].join("\n");
+    if (msg.length <= CHAT_MAX_CHARS) return msg;
+  }
+  return [intro, "", offerLine].join("\n");
 }

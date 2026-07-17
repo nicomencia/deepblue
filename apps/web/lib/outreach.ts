@@ -8,6 +8,7 @@
 import { randomBytes } from "node:crypto";
 import {
   canTransition,
+  CHAT_MAX_CHARS,
   composeOpeningMessage,
   isPlatformActive,
   medianSellerReplyMinutes,
@@ -122,10 +123,19 @@ export async function draftOutreach(db: Db, leadId: string): Promise<OutreachRes
   return { ok: true, messageId: message.id };
 }
 
+/** Wallapop's composer cuts at CHAT_MAX_CHARS — refuse, never truncate. */
+function chatLengthError(text: string): string | null {
+  return text.length > CHAT_MAX_CHARS
+    ? `el mensaje supera el límite del chat de Wallapop (${text.length}/${CHAT_MAX_CHARS} caracteres) — acórtalo o divídelo en dos`
+    : null;
+}
+
 /** Edit a draft's text while it still awaits approval. */
 export async function updateDraftBody(db: Db, messageId: string, body: string): Promise<OutreachResult> {
   const trimmed = body.trim();
   if (!trimmed) return { ok: false, error: "el mensaje no puede quedar vacío" };
+  const tooLong = chatLengthError(trimmed);
+  if (tooLong) return { ok: false, error: tooLong };
   const [updated] = await db
     .update(messages)
     .set({ body: trimmed })
@@ -230,6 +240,8 @@ export async function decideApproval(
 export async function sendUserMessage(db: Db, leadId: string, body: string): Promise<OutreachResult> {
   const text = body.trim();
   if (!text) return { ok: false, error: "el mensaje no puede ir vacío" };
+  const tooLong = chatLengthError(text);
+  if (tooLong) return { ok: false, error: tooLong };
 
   const [row] = await db
     .select({ lead: leads, listing: listings })

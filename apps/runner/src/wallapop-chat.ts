@@ -168,8 +168,19 @@ export async function sendWallapopMessage(
     // would fire a half-written message at a real person. A single-line
     // <input> composer can't hold newlines, so flatten for that case.
     const isInput = (await composer.evaluate((el) => el.tagName).catch(() => "")) === "INPUT";
-    await composer.fill(isInput ? body.replace(/\s*\r?\n+\s*/g, " ") : body);
+    const intended = isInput ? body.replace(/\s*\r?\n+\s*/g, " ") : body;
+    await composer.fill(intended);
     await pause(700, 1600);
+
+    // Wallapop's composer has maxlength=300 (measured 2026-07-17): if the
+    // field holds less than we wrote, the tail was silently cut — abort
+    // BEFORE sending. Half a message to a real person is worse than none.
+    const held = (await composer.inputValue().catch(() => composer.innerText())).trim();
+    if (held.length < intended.trim().length) {
+      throw new Error(
+        `el chat recortó el mensaje (${held.length}/${intended.trim().length} caracteres) — no se envía a medias; acórtalo`,
+      );
+    }
 
     const sendButton = await firstVisible(
       chatPage,

@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  CHAT_MAX_CHARS,
   composeFollowUpMessage,
   composeNudgeMessage,
   composeOfferMessage,
@@ -98,6 +99,68 @@ describe("composeTriageLine", () => {
   });
 });
 
+describe("chat length limit", () => {
+  const longQuestions = [
+    "¿Tiene el libro de mantenimiento completamente al día con todas las facturas de las revisiones oficiales?",
+    "¿Cuántos propietarios ha tenido el coche desde que se matriculó por primera vez en España?",
+    "¿Ha tenido algún accidente o reparación importante de chapa, pintura o mecánica que haya que conocer?",
+  ];
+
+  it("openers drop questions to fit Wallapop's 300-char composer", () => {
+    const msg = composeOpeningMessage({
+      title: "Ford Focus 1.0 EcoBoost 125 CV Trend+ 5 puertas",
+      sellerName: "María de las Mercedes",
+      openQuestions: longQuestions,
+    });
+    expect(msg.length).toBeLessThanOrEqual(CHAT_MAX_CHARS);
+    expect(msg).toContain("libro de mantenimiento"); // best question survives
+  });
+
+  it("follow-ups drop questions to fit", () => {
+    const msg = composeFollowUpMessage({
+      openQuestions: longQuestions,
+      alreadyAsked: [],
+      sellerReplies: 1,
+    });
+    expect(msg!.length).toBeLessThanOrEqual(CHAT_MAX_CHARS);
+  });
+
+  it("the real Ford offer that got cut now fits, price included", () => {
+    // 409 chars before this fix — Wallapop cut it at 300, losing the price.
+    const msg = composeOfferMessage({
+      askingPriceEur: 15000,
+      maxBudgetEur: 14500,
+      repairExposureEur: { min: 2150, max: 4950 },
+      pendingRisks: [
+        "1.0 EcoBoost: pérdida de refrigerante por el manguito degas → sobrecalentamiento y culata agrietada",
+        "Silentblocks y bieletas del tren trasero/delantero gastados",
+      ],
+      seed: "7b7775bd-1a10-478e-84c0-251074564e85",
+    });
+    expect(msg!.length).toBeLessThanOrEqual(CHAT_MAX_CHARS);
+    expect(msg).toContain("13.200");
+  });
+
+  it("merged follow-up + offer fits with the price intact", () => {
+    const msg = composeFollowUpMessage({
+      openQuestions: ["¿En qué taller Ford lo llevaban y de cuándo es la factura de la correa?"],
+      alreadyAsked: [],
+      sellerReplies: 3,
+      offer: {
+        askingPriceEur: 15000,
+        maxBudgetEur: 14500,
+        repairExposureEur: { min: 2150, max: 4950 },
+        pendingRisks: [
+          "1.0 EcoBoost: pérdida de refrigerante por el manguito degas → culata agrietada",
+          "Silentblocks y bieletas del tren trasero/delantero gastados",
+        ],
+      },
+    });
+    expect(msg!.length).toBeLessThanOrEqual(CHAT_MAX_CHARS);
+    expect(msg).toContain("13.200");
+  });
+});
+
 describe("computeOfferEur", () => {
   it("asks the seller to absorb half the expected repairs, capped at budget", () => {
     // Focus case: 15.000 asking, 14.500 budget, 2.150-4.950 exposure.
@@ -134,10 +197,7 @@ describe("composeOfferMessage", () => {
     askingPriceEur: 15000,
     maxBudgetEur: 14500,
     repairExposureEur: { min: 2150, max: 4950 },
-    pendingRisks: [
-      "1.0 EcoBoost: pérdida de refrigerante por el manguito degas → sobrecalentamiento y culata agrietada",
-      "Silentblocks y bieletas del tren trasero/delantero gastados",
-    ],
+    pendingRisks: ["1.0 EcoBoost: pérdida de refrigerante por el manguito degas → culata agrietada"],
     seed: "lead-focus",
   };
 
@@ -147,6 +207,7 @@ describe("composeOfferMessage", () => {
     expect(msg).toContain("pérdida de refrigerante por el manguito degas");
     // es-ES only groups 5+ digits: 2150 stays ungrouped.
     expect(msg).toContain("entre 2150 y 4950 €");
+    expect(msg!.length).toBeLessThanOrEqual(CHAT_MAX_CHARS);
     expect(msg).not.toMatch(/[¿¡]/);
     expect(msg).not.toMatch(/^- /m);
     expect(msg).toBe(composeOfferMessage(input));
