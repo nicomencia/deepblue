@@ -1,6 +1,6 @@
 import { isAuthorizedCron } from "../../../../lib/cron-auth";
 import { getDb } from "../../../../lib/db";
-import { enqueueListingChecks } from "../../../../lib/reaper";
+import { enqueueListingChecks, pruneOldJobs } from "../../../../lib/reaper";
 
 /**
  * Enqueue liveness probes for shortlisted listings due a re-check. The runner
@@ -15,5 +15,7 @@ export async function POST(req: Request): Promise<Response> {
 
   const db = await getDb();
   const stats = await enqueueListingChecks(db, limit);
-  return Response.json({ ok: true, ...stats });
+  // Rides the same tick: terminal jobs past retention leave the queue.
+  const pruned = await pruneOldJobs(db);
+  return Response.json({ ok: true, ...stats, prunedJobs: pruned });
 }

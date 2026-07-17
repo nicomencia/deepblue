@@ -122,6 +122,12 @@ anuncios, digest con suelo de nota + alertas A/B sin duplicados, dossiers
 en la página del lead), tabs por búsqueda, página Actividad, descubrimiento de
 modelos y adopción manual de anuncios con dossier-first. 77 tests verdes.
 
+**Cambio 2026-07-17 — higiene de la cola de jobs.** Los jobs terminales
+(succeeded/failed) se purgan a los 7 días en cada tick del reaper
+(`pruneOldJobs`) — la cola es cola, no audit trail (eso son los `events`),
+y los fallos antiguos ya diagnosticados no deben rondar Actividad para
+siempre. Limpieza manual: `POST /api/dev/jobs {action:"prune", all:true}`.
+
 **Cambio 2026-07-17 — «Adoptar un anuncio» vive en Búsquedas.** El
 formulario de adopción (pegar URL de Wallapop) se muda del panel de leads a
 /briefs, junto a la creación de búsquedas — adoptar un anuncio es iniciar

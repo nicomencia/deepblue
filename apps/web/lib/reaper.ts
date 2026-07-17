@@ -26,6 +26,23 @@ export interface ReapEnqueueStats {
   enqueued: number;
 }
 
+/** Terminal jobs older than this are queue residue, not useful history. */
+const JOB_RETENTION_DAYS = 7;
+
+/**
+ * Queue hygiene: drop succeeded/failed jobs past retention. The jobs table
+ * is a work queue, not the audit trail — events keep the durable history —
+ * so old failures shouldn't haunt the Actividad view forever.
+ */
+export async function pruneOldJobs(db: Db, retentionDays = JOB_RETENTION_DAYS): Promise<number> {
+  const cutoff = new Date(Date.now() - retentionDays * 24 * 60 * 60 * 1000);
+  const gone = await db
+    .delete(jobs)
+    .where(and(inArray(jobs.status, ["succeeded", "failed"]), lt(jobs.updatedAt, cutoff)))
+    .returning({ id: jobs.id });
+  return gone.length;
+}
+
 /**
  * Enqueue liveness probes for shortlisted listings not re-sighted in a while
  * and not already awaiting a probe. Deaths happen later, when the runner
