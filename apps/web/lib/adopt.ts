@@ -22,8 +22,9 @@ import {
   type NormalizedListing,
 } from "@deepblue/core";
 import { briefs, events, jobs, leads, listings, modelDossiers, type Db } from "@deepblue/db";
-import { and, eq, isNull } from "drizzle-orm";
+import { and, eq, isNull, sql } from "drizzle-orm";
 import { buildDossier } from "./dossier-builder";
+import { detailImportFact } from "./ingest";
 import { isLlmConfigured } from "./llm";
 import { getBenchmark, getDossier } from "./lookups";
 import { newEvalCaches, listingRowToNormalized, reevaluateLead } from "./reevaluate";
@@ -144,9 +145,12 @@ export async function completeAdoption(
       url: item.url,
       title: item.title,
       description: item.description,
+      imageUrl: item.imageUrl,
       priceEur: item.priceEur,
       cashPriceEur,
       dedupKey,
+      rhd: detailImportFact(item, "rhd"),
+      foreignPlates: detailImportFact(item, "foreignPlates"),
       make: item.make,
       model: item.model,
       version: item.version,
@@ -173,9 +177,13 @@ export async function completeAdoption(
       set: {
         title: item.title,
         description: item.description,
+        ...(item.imageUrl ? { imageUrl: item.imageUrl } : {}),
         priceEur: item.priceEur,
         cashPriceEur,
         dedupKey,
+        // Facts only fill gaps: stored (possibly user-verified) values win.
+        rhd: sql`coalesce(${listings.rhd}, ${detailImportFact(item, "rhd")})`,
+        foreignPlates: sql`coalesce(${listings.foreignPlates}, ${detailImportFact(item, "foreignPlates")})`,
         sellerRating: item.sellerRating,
         sellerReviewCount: item.sellerReviewCount,
         sellerSoldCount: item.sellerSoldCount,

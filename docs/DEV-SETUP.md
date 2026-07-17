@@ -122,6 +122,15 @@ anuncios, digest con suelo de nota + alertas A/B sin duplicados, dossiers
 en la página del lead), tabs por búsqueda, página Actividad, descubrimiento de
 modelos y adopción manual de anuncios con dossier-first. 77 tests verdes.
 
+**Cambio 2026-07-17 — la adopción guarda foto y hechos de importación.**
+`completeAdoption` no escribía `imageUrl` ni `rhd`/`foreignPlates` en el
+upsert del listing (el sweep sí) — por eso un lead adoptado salía sin foto.
+Corregido con el mismo patrón que ingest (foto si viene; hechos solo
+rellenan huecos, coalesce). Los ya afectados se curan con el backfill de
+`POST /api/dev/reevaluate`. Dossier Ford Focus III importado (5 issues con
+applicability por motor/cambio: degas 1.0 EcoBoost crítico, correa húmeda,
+PowerShift solo automáticos, TDCi solo diésel).
+
 **Cambio 2026-07-17 — higiene de la cola de jobs.** Los jobs terminales
 (succeeded/failed) se purgan a los 7 días en cada tick del reaper
 (`pruneOldJobs`) — la cola es cola, no audit trail (eso son los `events`),

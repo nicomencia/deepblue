@@ -268,7 +268,7 @@ async function ingestOne(
 }
 
 /** Explicit import fact from a listing's text, for gap-filling updates. */
-function detailImportFact(item: NormalizedListing, field: "rhd" | "foreignPlates"): boolean | null {
+export function detailImportFact(item: NormalizedListing, field: "rhd" | "foreignPlates"): boolean | null {
   const imp = extractImportSignals(item.title, item.description);
   if (field === "rhd") return imp.rhd && !imp.rhdAssumed ? true : null;
   return imp.foreignPlate ? true : null;
