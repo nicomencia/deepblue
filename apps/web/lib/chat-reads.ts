@@ -236,12 +236,18 @@ export async function readConversation(
   p: PendingConversation,
 ): Promise<{ before?: string; after: string }> {
   const client = getAnthropic();
+  // Generous output budget: models may spend tokens before/while emitting the
+  // JSON, and a truncated payload fails the parse (seen live with Sonnet 5 at
+  // 4000). Only produced tokens are billed — the cap is protection, not cost.
   const msg = await client.messages.create({
     model: READS_MODEL,
-    max_tokens: 4000,
+    max_tokens: 16_000,
     output_config: { format: zodOutputFormat(conversationReadingPayloadSchema) },
     messages: [{ role: "user", content: conversationPrompt(p) }],
   });
+  if (msg.stop_reason === "max_tokens") {
+    throw new Error(`lectura truncada por max_tokens (${READS_MODEL}) — sube el límite`);
+  }
   // Trust boundary: validate before anything touches the DB.
   const payload = conversationReadingPayloadSchema.parse(JSON.parse(messageText(msg)));
   return saveConversationReading(db, p, payload, READS_MODEL);

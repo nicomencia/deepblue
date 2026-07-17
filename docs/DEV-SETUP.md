@@ -122,6 +122,17 @@ anuncios, digest con suelo de nota + alertas A/B sin duplicados, dossiers
 en la página del lead), tabs por búsqueda, página Actividad, descubrimiento de
 modelos y adopción manual de anuncios con dossier-first. 77 tests verdes.
 
+**Cambio 2026-07-17 — presupuesto de salida holgado en lecturas.** La
+primera lectura en vivo con Sonnet 5 salió truncada («Unterminated string in
+JSON»): `max_tokens: 4000` se quedó corto y el JSON se cortó a medias.
+Ahora 16.000 (solo se factura lo producido; el tope es protección, no
+coste) y si `stop_reason === "max_tokens"` la lectura falla con error claro
+en vez de parsear basura. Pipeline completo validado en vivo con la
+negociación real del Focus: fetch del runner → lectura automática Sonnet
+(extrajo 13.900/14.200) → `respondToCounterEur` aceptó (diferencia 300 €
+bajo tope) → botón «Generar aceptación (14.200 €)» → prosa de Haiku con la
+cifra exacta.
+
 **Cambio 2026-07-17 — modelo propio para lecturas de conversación.** Las
 lecturas de chat compartían `ENRICH_MODEL` con el enriquecimiento de
 anuncios — imposible elegir modelos distintos por carril. Ahora
