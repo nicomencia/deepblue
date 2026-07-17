@@ -19,6 +19,7 @@ import { notFound } from "next/navigation";
 import { getDb } from "../../../lib/db";
 import { draftSellerProse } from "../../../lib/draft-message";
 import { fmtDate, fmtEur, fmtKm, gradeVar } from "../../../lib/ui";
+import { GenerateLink } from "./generate-link";
 import {
   approveSellerMessage,
   rejectSellerMessage,
@@ -609,9 +610,9 @@ export default async function LeadDetail({
                     Enviar al vendedor
                   </button>
                   {suggestion && !sugerir && (
-                    <Link
+                    <GenerateLink
                       href={`/leads/${lead.id}?sugerir=1`}
-                      scroll={false}
+                      label={suggestLabel}
                       style={{
                         ...btn,
                         display: "inline-block",
@@ -621,9 +622,7 @@ export default async function LeadDetail({
                         color: "var(--ink-muted)",
                         fontWeight: 400,
                       }}
-                    >
-                      {suggestLabel}
-                    </Link>
+                    />
                   )}
                 </form>
               </div>

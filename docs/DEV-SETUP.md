@@ -122,6 +122,21 @@ anuncios, digest con suelo de nota + alertas A/B sin duplicados, dossiers
 en la página del lead), tabs por búsqueda, página Actividad, descubrimiento de
 modelos y adopción manual de anuncios con dossier-first. 77 tests verdes.
 
+**Cambio 2026-07-17 — feedback al generar, sin inventar disponibilidad, y
+aviso de trato listo.** Tres correcciones de la primera sesión con el carril
+LLM en vivo: (1) el botón «Generar» ahora enseña «⏳ Generando…» mientras el
+servidor redacta (componente cliente `generate-link.tsx` con `useLinkStatus`
+de Next). (2) Un borrador de Haiku afirmó disponibilidad del comprador
+(«tengo disponibilidad el fin de semana») — el modelo NO conoce la agenda
+del usuario: regla en el prompt (pedir opciones al vendedor, el comprador
+confirma) + validación en código (`AVAILABILITY_CLAIMS`: días, franjas,
+«disponibilidad» que no estén en el borrador base ⇒ descartado, cae al
+determinista). (3) Cuando una lectura deja la negociación en territorio de
+aceptar (`respondToCounterEur` → accept), el cierre es del usuario: evento
+`negotiation_ready` + email «precio al alcance» con la cifra y el enlace a
+la ficha para mandar la aceptación y pactar la visita — solo con números
+nuevos, releer el mismo estado no reenvía.
+
 **Cambio 2026-07-17 — presupuesto de salida holgado en lecturas.** La
 primera lectura en vivo con Sonnet 5 salió truncada («Unterminated string in
 JSON»): `max_tokens: 4000` se quedó corto y el JSON se cortó a medias.

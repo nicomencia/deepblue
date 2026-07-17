@@ -52,9 +52,19 @@ function prompt(req: DraftRequest): string {
       : "- No menciones ningún precio nuevo que no esté en el borrador base.",
     "- No prometas visita incondicional si el objetivo es negociar: la visita solo condicionada al precio.",
     "- No inventes datos del coche que no estén en la conversación.",
+    "- NUNCA afirmes disponibilidad ni planes del comprador (días, fines de semana, horarios): no los conoces. Para la visita, pide opciones al vendedor y ya confirmará el comprador.",
     "- Responde a lo último que dijo el vendedor de forma natural (que no parezca un robot).",
   ].join("\n");
 }
+
+/**
+ * The buyer's schedule is unknown to the model — a draft asserting it
+ * ("tengo disponibilidad el fin de semana") invents a personal fact. Any of
+ * these appearing in the draft without being in the deterministic base
+ * invalidates it.
+ */
+const AVAILABILITY_CLAIMS =
+  /disponibilidad|fin de semana|lunes|martes|miércoles|jueves|viernes|sábado|domingo|esta (semana|tarde|mañana)|hoy mismo|por la (mañana|tarde|noche)/i;
 
 /** Code-side validation — the model is helpful, never trusted. */
 function isValidDraft(text: string, req: DraftRequest): boolean {
@@ -62,6 +72,7 @@ function isValidDraft(text: string, req: DraftRequest): boolean {
   if (/[¿¡]/.test(text)) return false;
   if (/^- /m.test(text)) return false;
   if (req.mustContainPrice && !text.includes(req.mustContainPrice)) return false;
+  if (AVAILABILITY_CLAIMS.test(text) && !AVAILABILITY_CLAIMS.test(req.fallback)) return false;
   // No stray euro amounts beyond what the base draft mentions: the model
   // must not introduce numbers code didn't decide.
   const allowed = new Set([...req.fallback.matchAll(/([\d.]+)\s*€/g)].map((m) => m[1]));

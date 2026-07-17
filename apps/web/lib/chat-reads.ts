@@ -10,6 +10,7 @@
 
 import {
   conversationReadingPayloadSchema,
+  respondToCounterEur,
   type ConversationReading,
   type ConversationReadingPayload,
   type IssueFinding,
@@ -220,6 +221,45 @@ export async function saveConversationReading(
         subject: `deepblue · la conversación necesita tu decisión — «${listing.title}»`,
         text: `${payload.escalateReason}\n\nConversación: ${leadUrl(lead.id)}`,
       });
+    }
+  }
+
+  // Deal ready: the seller's number reached accept territory (code decides,
+  // never the model). Closing — accepting and booking the visit — is the
+  // user's move, so tell them instead of acting. Only on fresh numbers: a
+  // re-read of the same state must not re-email.
+  const neg = payload.negotiation;
+  const prevNeg = lead.chatReading?.negotiation;
+  if (
+    neg?.ourLastOfferEur &&
+    neg?.sellerLastOfferEur &&
+    (prevNeg?.ourLastOfferEur !== neg.ourLastOfferEur ||
+      prevNeg?.sellerLastOfferEur !== neg.sellerLastOfferEur)
+  ) {
+    const decision = respondToCounterEur({
+      ourLastOfferEur: neg.ourLastOfferEur,
+      sellerCounterEur: neg.sellerLastOfferEur,
+      maxBudgetEur: brief.hardLimits.maxPriceEur,
+    });
+    if (decision.action === "accept") {
+      await db.insert(events).values({
+        userId: lead.userId,
+        leadId: lead.id,
+        type: "negotiation_ready",
+        payload: { ...neg, acceptEur: decision.priceEur },
+      });
+      const [owner] = await db.select().from(users).where(eq(users.id, lead.userId)).limit(1);
+      if (owner) {
+        await sendEmail({
+          to: owner.email,
+          subject: `deepblue · precio al alcance (${decision.priceEur.toLocaleString("es-ES")} €) — «${listing.title}»`,
+          text:
+            `El vendedor está en ${neg.sellerLastOfferEur.toLocaleString("es-ES")} € ` +
+            `(nuestra última oferta: ${neg.ourLastOfferEur.toLocaleString("es-ES")} €) y los números salen: ` +
+            `listo para aceptar en ${decision.priceEur.toLocaleString("es-ES")} €.\n\n` +
+            `Este cierre es tuyo — entra a la ficha, manda la aceptación y acuerda la visita:\n${leadUrl(lead.id)}`,
+        });
+      }
     }
   }
 
