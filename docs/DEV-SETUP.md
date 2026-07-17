@@ -122,6 +122,15 @@ anuncios, digest con suelo de nota + alertas A/B sin duplicados, dossiers
 en la página del lead), tabs por búsqueda, página Actividad, descubrimiento de
 modelos y adopción manual de anuncios con dossier-first. 77 tests verdes.
 
+**Cambio 2026-07-17 — regla: no pedir fotos por el chat.** El chat de
+Wallapop no permite enviar fotos ni archivos, así que ninguna pregunta
+compuesta debe pedirlas (regla en el prompt de `conversationPrompt`): se
+piden descripciones (qué consta en el libro, qué taller, fechas) o se deja
+la verificación documental para la visita. Además el `POST
+/api/dev/chat-reads` ahora acepta re-lecturas de conversaciones ya
+interpretadas — una lectura nueva cubre el hilo completo y REEMPLAZA la
+anterior, así se corrige una interpretación sin esperar mensaje nuevo.
+
 **Cambio 2026-07-17 — turno de conversación: esperando al vendedor.** Si el
 último mensaje del hilo es nuestro, la ficha marca «⏳ Esperando respuesta
 del vendedor» y NO sugiere más preguntas encima de las no contestadas

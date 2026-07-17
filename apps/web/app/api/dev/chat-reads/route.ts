@@ -1,5 +1,10 @@
 import { conversationReadingPayloadSchema } from "@deepblue/core";
-import { conversationPrompt, pendingConversations, saveConversationReading } from "../../../../lib/chat-reads";
+import {
+  conversationForLead,
+  conversationPrompt,
+  pendingConversations,
+  saveConversationReading,
+} from "../../../../lib/chat-reads";
 import { getDb } from "../../../../lib/db";
 
 /**
@@ -33,12 +38,13 @@ export async function POST(req: Request): Promise<Response> {
     return Response.json({ ok: false, error: "leadId y reading son obligatorios" }, { status: 400 });
   }
 
+  // Re-reads are allowed: a new reading REPLACES the stored one (it always
+  // covers the whole conversation), so correcting an interpretation is safe.
   const db = await getDb();
-  const pending = await pendingConversations(db, 50);
-  const p = pending.find((x) => x.lead.id === body.leadId);
+  const p = await conversationForLead(db, body.leadId);
   if (!p) {
     return Response.json(
-      { ok: false, error: "ese lead no tiene conversación pendiente de interpretar" },
+      { ok: false, error: "ese lead no tiene conversación con mensajes del vendedor" },
       { status: 409 },
     );
   }

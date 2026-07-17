@@ -63,6 +63,25 @@ export async function pendingConversations(db: Db, limit = 6): Promise<PendingCo
   return out;
 }
 
+/** One lead's conversation regardless of pending state — re-reads replace the stored reading. */
+export async function conversationForLead(db: Db, leadId: string): Promise<PendingConversation | null> {
+  const [row] = await db
+    .select({ lead: leads, listing: listings, brief: briefs })
+    .from(leads)
+    .innerJoin(briefs, eq(leads.briefId, briefs.id))
+    .innerJoin(listings, eq(leads.listingId, listings.id))
+    .where(eq(leads.id, leadId))
+    .limit(1);
+  if (!row) return null;
+  const conversation = await db
+    .select()
+    .from(messages)
+    .where(and(eq(messages.leadId, leadId), inArray(messages.status, ["sent", "received"])))
+    .orderBy(asc(messages.createdAt));
+  if (!conversation.some((m) => m.direction === "inbound")) return null;
+  return { ...row, conversation };
+}
+
 export function conversationPrompt(p: PendingConversation): string {
   const v = p.lead.verdict;
   const issues = (v?.issues ?? [])
@@ -109,6 +128,9 @@ Instrucciones:
   persona (señal/pago, documentos personales, salir de Wallapop, comportamiento
   raro) — escalateReason explicándolo.
 - extraOpenQuestions: SOLO preguntas nuevas que la conversación pide a gritos.
+  OJO: el chat de Wallapop NO permite enviar fotos ni archivos — nunca pidas
+  fotos/documentos por el chat; pide descripciones (qué consta en el libro,
+  qué taller, fechas) o deja la verificación documental para la visita.
 - summary: 2-3 frases honestas: qué se ha averiguado del coche en esta
   conversación y qué queda pendiente.`;
 }
