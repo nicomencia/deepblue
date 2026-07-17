@@ -122,6 +122,21 @@ anuncios, digest con suelo de nota + alertas A/B sin duplicados, dossiers
 en la página del lead), tabs por búsqueda, página Actividad, descubrimiento de
 modelos y adopción manual de anuncios con dossier-first. 77 tests verdes.
 
+**Cambio 2026-07-17 — un solo compositor de mensajes en la ficha del lead.**
+Antes había dos flujos: «Redactar mensaje al vendedor» (creaba un borrador
+pendiente de aprobación que aparecía ya escrito al recargar) y el textarea de
+respuesta con un enlace «Sugerir…». Ahora hay UN compositor consistente:
+siempre empieza vacío y un único botón «✍️ Generar…» lo rellena con la
+sugerencia determinista según el turno (mensaje inicial si no hay
+conversación, seguimiento con las preguntas sin hacer si respondió el
+vendedor, recordatorio suave si llevamos ≥2 días esperando). El usuario
+revisa, edita y pulsa «Enviar al vendedor» — enviar ES la aprobación
+(`sendUserMessage`), también para el primer contacto. La tarjeta de borrador
+pendiente de aprobación queda solo para borradores creados fuera de la página
+(API dev / automatización futura con aprobación por email, `draftOutreach`
+sigue existiendo para ese carril). Tras enviar se redirige a la URL limpia
+para que `?sugerir=1` no rellene el compositor otra vez.
+
 **Cambio 2026-07-17 — frase de triaje en alertas y digest.**
 `composeTriageLine(verdict)` (core, determinista, testeada): una frase por
 anuncio que responde «¿sigo con este o espero otro?» — A/B empujan a

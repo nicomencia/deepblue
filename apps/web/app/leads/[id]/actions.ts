@@ -22,8 +22,9 @@ export async function setIssueFinding(formData: FormData): Promise<void> {
   revalidatePath("/");
 }
 
+import { redirect } from "next/navigation";
 import { applyImportFact, type ImportFactField, type ImportFactValue } from "../../../lib/findings";
-import { decideLeadApproval, draftOutreach, sendUserMessage, updateDraftBody } from "../../../lib/outreach";
+import { decideLeadApproval, sendUserMessage, updateDraftBody } from "../../../lib/outreach";
 
 /** Mark a verified import fact (RHD / foreign plates) and refresh the verdict. */
 export async function setImportFact(formData: FormData): Promise<void> {
@@ -38,17 +39,6 @@ export async function setImportFact(formData: FormData): Promise<void> {
   await applyImportFact(db, leadId, field, value);
   revalidatePath(`/leads/${leadId}`);
   revalidatePath("/");
-}
-
-/** Draft the approval-gated opening message for this lead's seller. */
-export async function draftSellerMessage(formData: FormData): Promise<void> {
-  const leadId = String(formData.get("leadId") ?? "");
-  if (!leadId) throw new Error("falta leadId");
-
-  const db = await getDb();
-  const result = await draftOutreach(db, leadId);
-  if (!result.ok) throw new Error(result.error);
-  revalidatePath(`/leads/${leadId}`);
 }
 
 /** Approve the pending draft: save the (possibly edited) text, then queue the send. */
@@ -67,7 +57,7 @@ export async function approveSellerMessage(formData: FormData): Promise<void> {
   revalidatePath("/");
 }
 
-/** Send a user-written reply — typing it is the approval, it queues directly. */
+/** Send a user-written message — typing it is the approval, it queues directly. */
 export async function replySellerMessage(formData: FormData): Promise<void> {
   const leadId = String(formData.get("leadId") ?? "");
   const body = String(formData.get("body") ?? "");
@@ -77,6 +67,8 @@ export async function replySellerMessage(formData: FormData): Promise<void> {
   const result = await sendUserMessage(db, leadId, body);
   if (!result.ok) throw new Error(result.error);
   revalidatePath(`/leads/${leadId}`);
+  // Back to the clean URL: a lingering ?sugerir=1 would re-fill the composer.
+  redirect(`/leads/${leadId}`);
 }
 
 /** Reject the pending draft — it stays in the timeline as an inert draft. */

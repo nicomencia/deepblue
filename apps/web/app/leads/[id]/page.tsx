@@ -1,6 +1,7 @@
 import {
   composeFollowUpMessage,
   composeNudgeMessage,
+  composeOpeningMessage,
   extractImportSignals,
   type IssueAssessment,
   type IssueFinding,
@@ -14,7 +15,6 @@ import { getDb } from "../../../lib/db";
 import { fmtDate, fmtEur, fmtKm, gradeVar } from "../../../lib/ui";
 import {
   approveSellerMessage,
-  draftSellerMessage,
   rejectSellerMessage,
   replySellerMessage,
   setImportFact,
@@ -122,18 +122,33 @@ export default async function LeadDetail({
     : 0;
   const NUDGE_AFTER_MS = 2 * 24 * 60 * 60 * 1000;
 
-  // Deterministic suggestion, by conversation turn: seller answered → the
-  // open questions not yet asked; we're waiting → a nudge (quiet ≥2 days).
-  const followUpSuggestion = waitingForSeller
-    ? quietMs >= NUDGE_AFTER_MS
-      ? composeNudgeMessage(lead.id)
-      : null
-    : composeFollowUpMessage({
+  // Deterministic suggestion, by conversation turn: nothing exchanged yet →
+  // the opening message; seller answered → the open questions not yet asked;
+  // we're waiting → a nudge (quiet ≥2 days). Always behind the same button:
+  // nothing is pre-composed until the user asks for it.
+  const hasExchange = lastExchange !== undefined;
+  const suggestion = !hasExchange
+    ? composeOpeningMessage({
+        title: listing.title,
+        sellerName: listing.sellerName ?? undefined,
         openQuestions: lead.verdict?.openQuestions ?? [],
-        alreadyAsked: conversation
-          .filter((m) => m.direction === "outbound" && (m.status === "sent" || m.status === "queued"))
-          .map((m) => m.body),
-      });
+      })
+    : waitingForSeller
+      ? quietMs >= NUDGE_AFTER_MS
+        ? composeNudgeMessage(lead.id)
+        : null
+      : composeFollowUpMessage({
+          openQuestions: lead.verdict?.openQuestions ?? [],
+          alreadyAsked: conversation
+            .filter((m) => m.direction === "outbound" && (m.status === "sent" || m.status === "queued"))
+            .map((m) => m.body),
+        });
+  const suggestionQuestions = suggestion?.split("\n").filter((l) => l.trim().endsWith("?")).length ?? 0;
+  const suggestLabel = !hasExchange
+    ? `✍️ Generar mensaje inicial${suggestionQuestions > 0 ? ` (${suggestionQuestions} pregunta${suggestionQuestions === 1 ? "" : "s"})` : ""}`
+    : waitingForSeller
+      ? "✍️ Generar recordatorio suave (sin preguntas nuevas)"
+      : `✍️ Generar seguimiento (${suggestionQuestions} pregunta${suggestionQuestions === 1 ? "" : "s"} sin hacer)`;
 
   // High-signal import warnings belong next to the title, not buried in a
   // card. Stored facts (user-verified or ingest-detected) beat text inference.
@@ -457,18 +472,19 @@ export default async function LeadDetail({
             </div>
           ) : (
             contactable &&
-            !conversation.some((m) => m.status === "queued") &&
-            (conversation.some((m) => m.status === "sent" || m.direction === "inbound") ? (
-              // Ongoing conversation: the user writes, writing IS the approval.
+            !conversation.some((m) => m.status === "queued") && (
+              // One composer for every turn. It starts empty; the button fills
+              // it with the suggested message (opener / follow-up / nudge) and
+              // the user edits and sends — clicking send IS the approval.
               <div style={{ marginTop: "0.5rem" }}>
                 <form action={replySellerMessage}>
                   <input type="hidden" name="leadId" value={lead.id} />
                   <textarea
                     name="body"
-                    rows={sugerir && followUpSuggestion ? 7 : 4}
+                    rows={sugerir && suggestion ? 8 : 4}
                     required
-                    placeholder="Responder al vendedor…"
-                    defaultValue={sugerir && followUpSuggestion ? followUpSuggestion : undefined}
+                    placeholder={hasExchange ? "Responder al vendedor…" : "Mensaje al vendedor…"}
+                    defaultValue={sugerir && suggestion ? suggestion : undefined}
                     style={{
                       width: "100%",
                       boxSizing: "border-box",
@@ -484,25 +500,25 @@ export default async function LeadDetail({
                   <button type="submit" style={{ ...btn, marginTop: "0.4rem" }}>
                     Enviar al vendedor
                   </button>
-                </form>
-                {followUpSuggestion && !sugerir && (
-                  <p style={{ margin: "0.5rem 0 0", fontSize: "0.83rem" }}>
-                    <Link href={`/leads/${lead.id}?sugerir=1`} style={{ color: "var(--ink-muted)" }}>
-                      {waitingForSeller
-                        ? "💡 Sugerir un recordatorio suave (sin preguntas nuevas)"
-                        : `💡 Sugerir seguimiento con las preguntas aún sin hacer (${followUpSuggestion.split("\n").filter((l) => l.endsWith("?")).length})`}
+                  {suggestion && !sugerir && (
+                    <Link
+                      href={`/leads/${lead.id}?sugerir=1`}
+                      style={{
+                        ...btn,
+                        display: "inline-block",
+                        marginLeft: "0.5rem",
+                        marginTop: "0.4rem",
+                        textDecoration: "none",
+                        color: "var(--ink-muted)",
+                        fontWeight: 400,
+                      }}
+                    >
+                      {suggestLabel}
                     </Link>
-                  </p>
-                )}
+                  )}
+                </form>
               </div>
-            ) : (
-              <form action={draftSellerMessage}>
-                <input type="hidden" name="leadId" value={lead.id} />
-                <button type="submit" style={btn}>
-                  Redactar mensaje al vendedor
-                </button>
-              </form>
-            ))
+            )
           )}
         </>
       )}
