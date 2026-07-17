@@ -1,5 +1,14 @@
 import { describe, expect, it } from "vitest";
-import { composeFollowUpMessage, composeNudgeMessage, composeOpeningMessage } from "./compose.js";
+import {
+  composeFollowUpMessage,
+  composeNudgeMessage,
+  composeOpeningMessage,
+  composeTriageLine,
+} from "./compose.js";
+import type { ConfidenceVerdict } from "./domain.js";
+
+const verdict = (over: Partial<ConfidenceVerdict>): ConfidenceVerdict =>
+  ({ overall: "C", score: 60, confidencePct: 40, openQuestions: [], ...over }) as ConfidenceVerdict;
 
 describe("composeOpeningMessage", () => {
   it("greets the seller by first name and asks the questions informally", () => {
@@ -60,6 +69,30 @@ describe("composeOpeningMessage", () => {
       openQuestions: [],
     });
     expect(msg).toMatch(/^(Hola|Buenas)! /);
+  });
+});
+
+describe("composeTriageLine", () => {
+  it("tells the reader to pursue good grades and skip bad ones", () => {
+    expect(composeTriageLine(verdict({ overall: "B" }))).toContain("escribir al vendedor");
+    expect(composeTriageLine(verdict({ overall: "E" }))).toContain("pasa");
+  });
+
+  it("makes an over-budget C conditional on the seller clearing risks", () => {
+    const line = composeTriageLine(
+      verdict({
+        overall: "C",
+        repairExposureEur: { min: 2750, max: 6150 },
+        budgetNote: "Peor caso ~6.150 € → total ~21.150 €, por encima de tu presupuesto de 14.500 €",
+      }),
+    );
+    expect(line).toContain("descartando riesgos");
+    // es-ES only groups 5+ digits: 6150 stays ungrouped.
+    expect(line).toContain("6150");
+  });
+
+  it("vetoes override everything", () => {
+    expect(composeTriageLine(verdict({ overall: "B", vetoes: ["scam_price"] }))).toContain("Descártalo");
   });
 });
 

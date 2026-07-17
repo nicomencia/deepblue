@@ -7,6 +7,8 @@
  * Variety is seeded, never random: same input, same draft, testable.
  */
 
+import type { ConfidenceVerdict } from "./domain.js";
+
 /** Wallapop chat accepts long texts, but sellers don't read them. */
 const MAX_OPENING_QUESTIONS = 3;
 
@@ -76,6 +78,38 @@ export function composeOpeningMessage(input: OpeningMessageInput): string {
     "",
     seedPick(OPENER_CLOSINGS, `${seed}|opener-closing`),
   ].join("\n");
+}
+
+/**
+ * One-phrase triage for emails: with many candidates arriving, the reader
+ * needs an instant "pursue this or wait for the next one". Deterministic
+ * from the verdict — grade decides the posture, worst-case-over-budget
+ * softens a C into a conditional.
+ */
+export function composeTriageLine(verdict: ConfidenceVerdict): string {
+  if (verdict.vetoes?.length) {
+    return "Descártalo: hay vetos activos (posible estafa o fallo crítico confirmado).";
+  }
+  const exposure = verdict.repairExposureEur;
+  const exposureTxt = exposure
+    ? ` (~${exposure.min.toLocaleString("es-ES")}–${exposure.max.toLocaleString("es-ES")} € en juego)`
+    : "";
+  switch (verdict.overall) {
+    case "A":
+      return "Candidato excelente: contacta hoy mismo — así salen muy pocos.";
+    case "B":
+      return "Buen candidato: merece escribir al vendedor ya y empezar a verificar.";
+    case "C":
+      // The worst-case-over-budget phrasing is set in evaluate.ts; its
+      // presence marks the leads where the gamble outgrows the wallet.
+      return verdict.budgetNote?.includes("por encima de tu presupuesto")
+        ? `Solo sigue si el vendedor va descartando riesgos${exposureTxt}; si no responde claro, espera otro.`
+        : "Candidato razonable: un par de preguntas al vendedor lo confirman o lo descartan.";
+    case "D":
+      return "Flojo: no inviertas tiempo salvo bajada fuerte de precio.";
+    case "E":
+      return "Malo: pasa de este y espera al siguiente.";
+  }
 }
 
 const NUDGES = [

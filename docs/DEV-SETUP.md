@@ -122,6 +122,14 @@ anuncios, digest con suelo de nota + alertas A/B sin duplicados, dossiers
 en la página del lead), tabs por búsqueda, página Actividad, descubrimiento de
 modelos y adopción manual de anuncios con dossier-first. 77 tests verdes.
 
+**Cambio 2026-07-17 — frase de triaje en alertas y digest.**
+`composeTriageLine(verdict)` (core, determinista, testeada): una frase por
+anuncio que responde «¿sigo con este o espero otro?» — A/B empujan a
+contactar, C condiciona a que el vendedor descarte riesgos cuando el peor
+caso supera el presupuesto (cita la exposición), D/E dicen esperar, y los
+vetos mandan descartar. Va tras la nota en la alerta instantánea (texto y
+HTML) y como primera línea de cada candidato en el digest.
+
 **Cambio 2026-07-17 — alertas de email sin lista de preguntas.** Las
 alertas instantáneas de shortlist llevan solo el resumen del lead (título,
 specs, foto, nota, exposición, enlaces) — las «preguntas clave» sobraban:
