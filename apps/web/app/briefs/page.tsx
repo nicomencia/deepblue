@@ -1,13 +1,21 @@
 import { briefs, leads } from "@deepblue/db";
 import { desc, eq, sql } from "drizzle-orm";
+import Link from "next/link";
 import { getDb } from "../../lib/db";
 import { fmtEur } from "../../lib/ui";
+import { adoptAd } from "../actions";
+import { AdoptSubmit } from "../adopt-submit";
 import { createBrief, deleteBrief, setBriefStatus, toggleBriefLimit } from "./actions";
 import { ConfirmDelete } from "./confirm-delete";
 
 export const dynamic = "force-dynamic";
 
-export default async function BriefsPage() {
+export default async function BriefsPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ adopted?: string }>;
+}) {
+  const { adopted } = await searchParams;
   const db = await getDb();
 
   const rows = await db
@@ -24,6 +32,55 @@ export default async function BriefsPage() {
   return (
     <main style={{ maxWidth: 860, margin: "0 auto", padding: "2rem 1.5rem" }}>
       <h1 style={{ fontSize: "1.2rem" }}>Búsquedas</h1>
+
+      {adopted === "queued" && (
+        <p style={{ ...banner, borderColor: "var(--grade-a)", color: "var(--grade-a)" }}>
+          Anuncio en cola ✓ — el runner lo analizará en ~1 minuto y aparecerá como lead en{" "}
+          <Link href="/">el panel</Link>. Progreso en <Link href="/activity">Actividad</Link>.
+        </p>
+      )}
+      {adopted === "invalid" && (
+        <p style={{ ...banner, borderColor: "var(--grade-e)", color: "var(--grade-e)" }}>
+          URL no reconocida — pega el enlace completo de un anuncio de Wallapop
+          (es.wallapop.com/item/…).
+        </p>
+      )}
+
+      {/* Adopt a hand-found ad: analyzed, tracked and questioned like any lead */}
+      <details style={{ ...card, padding: "0.6rem 0.9rem" }}>
+        <summary style={{ cursor: "pointer", fontSize: "0.9rem", fontWeight: 600 }}>
+          ＋ Adoptar un anuncio que has encontrado tú
+        </summary>
+        <form
+          action={adoptAd}
+          style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap", marginTop: "0.6rem" }}
+        >
+          <input
+            name="url"
+            required
+            placeholder="https://es.wallapop.com/item/…"
+            style={{ ...inp, width: "auto", flex: "2 1 320px" }}
+          />
+          <input
+            name="maxPriceEur"
+            placeholder="Tu precio máx (€)"
+            style={{ ...inp, width: "auto", flex: "1 1 140px" }}
+          />
+          <select name="briefId" style={{ ...inp, width: "auto", flex: "1 1 160px" }} defaultValue="auto">
+            <option value="auto">Búsqueda: automática</option>
+            {rows.map(({ brief }) => (
+              <option key={brief.id} value={brief.id}>
+                {brief.name}
+              </option>
+            ))}
+          </select>
+          <AdoptSubmit style={{ ...btn, fontWeight: 600 }} />
+        </form>
+        <p style={{ color: "var(--ink-muted)", fontSize: "0.8rem", margin: "0.4rem 0 0" }}>
+          El runner analizará el anuncio en su siguiente ciclo (~1 min); aparecerá como lead
+          con veredicto completo y seguimiento de vida del anuncio.
+        </p>
+      </details>
 
       {rows.map(({ brief, shortlisted, total }) => {
         const c = brief.criteria;
@@ -253,4 +310,11 @@ const btn: React.CSSProperties = {
   cursor: "pointer",
   font: "inherit",
   fontSize: "0.85rem",
+};
+const banner: React.CSSProperties = {
+  border: "1px solid",
+  borderRadius: 8,
+  padding: "0.5rem 0.8rem",
+  fontSize: "0.85rem",
+  margin: "0 0 1rem",
 };

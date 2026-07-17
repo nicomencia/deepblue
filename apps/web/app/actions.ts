@@ -21,7 +21,8 @@ export async function adoptAd(formData: FormData): Promise<void> {
     briefId: briefId && briefId !== "auto" ? briefId : undefined,
   });
   revalidatePath("/");
+  revalidatePath("/briefs");
   revalidatePath("/activity");
-  // Feedback banner on the dashboard (redirect must stay outside try/catch).
-  redirect(result.ok ? "/?adopted=queued" : "/?adopted=invalid");
+  // Feedback banner on Búsquedas, where the form lives (redirect stays outside try/catch).
+  redirect(result.ok ? "/briefs?adopted=queued" : "/briefs?adopted=invalid");
 }

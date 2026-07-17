@@ -3,18 +3,15 @@ import { and, asc, count, desc, eq, ne, sql } from "drizzle-orm";
 import Link from "next/link";
 import { getDb } from "../lib/db";
 import { fmtEur, fmtKm, gradeVar } from "../lib/ui";
-import { adoptAd } from "./actions";
-import { AdoptSubmit } from "./adopt-submit";
-
 export const dynamic = "force-dynamic";
 
 export default async function Home({
   searchParams,
 }: {
-  searchParams: Promise<{ brief?: string; adopted?: string }>;
+  searchParams: Promise<{ brief?: string }>;
 }) {
   const db = await getDb();
-  const { brief: briefParam, adopted } = await searchParams;
+  const { brief: briefParam } = await searchParams;
 
   const allBriefs = await db
     .select({ id: briefs.id, name: briefs.name })
@@ -63,63 +60,6 @@ export default async function Home({
         {rows.length} lead{rows.length === 1 ? "" : "s"} activos
         {activeBrief ? ` en «${activeBrief.name}»` : ""}, ordenados por puntuación
       </p>
-
-      {adopted === "queued" && (
-        <p style={{ ...banner, borderColor: "var(--grade-a)", color: "var(--grade-a)" }}>
-          Anuncio en cola ✓ — el runner lo analizará en ~1 minuto y aparecerá aquí como lead.
-          Puedes seguir el progreso en <Link href="/activity">Actividad</Link>.
-        </p>
-      )}
-      {adopted === "invalid" && (
-        <p style={{ ...banner, borderColor: "var(--grade-e)", color: "var(--grade-e)" }}>
-          URL no reconocida — pega el enlace completo de un anuncio de Wallapop
-          (es.wallapop.com/item/…).
-        </p>
-      )}
-
-      {/* Adopt a hand-found ad: analyzed, tracked and questioned like any lead */}
-      <details
-        style={{
-          margin: "0 0 1rem",
-          background: "var(--card)",
-          border: "1px solid var(--border)",
-          borderRadius: 8,
-          padding: "0.6rem 0.9rem",
-        }}
-      >
-        <summary style={{ cursor: "pointer", fontSize: "0.9rem", fontWeight: 600 }}>
-          ＋ Adoptar un anuncio que has encontrado tú
-        </summary>
-        <form
-          action={adoptAd}
-          style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap", marginTop: "0.6rem" }}
-        >
-          <input
-            name="url"
-            required
-            placeholder="https://es.wallapop.com/item/…"
-            style={{ ...adoptInput, flex: "2 1 320px" }}
-          />
-          <input
-            name="maxPriceEur"
-            placeholder="Tu precio máx (€)"
-            style={{ ...adoptInput, flex: "1 1 140px" }}
-          />
-          <select name="briefId" style={{ ...adoptInput, flex: "1 1 160px" }} defaultValue="auto">
-            <option value="auto">Búsqueda: automática</option>
-            {allBriefs.map((b) => (
-              <option key={b.id} value={b.id}>
-                {b.name}
-              </option>
-            ))}
-          </select>
-          <AdoptSubmit style={adoptBtn} />
-        </form>
-        <p style={{ color: "var(--ink-muted)", fontSize: "0.8rem", margin: "0.4rem 0 0" }}>
-          El runner analizará el anuncio en su siguiente ciclo (~1 min); aparecerá como lead
-          con veredicto completo y seguimiento de vida del anuncio.
-        </p>
-      </details>
 
       {rows.length === 0 ? (
         <p style={{ color: "var(--ink-muted)" }}>
@@ -224,29 +164,3 @@ const tab = (active: boolean): React.CSSProperties => ({
 
 const tabCount: React.CSSProperties = { color: "var(--ink-muted)", fontWeight: 400 };
 
-const banner: React.CSSProperties = {
-  border: "1px solid",
-  borderRadius: 8,
-  padding: "0.5rem 0.8rem",
-  fontSize: "0.85rem",
-  margin: "0 0 1rem",
-};
-const adoptInput: React.CSSProperties = {
-  padding: "0.4rem 0.6rem",
-  borderRadius: 6,
-  border: "1px solid var(--border)",
-  background: "transparent",
-  color: "inherit",
-  font: "inherit",
-  fontSize: "0.85rem",
-};
-const adoptBtn: React.CSSProperties = {
-  padding: "0.4rem 1rem",
-  borderRadius: 6,
-  border: "1px solid var(--border)",
-  background: "transparent",
-  color: "inherit",
-  fontSize: "0.85rem",
-  fontWeight: 600,
-  cursor: "pointer",
-};

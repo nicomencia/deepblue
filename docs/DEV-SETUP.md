@@ -122,6 +122,12 @@ anuncios, digest con suelo de nota + alertas A/B sin duplicados, dossiers
 en la página del lead), tabs por búsqueda, página Actividad, descubrimiento de
 modelos y adopción manual de anuncios con dossier-first. 77 tests verdes.
 
+**Cambio 2026-07-17 — «Adoptar un anuncio» vive en Búsquedas.** El
+formulario de adopción (pegar URL de Wallapop) se muda del panel de leads a
+/briefs, junto a la creación de búsquedas — adoptar un anuncio es iniciar
+una caza, no consultar resultados. Los banners de feedback y el redirect de
+`adoptAd` van con él.
+
 **Cambio 2026-07-17 — regla: no pedir fotos por el chat.** El chat de
 Wallapop no permite enviar fotos ni archivos, así que ninguna pregunta
 compuesta debe pedirlas (regla en el prompt de `conversationPrompt`): se
