@@ -254,6 +254,58 @@ describe("composeFollowUpMessage", () => {
     expect(many).toMatch(/par de cosas|par de dudas/i);
   });
 
+  const offerFixture = {
+    askingPriceEur: 15000,
+    maxBudgetEur: 14500,
+    repairExposureEur: { min: 2150, max: 4950 },
+    pendingRisks: ["1.0 EcoBoost: pérdida de refrigerante por el manguito degas → culata"],
+  };
+
+  it("merges the offer into the last warm batch of questions", () => {
+    const followUp = composeFollowUpMessage({
+      openQuestions: ["¿En qué taller Ford lo llevaban?"],
+      alreadyAsked: ["Hola! Me interesa el coche."],
+      sellerReplies: 3,
+      offer: offerFixture,
+    });
+    expect(followUp).toContain("En qué taller Ford lo llevaban?");
+    expect(followUp).toContain("13.200");
+    // The visit is only contingent on the number — never promised first.
+    expect(followUp).not.toContain("Con esto ya me decido");
+    expect(followUp).not.toMatch(/[¿¡]/);
+  });
+
+  it("does not anchor a price mid-interrogation", () => {
+    const followUp = composeFollowUpMessage({
+      openQuestions: ["¿una?", "¿dos?", "¿tres?", "¿cuatro?", "¿cinco?"],
+      alreadyAsked: ["Hola! Me interesa el coche."],
+      sellerReplies: 3,
+      offer: offerFixture,
+    });
+    expect(followUp).not.toContain("13.200");
+    // …and while negotiation is pending it never promises the visit either.
+    expect(followUp).not.toMatch(/me decido|pasarme a verlo|hablamos de verlo/);
+  });
+
+  it("does not negotiate while the conversation is still cold", () => {
+    const followUp = composeFollowUpMessage({
+      openQuestions: ["¿Tiene ITV en vigor?"],
+      alreadyAsked: ["Hola! Me interesa el coche."],
+      sellerReplies: 1,
+      offer: offerFixture,
+    });
+    expect(followUp).not.toContain("13.200");
+  });
+
+  it("still promises the visit when there is nothing to negotiate", () => {
+    const followUp = composeFollowUpMessage({
+      openQuestions: ["¿Tiene ITV en vigor?"],
+      alreadyAsked: ["Hola! Me interesa el coche."],
+      sellerReplies: 3,
+    });
+    expect(followUp).toMatch(/verlo|pasarme/);
+  });
+
   it("does not close with the same word as the opener's default", () => {
     const followUp = composeFollowUpMessage({
       openQuestions: ["¿Tiene ITV en vigor?"],

@@ -178,6 +178,12 @@ export interface FollowUpInput {
   alreadyAsked: string[];
   /** Seller replies received so far — interest warms up as they answer. */
   sellerReplies?: number;
+  /**
+   * When a price offer is justified, it merges into the follow-up: the
+   * closing becomes the proposal, so we never promise a visit or a decision
+   * BEFORE negotiating — the visit is offered contingent on the number.
+   */
+  offer?: Omit<OfferMessageInput, "seed">;
 }
 
 /**
@@ -190,10 +196,10 @@ export function composeFollowUpMessage(input: FollowUpInput): string | null {
   // Strip ¿¡ on both sides: messages sent before the informal-tone change
   // carry the marks mid-sentence and must still count as asked.
   const asked = input.alreadyAsked.join("\n").toLowerCase().replace(/[¿¡]/g, "");
-  const remaining = input.openQuestions
+  const remainingAll = input.openQuestions
     .map(asQuestion)
-    .filter((q) => q && !asked.includes(q.toLowerCase()))
-    .slice(0, MAX_OPENING_QUESTIONS);
+    .filter((q) => q && !asked.includes(q.toLowerCase()));
+  const remaining = remainingAll.slice(0, MAX_OPENING_QUESTIONS);
   if (remaining.length === 0) return null;
 
   const replies = input.sellerReplies ?? 0;
@@ -201,7 +207,24 @@ export function composeFollowUpMessage(input: FollowUpInput): string | null {
   const seed = `${asked.length}|${replies}|${remaining[0] ?? ""}`;
   const intro = seedPick(warm ? FOLLOWUP_INTROS_WARM : FOLLOWUP_INTROS_EARLY, seed);
   const link = seedPick(remaining.length === 1 ? FOLLOWUP_LINKS_ONE : FOLLOWUP_LINKS_MANY, `${seed}|link`);
-  const closing = seedPick(warm ? FOLLOWUP_CLOSINGS_WARM : FOLLOWUP_CLOSINGS_EARLY, `${seed}|followup-closing`);
+
+  // A justified offer replaces the closing — but only once the conversation
+  // is warm AND this batch asks the LAST remaining questions: anchoring a
+  // price mid-interrogation is premature, and promising a visit before
+  // negotiating gives the leverage away. "Me acerco a verlo" only ever
+  // appears contingent on the number.
+  const lastBatch = remainingAll.length <= MAX_OPENING_QUESTIONS;
+  const offerPart =
+    input.offer && warm && lastBatch ? composeOfferClosing(input.offer, seed) : null;
+  if (offerPart) return [`${intro} ${link}`, ...remaining, "", offerPart].join("\n");
+
+  // Visit-promising warm closings ("con esto ya me decido y me paso a
+  // verlo") only when there is NOTHING to negotiate: with an offer pending,
+  // announcing the visit first would concede the price.
+  const closing = seedPick(
+    warm && !input.offer ? FOLLOWUP_CLOSINGS_WARM : FOLLOWUP_CLOSINGS_EARLY,
+    `${seed}|followup-closing`,
+  );
   return [`${intro} ${link}`, ...remaining, "", closing].join("\n");
 }
 
@@ -262,6 +285,44 @@ export interface OfferMessageInput extends OfferInput {
   seed: string;
 }
 
+/** The justification for the number, from the data at hand. */
+function offerWhy(input: Omit<OfferMessageInput, "seed">, compact: boolean): string {
+  const risks = (input.pendingRisks ?? []).map(shortRisk).slice(0, 2);
+  const exposure = input.repairExposureEur;
+  const overBudget = input.askingPriceEur > input.maxBudgetEur;
+
+  if (risks.length > 0 && exposure) {
+    const list = risks.join(" y ");
+    const band = `entre ${exposure.min.toLocaleString("es-ES")} y ${exposure.max.toLocaleString("es-ES")} €`;
+    return compact
+      ? `Eso sí, con lo que queda sin comprobar (${list}) me tocaría asumir ${band} de posibles arreglos.`
+      : `Lo único que me frena es lo que queda sin comprobar (${list}): por lo que suele costar arreglarlo hablamos de ${band} que tendría que asumir yo.`;
+  }
+  if (overBudget) {
+    const asking = input.askingPriceEur.toLocaleString("es-ES");
+    return compact
+      ? `Eso sí, ${asking} € se me va un poco de lo que tenía pensado.`
+      : `Lo único es que ${asking} € se me va de lo que tenía pensado gastarme.`;
+  }
+  return compact ? "" : "Le he echado números con calma para dejarlo a punto.";
+}
+
+/**
+ * Compact offer paragraph used as the CLOSING of a follow-up: justification
+ * plus the number, visit only contingent on it. Null when there is nothing
+ * to negotiate.
+ */
+function composeOfferClosing(input: Omit<OfferMessageInput, "seed">, seed: string): string | null {
+  const offer = computeOfferEur(input);
+  if (offer === null) return null;
+  const why = offerWhy(input, true);
+  const line = seedPick(OFFER_LINES, `${seed}|offer|${offer}`).replace(
+    "{price}",
+    offer.toLocaleString("es-ES"),
+  );
+  return why ? `${why} ${line}` : line;
+}
+
 /**
  * A data-justified price proposal for when every question has been asked and
  * the conversation is warm: state what the car has going for it, name what is
@@ -272,27 +333,12 @@ export function composeOfferMessage(input: OfferMessageInput): string | null {
   const offer = computeOfferEur(input);
   if (offer === null) return null;
 
-  const risks = (input.pendingRisks ?? []).map(shortRisk).slice(0, 2);
-  const exposure = input.repairExposureEur;
-  const overBudget = input.askingPriceEur > input.maxBudgetEur;
-
-  let why: string;
-  if (risks.length > 0 && exposure) {
-    const list = risks.join(" y ");
-    why =
-      `Lo único que me frena es lo que queda sin comprobar (${list}): ` +
-      `por lo que suele costar arreglarlo hablamos de entre ${exposure.min.toLocaleString("es-ES")} ` +
-      `y ${exposure.max.toLocaleString("es-ES")} € que tendría que asumir yo.`;
-  } else if (overBudget) {
-    why = `Lo único es que ${input.askingPriceEur.toLocaleString("es-ES")} € se me va de lo que tenía pensado gastarme.`;
-  } else {
-    why = "Le he echado números con calma para dejarlo a punto.";
-  }
-
   const seed = `${input.seed}|offer|${offer}`;
   const offerLine = seedPick(OFFER_LINES, seed).replace(
     "{price}",
     offer.toLocaleString("es-ES"),
   );
-  return [`${seedPick(OFFER_INTROS, `${seed}|intro`)} ${why}`, "", offerLine].join("\n");
+  return [`${seedPick(OFFER_INTROS, `${seed}|intro`)} ${offerWhy(input, false)}`, "", offerLine].join(
+    "\n",
+  );
 }

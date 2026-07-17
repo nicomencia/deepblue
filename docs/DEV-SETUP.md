@@ -122,6 +122,21 @@ anuncios, digest con suelo de nota + alertas A/B sin duplicados, dossiers
 en la página del lead), tabs por búsqueda, página Actividad, descubrimiento de
 modelos y adopción manual de anuncios con dossier-first. 77 tests verdes.
 
+**Cambio 2026-07-17 — negociar antes de prometer la visita.** Feedback del
+usuario: el cierre cálido «Con esto ya me decido y vemos cuándo puedo pasarme
+a verlo» regala la palanca — anunciar la visita antes de negociar concede el
+precio. Ahora: (1) cuando quedan pocas preguntas Y hay propuesta justificada
+(`computeOfferEur` ≠ null), la oferta se FUSIONA en el seguimiento — el
+cierre pasa a ser la justificación compacta + la cifra, y «me acerco a
+verlo» solo aparece condicionado al número; (2) la fusión exige conversación
+cálida (≥2 respuestas) y que el lote pregunte las ÚLTIMAS dudas — anclar
+precio a mitad de interrogatorio es prematuro; (3) con negociación pendiente
+los cierres cálidos que prometen visita/decisión NO se usan (caen al pool
+neutro); solo se prometen cuando no hay nada que negociar. El botón:
+«✍️ Generar seguimiento + propuesta de precio (N €)» cuando fusiona.
+Validado en vivo con el Focus: todo respondido → propuesta autónoma de
+13.200 € citando manguito degas y suspensión (140 tests).
+
 **Cambio 2026-07-17 — polling de respuestas adaptativo + prioridad por nota.**
 El sweep de respuestas ya no usa un cooldown fijo de 45 min: cada
 conversación tiene su propio ritmo (`replyPollCooldownMinutes`, core puro).

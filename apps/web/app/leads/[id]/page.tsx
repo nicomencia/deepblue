@@ -130,6 +130,19 @@ export default async function LeadDetail({
   // waiting → a nudge (quiet ≥2 days). Always behind the same button:
   // nothing is pre-composed until the user asks for it.
   const hasExchange = lastExchange !== undefined;
+  const askingPriceEur = listing.cashPriceEur ?? listing.priceEur;
+  const offerInput =
+    askingPriceEur != null
+      ? {
+          askingPriceEur,
+          maxBudgetEur: brief.hardLimits.maxPriceEur,
+          repairExposureEur: lead.verdict?.repairExposureEur,
+          pendingRisks: lead.verdict?.issues
+            ?.filter((i) => i.status === "unconfirmed")
+            .map((i) => i.title),
+        }
+      : undefined;
+  const offerEur = offerInput ? computeOfferEur(offerInput) : null;
   const followUp =
     hasExchange && !waitingForSeller
       ? composeFollowUpMessage({
@@ -140,15 +153,8 @@ export default async function LeadDetail({
           sellerReplies: conversation.filter(
             (m) => m.direction === "inbound" && m.status === "received",
           ).length,
-        })
-      : null;
-  const askingPriceEur = listing.cashPriceEur ?? listing.priceEur;
-  const offerEur =
-    hasExchange && !waitingForSeller && !followUp && askingPriceEur != null
-      ? computeOfferEur({
-          askingPriceEur,
-          maxBudgetEur: brief.hardLimits.maxPriceEur,
-          repairExposureEur: lead.verdict?.repairExposureEur,
+          // A justified offer rides along: negotiate before promising a visit.
+          offer: offerEur !== null ? offerInput : undefined,
         })
       : null;
   const suggestion = !hasExchange
@@ -162,25 +168,20 @@ export default async function LeadDetail({
         ? composeNudgeMessage(lead.id)
         : null
       : (followUp ??
-        (offerEur !== null && askingPriceEur != null
-          ? composeOfferMessage({
-              askingPriceEur,
-              maxBudgetEur: brief.hardLimits.maxPriceEur,
-              repairExposureEur: lead.verdict?.repairExposureEur,
-              pendingRisks: lead.verdict?.issues
-                ?.filter((i) => i.status === "unconfirmed")
-                .map((i) => i.title),
-              seed: lead.id,
-            })
+        (offerEur !== null && offerInput
+          ? composeOfferMessage({ ...offerInput, seed: lead.id })
           : null));
   const suggestionQuestions = suggestion?.split("\n").filter((l) => l.trim().endsWith("?")).length ?? 0;
+  const offerTxt = offerEur !== null ? `propuesta de precio (${offerEur.toLocaleString("es-ES")} €)` : "";
   const suggestLabel = !hasExchange
     ? `✍️ Generar mensaje inicial${suggestionQuestions > 0 ? ` (${suggestionQuestions} pregunta${suggestionQuestions === 1 ? "" : "s"})` : ""}`
     : waitingForSeller
       ? "✍️ Generar recordatorio suave (sin preguntas nuevas)"
       : followUp
-        ? `✍️ Generar seguimiento (${suggestionQuestions} pregunta${suggestionQuestions === 1 ? "" : "s"} sin hacer)`
-        : `✍️ Generar propuesta de precio (${offerEur?.toLocaleString("es-ES")} €)`;
+        ? offerEur !== null
+          ? `✍️ Generar seguimiento + ${offerTxt}`
+          : `✍️ Generar seguimiento (${suggestionQuestions} pregunta${suggestionQuestions === 1 ? "" : "s"} sin hacer)`
+        : `✍️ Generar ${offerTxt}`;
 
   // High-signal import warnings belong next to the title, not buried in a
   // card. Stored facts (user-verified or ingest-detected) beat text inference.
