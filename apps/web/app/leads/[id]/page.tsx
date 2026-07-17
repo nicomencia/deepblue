@@ -542,7 +542,8 @@ function ImportFactRow({
     { value: "unknown", text: "¿?", active: stored === null },
   ];
   return (
-    <span style={{ display: "flex", gap: "0.35rem", alignItems: "center", fontSize: "0.83rem" }}>
+    // div, not span: a form may not nest inside phrasing content (hydration error).
+    <div style={{ display: "flex", gap: "0.35rem", alignItems: "center", fontSize: "0.83rem" }}>
       <span style={{ color: "var(--ink-muted)" }}>{label}:</span>
       {options.map((o) => (
         <form key={o.value} action={setImportFact} style={{ display: "inline" }}>
@@ -567,7 +568,7 @@ function ImportFactRow({
           </button>
         </form>
       ))}
-    </span>
+    </div>
   );
 }
 

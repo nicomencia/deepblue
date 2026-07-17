@@ -137,7 +137,7 @@ export default async function DossiersPage() {
                   {c.sources.length} fuentes · creado {fmtDate(d.createdAt)}
                 </p>
               </div>
-              <span style={{ display: "flex", gap: "0.4rem", alignItems: "start" }}>
+              <div style={{ display: "flex", gap: "0.4rem", alignItems: "start" }}>
                 {draft && (
                   <>
                     <form action={approveDossier}>
@@ -170,7 +170,7 @@ export default async function DossiersPage() {
                     </button>
                   </form>
                 )}
-              </span>
+              </div>
             </div>
 
             <details style={{ marginTop: "0.6rem" }}>

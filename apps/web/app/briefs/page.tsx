@@ -101,8 +101,9 @@ export default async function BriefsPage({
                   {" · riesgo "}
                   {c.riskTolerance ?? "medium"} · {shortlisted}/{total} leads vivos
                 </p>
-                {/* Import hard limits: toggling re-evaluates the brief's leads. */}
-                <p style={{ margin: "0.4rem 0 0", display: "flex", gap: "0.4rem", flexWrap: "wrap" }}>
+                {/* Import hard limits: toggling re-evaluates the brief's leads.
+                    div, not p: a form may not nest inside a p (hydration error). */}
+                <div style={{ margin: "0.4rem 0 0", display: "flex", gap: "0.4rem", flexWrap: "wrap" }}>
                   <LimitToggle
                     briefId={brief.id}
                     field="noRhd"
@@ -115,11 +116,11 @@ export default async function BriefsPage({
                     enabled={brief.hardLimits.requireSpanishPlates === true}
                     label="Sin matricular en España"
                   />
-                </p>
+                </div>
               </div>
               {/* One form per action: React server actions drop the submitter
                   button's own name/value, so status must be a hidden input. */}
-              <span style={{ display: "flex", gap: "0.4rem", alignItems: "start" }}>
+              <div style={{ display: "flex", gap: "0.4rem", alignItems: "start" }}>
                 <form action={setBriefStatus}>
                   <input type="hidden" name="id" value={brief.id} />
                   <input
@@ -138,7 +139,7 @@ export default async function BriefsPage({
                     message={`¿Eliminar «${brief.name}» y sus ${total} leads? Los anuncios del corpus se conservan. No se puede deshacer.`}
                   />
                 </form>
-              </span>
+              </div>
             </div>
           </div>
         );
