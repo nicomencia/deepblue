@@ -122,6 +122,27 @@ anuncios, digest con suelo de nota + alertas A/B sin duplicados, dossiers
 en la página del lead), tabs por búsqueda, página Actividad, descubrimiento de
 modelos y adopción manual de anuncios con dossier-first. 77 tests verdes.
 
+**Cambio 2026-07-17 — respuesta a contraofertas + carril LLM de prosa.** El
+compositor determinista repetía la oferta ya rechazada cuando el vendedor
+contraofertaba. Ahora: (1) la lectura de conversación OBSERVA la negociación
+(`negotiation: { ourLastOfferEur, sellerLastOfferEur, quote }` en el schema;
+el prompt instruye solo números literales del chat); (2) el código DECIDE
+(`respondToCounterEur`, core, testeado): acepta si el vendedor baja a
+nuestra cifra o queda a ≤300 € bajo presupuesto; si no, parte la diferencia
+redondeada a centenas con tope duro en `hardLimits.maxPriceEur`; si no hay
+recorrido, mantiene la oferta («stand»). Una contraoferta viva tiene
+prioridad sobre preguntas y ofertas nuevas en la cascada del botón
+(«✍️ Generar contraoferta/aceptación/mantener oferta (N €)»);
+`composeCounterReply` es el texto determinista (aceptar sí promete visita:
+el trato está hecho). (3) Carril de prosa LLM (`lib/draft-message.ts`,
+modelo barato `DEEPBLUE_DRAFT_MODEL` ?? Haiku 4.5): con `?sugerir=1` y
+`ANTHROPIC_API_KEY`, Haiku redacta el mensaje sobre el borrador base con
+validación en código — debe contener el precio EXACTO decidido, caber en
+300 chars, sin ¿¡, sin cifras en € que el código no haya decidido; cualquier
+fallo cae al determinista. Sin API key es passthrough. El modelo nunca elige
+números. Validado en vivo: contraoferta de Paula 14.500 → botón «Generar
+contraoferta (13.900 €)» (151 tests).
+
 **Cambio 2026-07-17 — límite de 300 caracteres del chat de Wallapop.** El
 compositor del chat es un `<textarea maxlength="300">` (medido en vivo con
 `apps/runner/src/probe-limit.ts`): la primera propuesta de precio (409

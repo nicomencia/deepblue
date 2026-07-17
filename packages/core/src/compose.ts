@@ -295,6 +295,69 @@ export function computeOfferEur(input: OfferInput): number | null {
   return offer >= input.askingPriceEur ? null : offer;
 }
 
+export interface CounterInput {
+  /** The last number we put on the table. */
+  ourLastOfferEur: number;
+  /** The seller's counter. */
+  sellerCounterEur: number;
+  /** The user's hard cap — accept/counter NEVER exceeds it. */
+  maxBudgetEur: number;
+}
+
+export type CounterDecision =
+  | { action: "accept"; priceEur: number }
+  | { action: "counter"; priceEur: number }
+  | { action: "stand"; priceEur: number };
+
+/**
+ * Answer a seller's counter-offer, deterministically. Accept when they came
+ * down to (or under) something we can call a win: at/below our number, or
+ * within one small step (≤300 €) of it while under budget. Otherwise split
+ * the difference, rounded to hundreds and hard-capped at the budget; if the
+ * split can't improve on our last number (their counter above budget with no
+ * room left), stand on what we already offered. The model never chooses
+ * these numbers — a charming seller cannot talk code up.
+ */
+export function respondToCounterEur(input: CounterInput): CounterDecision {
+  const { ourLastOfferEur: ours, sellerCounterEur: theirs, maxBudgetEur: cap } = input;
+  if (theirs <= ours) return { action: "accept", priceEur: theirs };
+  if (theirs <= cap && theirs - ours <= 300) return { action: "accept", priceEur: theirs };
+
+  const split = Math.min(Math.round((ours + theirs) / 2 / 100) * 100, cap);
+  if (split <= ours) return { action: "stand", priceEur: ours };
+  return { action: "counter", priceEur: Math.min(split, theirs) };
+}
+
+const ACCEPT_LINES = [
+  "Venga, hecho: {price} € y nos lo quedamos. Cuándo te viene bien que me pase a verlo?",
+  "Trato hecho en {price} €. Dime cuándo puedo pasarme a verlo y lo cerramos.",
+  "Vale, {price} € me cuadra. Cuándo podría ir a verlo?",
+];
+const COUNTER_LINES = [
+  "Te entiendo, pero con lo pendiente aún me queda margen que cubrir. Nos vemos en {price} € y voy a verlo con la factura delante. Te va?",
+  "Uf, es que ahí no me salen los números con lo que hay que repasar. Lo dejamos en {price} € y me acerco a verlo. Cómo lo ves?",
+  "Casi! Por lo que tendría que meterle, {price} € es donde puedo llegar. Si te vale, me paso a verlo cuando digas.",
+];
+const STAND_LINES = [
+  "Lo siento pero no me salen los números por encima de lo que te dije: {price} € es mi tope de verdad. Si te encaja, me acerco a verlo cuando quieras.",
+  "Te entiendo, pero mi máximo real son los {price} € que te decía. Ahí lo dejo por si te cuadra, y voy a verlo cuando te venga bien.",
+];
+
+/**
+ * Deterministic reply to a counter-offer — the fallback when no LLM drafts
+ * the prose (and the guarantee that the NUMBER always comes from code).
+ * Accepting may finally promise the visit: the deal is done.
+ */
+export function composeCounterReply(input: CounterInput & { seed: string }): string {
+  const decision = respondToCounterEur(input);
+  const pool =
+    decision.action === "accept" ? ACCEPT_LINES : decision.action === "counter" ? COUNTER_LINES : STAND_LINES;
+  return seedPick(pool, `${input.seed}|counter|${decision.priceEur}`).replace(
+    "{price}",
+    decision.priceEur.toLocaleString("es-ES"),
+  );
+}
+
 const OFFER_INTROS = [
   "Gracias por contestar a todo! La verdad es que el coche me encaja.",
   "Pues con todo lo que me has contado el coche me convence.",

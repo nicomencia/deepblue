@@ -1,12 +1,14 @@
 import { describe, expect, it } from "vitest";
 import {
   CHAT_MAX_CHARS,
+  composeCounterReply,
   composeFollowUpMessage,
   composeNudgeMessage,
   composeOfferMessage,
   composeOpeningMessage,
   composeTriageLine,
   computeOfferEur,
+  respondToCounterEur,
 } from "./compose.js";
 import type { ConfidenceVerdict } from "./domain.js";
 
@@ -234,6 +236,75 @@ describe("composeOfferMessage", () => {
     expect(
       composeOfferMessage({ askingPriceEur: 13000, maxBudgetEur: 14500, seed: "x" }),
     ).toBeNull();
+  });
+});
+
+describe("respondToCounterEur", () => {
+  it("splits the difference on the real Ford counter", () => {
+    // We offered 13.200, she countered 14.500, cap 14.500 → split 13.900.
+    expect(
+      respondToCounterEur({ ourLastOfferEur: 13200, sellerCounterEur: 14500, maxBudgetEur: 14500 }),
+    ).toEqual({ action: "counter", priceEur: 13900 });
+  });
+
+  it("accepts when the seller comes down to our number or below", () => {
+    expect(
+      respondToCounterEur({ ourLastOfferEur: 13200, sellerCounterEur: 13000, maxBudgetEur: 14500 }),
+    ).toEqual({ action: "accept", priceEur: 13000 });
+  });
+
+  it("accepts a counter within one small step under budget", () => {
+    expect(
+      respondToCounterEur({ ourLastOfferEur: 13200, sellerCounterEur: 13400, maxBudgetEur: 14500 }),
+    ).toEqual({ action: "accept", priceEur: 13400 });
+  });
+
+  it("never counters above the budget cap", () => {
+    const d = respondToCounterEur({
+      ourLastOfferEur: 14000,
+      sellerCounterEur: 15800,
+      maxBudgetEur: 14500,
+    });
+    expect(d.priceEur).toBeLessThanOrEqual(14500);
+  });
+
+  it("stands on our number when there is no room left under the cap", () => {
+    expect(
+      respondToCounterEur({ ourLastOfferEur: 14500, sellerCounterEur: 15500, maxBudgetEur: 14500 }),
+    ).toEqual({ action: "stand", priceEur: 14500 });
+  });
+});
+
+describe("composeCounterReply", () => {
+  it("carries the code-decided number, fits the chat, stays informal", () => {
+    const msg = composeCounterReply({
+      ourLastOfferEur: 13200,
+      sellerCounterEur: 14500,
+      maxBudgetEur: 14500,
+      seed: "lead-focus",
+    });
+    expect(msg).toContain("13.900");
+    expect(msg.length).toBeLessThanOrEqual(CHAT_MAX_CHARS);
+    expect(msg).not.toMatch(/[¿¡]/);
+    expect(msg).toBe(
+      composeCounterReply({
+        ourLastOfferEur: 13200,
+        sellerCounterEur: 14500,
+        maxBudgetEur: 14500,
+        seed: "lead-focus",
+      }),
+    );
+  });
+
+  it("an acceptance finally proposes the visit", () => {
+    const msg = composeCounterReply({
+      ourLastOfferEur: 13200,
+      sellerCounterEur: 13200,
+      maxBudgetEur: 14500,
+      seed: "x",
+    });
+    expect(msg).toContain("13.200");
+    expect(msg).toMatch(/verlo|pasarme/);
   });
 });
 

@@ -476,6 +476,19 @@ export const conversationReadingPayloadSchema = llmEnrichmentPayloadSchema.exten
       quote: z.string().optional(),
     })
     .optional(),
+  /**
+   * Live negotiation state, read from the transcript: the last number WE put
+   * on the table and the seller's last counter. The reading only OBSERVES —
+   * what to answer (and with which number) is decided by deterministic code
+   * (respondToCounterEur), never by the model.
+   */
+  negotiation: z
+    .object({
+      ourLastOfferEur: z.number().positive().nullable().optional(),
+      sellerLastOfferEur: z.number().positive().nullable().optional(),
+      quote: z.string().optional(),
+    })
+    .optional(),
   escalate: z.boolean(),
   escalateReason: z.string().optional(),
 });

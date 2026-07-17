@@ -117,6 +117,11 @@ Instrucciones:
   sus palabras. Si no tocó ningún riesgo, lista vacía.
 - importFacts: rhd/foreignPlates SOLO si la conversación lo establece
   (p.ej. menciona V5/matrícula UK ⇒ foreignPlates true), con quote.
+- negotiation: si en el chat hay cifras de negociación, rellena
+  ourLastOfferEur (la última cifra que ofreció el COMPRADOR) y
+  sellerLastOfferEur (la última contraoferta del VENDEDOR), con quote.
+  SOLO números que aparezcan literalmente en la conversación — tú observas,
+  la respuesta la decide el código. Si no se ha hablado de precio, omite.
 - factorAdjustments: deltas donde la conversación aporte señal que el anuncio
   no daba (mantenimiento documentado prometido, respuestas evasivas, número de
   propietarios, transparencia del vendedor ⇒ sellerCredibility/unitEvidence).

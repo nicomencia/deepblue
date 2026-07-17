@@ -1,11 +1,13 @@
 import {
   CHAT_MAX_CHARS,
+  composeCounterReply,
   composeFollowUpMessage,
   composeNudgeMessage,
   composeOfferMessage,
   composeOpeningMessage,
   computeOfferEur,
   extractImportSignals,
+  respondToCounterEur,
   type IssueAssessment,
   type IssueFinding,
   type VerdictFactor,
@@ -15,6 +17,7 @@ import { asc, desc, eq } from "drizzle-orm";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getDb } from "../../../lib/db";
+import { draftSellerProse } from "../../../lib/draft-message";
 import { fmtDate, fmtEur, fmtKm, gradeVar } from "../../../lib/ui";
 import {
   approveSellerMessage,
@@ -131,6 +134,21 @@ export default async function LeadDetail({
   // waiting → a nudge (quiet ≥2 days). Always behind the same button:
   // nothing is pre-composed until the user asks for it.
   const hasExchange = lastExchange !== undefined;
+
+  // Live negotiation: the reading OBSERVED both numbers; code decides the
+  // answer. A pending counter takes precedence over questions and fresh
+  // offers — the one wrong move is repeating a number they already refused.
+  const negotiation = lead.chatReading?.negotiation;
+  const counterInput =
+    !waitingForSeller && negotiation?.ourLastOfferEur && negotiation?.sellerLastOfferEur
+      ? {
+          ourLastOfferEur: negotiation.ourLastOfferEur,
+          sellerCounterEur: negotiation.sellerLastOfferEur,
+          maxBudgetEur: brief.hardLimits.maxPriceEur,
+        }
+      : null;
+  const counterDecision = counterInput ? respondToCounterEur(counterInput) : null;
+
   const askingPriceEur = listing.cashPriceEur ?? listing.priceEur;
   const offerInput =
     askingPriceEur != null
@@ -168,21 +186,72 @@ export default async function LeadDetail({
       ? quietMs >= NUDGE_AFTER_MS
         ? composeNudgeMessage(lead.id)
         : null
-      : (followUp ??
-        (offerEur !== null && offerInput
-          ? composeOfferMessage({ ...offerInput, seed: lead.id })
-          : null));
+      : counterInput
+        ? composeCounterReply({ ...counterInput, seed: lead.id })
+        : (followUp ??
+          (offerEur !== null && offerInput
+            ? composeOfferMessage({ ...offerInput, seed: lead.id })
+            : null));
   const suggestionQuestions = suggestion?.split("\n").filter((l) => l.trim().endsWith("?")).length ?? 0;
   const offerTxt = offerEur !== null ? `propuesta de precio (${offerEur.toLocaleString("es-ES")} €)` : "";
+  const counterTxt = counterDecision
+    ? counterDecision.action === "accept"
+      ? `aceptación (${counterDecision.priceEur.toLocaleString("es-ES")} €)`
+      : counterDecision.action === "counter"
+        ? `contraoferta (${counterDecision.priceEur.toLocaleString("es-ES")} €)`
+        : `mantener oferta (${counterDecision.priceEur.toLocaleString("es-ES")} €)`
+    : "";
   const suggestLabel = !hasExchange
     ? `✍️ Generar mensaje inicial${suggestionQuestions > 0 ? ` (${suggestionQuestions} pregunta${suggestionQuestions === 1 ? "" : "s"})` : ""}`
     : waitingForSeller
       ? "✍️ Generar recordatorio suave (sin preguntas nuevas)"
-      : followUp
-        ? offerEur !== null
-          ? `✍️ Generar seguimiento + ${offerTxt}`
-          : `✍️ Generar seguimiento (${suggestionQuestions} pregunta${suggestionQuestions === 1 ? "" : "s"} sin hacer)`
-        : `✍️ Generar ${offerTxt}`;
+      : counterDecision
+        ? `✍️ Generar ${counterTxt}`
+        : followUp
+          ? offerEur !== null
+            ? `✍️ Generar seguimiento + ${offerTxt}`
+            : `✍️ Generar seguimiento (${suggestionQuestions} pregunta${suggestionQuestions === 1 ? "" : "s"} sin hacer)`
+          : `✍️ Generar ${offerTxt}`;
+
+  // The cheap-LLM prose lane: the deterministic text is both the base draft
+  // and the guaranteed fallback; the number (if any) is code-decided and the
+  // draft is validated to carry it verbatim. Without ANTHROPIC_API_KEY this
+  // is a no-op passthrough.
+  const suggestionText =
+    sugerir && suggestion
+      ? (
+          await draftSellerProse({
+            title: listing.title,
+            transcript: conversation
+              .filter(
+                (m) =>
+                  (m.direction === "outbound" && m.status === "sent") ||
+                  (m.direction === "inbound" && m.status === "received"),
+              )
+              .map((m) => `${m.direction === "inbound" ? "VENDEDOR" : "COMPRADOR"}: ${m.body}`)
+              .join("\n---\n"),
+            intent: counterDecision
+              ? counterDecision.action === "accept"
+                ? `aceptar la contraoferta del vendedor en ${counterDecision.priceEur.toLocaleString("es-ES")} € y proponer ver el coche`
+                : counterDecision.action === "counter"
+                  ? `responder a la contraoferta con ${counterDecision.priceEur.toLocaleString("es-ES")} €, justificado en los riesgos pendientes, sin aceptar su cifra`
+                  : `mantener con amabilidad nuestra oferta de ${counterDecision.priceEur.toLocaleString("es-ES")} €, dejando la puerta abierta`
+              : !hasExchange
+                ? "primer contacto: mostrar interés y hacer las preguntas del borrador base"
+                : waitingForSeller
+                  ? "recordatorio suave, sin preguntas nuevas"
+                  : followUp
+                    ? "agradecer las respuestas y hacer las preguntas del borrador base"
+                    : "proponer el precio del borrador base justificado con los riesgos pendientes",
+            fallback: suggestion,
+            mustContainPrice: counterDecision
+              ? counterDecision.priceEur.toLocaleString("es-ES")
+              : !followUp && offerEur !== null
+                ? offerEur.toLocaleString("es-ES")
+                : undefined,
+          })
+        ).text
+      : suggestion;
 
   // High-signal import warnings belong next to the title, not buried in a
   // card. Stored facts (user-verified or ingest-detected) beat text inference.
@@ -516,11 +585,11 @@ export default async function LeadDetail({
                   <input type="hidden" name="leadId" value={lead.id} />
                   <textarea
                     name="body"
-                    rows={sugerir && suggestion ? 8 : 4}
+                    rows={sugerir && suggestionText ? 8 : 4}
                     required
                     maxLength={CHAT_MAX_CHARS}
                     placeholder={hasExchange ? "Responder al vendedor…" : "Mensaje al vendedor…"}
-                    defaultValue={sugerir && suggestion ? suggestion : undefined}
+                    defaultValue={sugerir && suggestionText ? suggestionText : undefined}
                     style={{
                       width: "100%",
                       boxSizing: "border-box",
