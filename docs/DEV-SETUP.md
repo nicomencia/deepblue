@@ -122,6 +122,12 @@ anuncios, digest con suelo de nota + alertas A/B sin duplicados, dossiers
 en la página del lead), tabs por búsqueda, página Actividad, descubrimiento de
 modelos y adopción manual de anuncios con dossier-first. 77 tests verdes.
 
+**Cambio 2026-07-17 — `GET /api/dev/leads?id=<leadId>`.** El endpoint dev de
+leads acepta ahora `?id=` y devuelve ese lead con su veredicto completo sea
+cual sea su estado — la forma de inspeccionar un lead `contacted`/
+`negotiating` en mitad de una conversación (sin id sigue listando solo
+shortlisted).
+
 **Cambio 2026-07-17 — más variedad y interés creciente en los mensajes.**
 Feedback del usuario: los textos sonaban muy automáticos y el vendedor solo
 recibía preguntas sin ningún feedback (riesgo de que deje de contestar). En

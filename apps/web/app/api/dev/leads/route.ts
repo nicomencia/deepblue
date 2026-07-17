@@ -2,7 +2,11 @@ import { leads, listings } from "@deepblue/db";
 import { asc, eq, sql } from "drizzle-orm";
 import { getDb } from "../../../../lib/db";
 
-/** Dev-only: shortlisted leads with full verdicts, best grades first. */
+/**
+ * Dev-only: shortlisted leads with full verdicts, best grades first.
+ * ?id=<leadId> returns that single lead whatever its state — the way to
+ * inspect a contacted/negotiating lead's verdict mid-conversation.
+ */
 export async function GET(req: Request): Promise<Response> {
   if (process.env.NODE_ENV === "production") return new Response(null, { status: 404 });
   const db = await getDb();
@@ -10,12 +14,13 @@ export async function GET(req: Request): Promise<Response> {
   const url = new URL(req.url);
   const limit = Math.min(Number(url.searchParams.get("limit") ?? 10), 200);
   const platform = url.searchParams.get("platform");
+  const id = url.searchParams.get("id");
 
   const rows = await db
     .select({ lead: leads, listing: listings })
     .from(leads)
     .innerJoin(listings, eq(leads.listingId, listings.id))
-    .where(eq(leads.state, "shortlisted"))
+    .where(id ? eq(leads.id, id) : eq(leads.state, "shortlisted"))
     .orderBy(asc(sql`${leads.verdict}->>'overall'`), asc(listings.priceEur))
     .limit(200);
 
