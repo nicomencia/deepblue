@@ -397,7 +397,14 @@ export async function applyInboundMessages(
     .where(and(eq(messages.leadId, lead.id), eq(messages.direction, "inbound")));
   const knownIds = new Set(known.map((k) => k.externalId));
 
-  const fresh = inbound.filter((m) => !knownIds.has(m.externalId));
+  // Dedup against stored messages AND within the batch: a seller double-send
+  // shows as two identical bubbles that hash to the same externalId.
+  const fresh: InboundMessage[] = [];
+  for (const m of inbound) {
+    if (knownIds.has(m.externalId)) continue;
+    knownIds.add(m.externalId);
+    fresh.push(m);
+  }
   for (const m of fresh) {
     await db.insert(messages).values({
       userId: lead.userId,

@@ -36,7 +36,7 @@ export async function POST(req: Request): Promise<Response> {
 
   const body = (await req.json().catch(() => null)) as {
     leadId?: string;
-    action?: "draft" | "approve" | "reject" | "fetch" | "send";
+    action?: "draft" | "approve" | "reject" | "fetch" | "send" | "dedup-inbound";
     body?: string;
   } | null;
   if (!body?.leadId || !body.action) {
@@ -44,6 +44,23 @@ export async function POST(req: Request): Promise<Response> {
   }
 
   const db = await getDb();
+  if (body.action === "dedup-inbound") {
+    // Remove duplicate inbound rows (same externalId), keeping the oldest.
+    const rows = await db
+      .select({ id: messages.id, externalId: messages.externalId, createdAt: messages.createdAt })
+      .from(messages)
+      .where(eq(messages.leadId, body.leadId))
+      .orderBy(messages.createdAt);
+    const seen = new Set<string>();
+    const dupes: string[] = [];
+    for (const m of rows) {
+      if (!m.externalId) continue;
+      if (seen.has(m.externalId)) dupes.push(m.id);
+      else seen.add(m.externalId);
+    }
+    for (const id of dupes) await db.delete(messages).where(eq(messages.id, id));
+    return Response.json({ ok: true, removed: dupes.length });
+  }
   if (body.action === "fetch") {
     const [row] = await db
       .select({ userId: leads.userId, platform: listings.platform, platformListingId: listings.platformListingId })
