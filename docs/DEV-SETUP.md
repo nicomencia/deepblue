@@ -122,6 +122,20 @@ anuncios, digest con suelo de nota + alertas A/B sin duplicados, dossiers
 en la página del lead), tabs por búsqueda, página Actividad, descubrimiento de
 modelos y adopción manual de anuncios con dossier-first. 77 tests verdes.
 
+**Cambio 2026-07-18 — diffing de precio + tests de web-lib.** Los precios
+cambiaban en silencio: el upsert del sweep pisaba la columna y las sondas de
+vida tiraban el número. Ahora (1) la sonda `check_listing` lleva `priceEur`
+(el detalle ya estaba pagado) y `applyListingCheck` lo diffea; (2) el ingest
+captura el precio almacenado ANTES del upsert y diffea al reavistar;
+(3) `lib/price-watch.ts` centraliza: evento `listing_price_changed` por lead
+activo, reevaluación con el precio nuevo, y si es una BAJADA que deja al
+lead shortlisted por encima del listón de alertas (mismo `ALERT_MAX_GRADE` +
+`ALERT_MIN_SCORE` — una sola política de selectividad), email «bajada de
+precio» con la línea de triaje (`composePriceDropEmail`, puro y testeado).
+Además `apps/web` estrena carril de tests (vitest, `pnpm -r test` lo
+incluye): `composeAlert`/`composeAlertHtml` (brief sin lista de preguntas,
+con triaje) y el email de bajada. 157 tests core + 6 web.
+
 **Cambio 2026-07-18 — triaje visible en la web, suelo de puntuación en
 alertas, y retirada de leads de prueba.** (1) La frase de triaje
 (`composeTriageLine`) ya no vive solo en el email: aparece bajo el título de

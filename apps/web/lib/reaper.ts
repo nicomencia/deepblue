@@ -14,6 +14,7 @@ import {
 } from "@deepblue/core";
 import { events, jobs, leads, listings, type Db } from "@deepblue/db";
 import { and, eq, inArray, lt, notInArray } from "drizzle-orm";
+import { applyPriceChange } from "./price-watch";
 
 /** Only Wallapop can be probed today (AS24 detail/liveness is still a stub). */
 const PROBEABLE_PLATFORMS = ["wallapop"] as const;
@@ -110,7 +111,7 @@ export interface ReapResult {
  */
 export async function applyListingCheck(db: Db, check: ListingCheckResult): Promise<ReapResult> {
   const [listing] = await db
-    .select({ id: listings.id })
+    .select({ id: listings.id, priceEur: listings.priceEur })
     .from(listings)
     .where(
       and(
@@ -122,7 +123,13 @@ export async function applyListingCheck(db: Db, check: ListingCheckResult): Prom
   if (!listing) return { status: check.status, reaped: 0 };
 
   if (check.status === "active") {
-    await db.update(listings).set({ lastSeenAt: new Date() }).where(eq(listings.id, listing.id));
+    await db
+      .update(listings)
+      .set({ lastSeenAt: new Date(), ...(check.priceEur ? { priceEur: check.priceEur } : {}) })
+      .where(eq(listings.id, listing.id));
+    // The probe saw the live price: diff it — a drop on a shortlisted unit
+    // is the freshest buy signal this system produces.
+    await applyPriceChange(db, listing.id, listing.priceEur, check.priceEur ?? null);
     return { status: "active", reaped: 0 };
   }
 

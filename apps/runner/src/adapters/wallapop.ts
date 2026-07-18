@@ -149,7 +149,18 @@ export const wallapopAdapter: PlatformAdapter = {
     if (!res.ok) throw new Error(`wallapop check failed: HTTP ${res.status}`);
     const detail = (await res.json()) as ItemDetail;
     const status = detailFlagsStatus(detail);
-    return { platform: "wallapop", platformListingId: ref.platformListingId, status };
+    // The probe already paid for the detail — carry the current price so the
+    // Core can diff it against the stored one (price drops are signal).
+    const priceEur =
+      detail.price?.cash?.currency === undefined || detail.price?.cash?.currency === "EUR"
+        ? detail.price?.cash?.amount
+        : undefined;
+    return {
+      platform: "wallapop",
+      platformListingId: ref.platformListingId,
+      status,
+      ...(status === "active" && priceEur ? { priceEur } : {}),
+    };
   },
 
   async sendMessage(ref, body) {

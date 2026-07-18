@@ -74,6 +74,8 @@ export const listingCheckResultSchema = z.object({
   platform: platformSchema,
   platformListingId: z.string(),
   status: z.enum(LISTING_CHECK_STATUSES),
+  /** Current asking price when alive — the probe sees the ad, so price drops surface. */
+  priceEur: z.number().positive().optional(),
 });
 export type ListingCheckResult = z.infer<typeof listingCheckResultSchema>;
 

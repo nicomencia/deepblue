@@ -23,6 +23,7 @@ import { and, eq, ne, sql } from "drizzle-orm";
 import { sendEmail } from "./email";
 import { leadUrl } from "./links";
 import { getBenchmark, getDossier } from "./lookups";
+import { applyPriceChange } from "./price-watch";
 import { newEvalCaches, reevaluateLead } from "./reevaluate";
 
 /** Cap instant alerts per ingest batch — the rest land in the daily digest. */
@@ -121,6 +122,19 @@ async function ingestOne(
   const rhdFact = item.rhd ?? (imp.rhd && !imp.rhdAssumed ? true : undefined);
   const foreignPlatesFact = item.foreignPlates ?? (imp.foreignPlate ? true : undefined);
 
+  // Snapshot the stored price BEFORE the upsert refreshes it: a re-sighted
+  // listing with a different price is a price change, not background noise.
+  const [preexisting] = await db
+    .select({ id: listings.id, priceEur: listings.priceEur })
+    .from(listings)
+    .where(
+      and(
+        eq(listings.platform, item.platform),
+        eq(listings.platformListingId, item.platformListingId),
+      ),
+    )
+    .limit(1);
+
   // Upsert into the global corpus; price/mileage/title refresh on re-sighting.
   // powerCv re-sanitized here: garbage from an out-of-date runner must not
   // reach the integer column (the "1.4 CV" incident).
@@ -178,6 +192,11 @@ async function ingestOne(
     })
     .returning({ id: listings.id });
   if (!listing) return;
+
+  // Price diff on re-sighting — evented and re-evaluated, drops may alert.
+  if (preexisting && item.priceEur != null && preexisting.priceEur !== item.priceEur) {
+    await applyPriceChange(db, listing.id, preexisting.priceEur, item.priceEur);
+  }
 
   const [existingLead] = await db
     .select({ id: leads.id })
@@ -280,7 +299,8 @@ export function detailImportFact(item: NormalizedListing, field: "rhd" | "foreig
   return imp.foreignPlate ? true : null;
 }
 
-function composeAlert(
+/** Exported for tests: the instant-alert text is a contract with the reader. */
+export function composeAlert(
   item: NormalizedListing,
   evaluation: EvaluationResult,
   leadId?: string,
@@ -315,7 +335,7 @@ function composeAlert(
   return lines.join("\n");
 }
 
-function composeAlertHtml(
+export function composeAlertHtml(
   item: NormalizedListing,
   evaluation: EvaluationResult,
   leadId?: string,
