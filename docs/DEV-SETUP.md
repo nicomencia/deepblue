@@ -122,6 +122,21 @@ anuncios, digest con suelo de nota + alertas A/B sin duplicados, dossiers
 en la página del lead), tabs por búsqueda, página Actividad, descubrimiento de
 modelos y adopción manual de anuncios con dossier-first. 77 tests verdes.
 
+**Cambio 2026-07-18 — triaje visible en la web, suelo de puntuación en
+alertas, y retirada de leads de prueba.** (1) La frase de triaje
+(`composeTriageLine`) ya no vive solo en el email: aparece bajo el título de
+cada lead en el listado y en negrita en la tarjeta del veredicto de la ficha
+— «¿sigo con este o espero otro?» donde de verdad se compara. (2) Con una
+búsqueda ancha salen más B que atención tiene el usuario: las alertas
+instantáneas exigen ahora además `score >= ALERT_MIN_SCORE` (defecto 75) —
+solo interrumpe la parte alta de la banda, el resto espera al digest
+diario. (3) `POST /api/dev/lead-state {leadId, state, reason}` mueve un lead
+de estado respetando `canTransition` — usado para retirar el Focus de prueba
+(la negociación completa fue un simulacro; el pipeline entero quedó validado
+con él). Diagnóstico de la selectividad: 97 de 121 shortlisted son Golf, 23
+A/B con scores 70–89 — la anchura de la búsqueda (entra Sportsvan y e-Golf)
+más el benchmark por modelo (no por versión) comprimen la banda.
+
 **Cambio 2026-07-18 — informe de visita por unidad.** Al cerrar visita, el
 sistema convierte todo lo que sabe de ESA unidad en la lista de verificación
 presencial. `composeVisitChecklist` (core, determinista, testeado): riesgos

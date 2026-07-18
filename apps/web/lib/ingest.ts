@@ -56,10 +56,15 @@ export async function ingestSearchResults(
     try {
       await ingestOne(db, brief, item, caches, stats, async (lead, evaluation) => {
         const alertThreshold = (process.env.ALERT_MAX_GRADE ?? "B") as ConfidenceGrade;
+        // Selectivity floor: alerts are the interruption channel, and a broad
+        // search produces more low-B candidates than a person can work. Only
+        // the top of the band interrupts; the rest wait in the daily digest.
+        const minScore = Number(process.env.ALERT_MIN_SCORE ?? 75);
         if (
           owner &&
           alertsSent < MAX_ALERTS_PER_INGEST &&
-          gradeAtMost(evaluation.verdict.overall, alertThreshold)
+          gradeAtMost(evaluation.verdict.overall, alertThreshold) &&
+          evaluation.verdict.score >= minScore
         ) {
           alertsSent += 1;
           await sendEmail({

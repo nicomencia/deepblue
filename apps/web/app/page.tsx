@@ -1,3 +1,4 @@
+import { composeTriageLine } from "@deepblue/core";
 import { briefs, leads, listings } from "@deepblue/db";
 import { and, asc, count, desc, eq, ne, sql } from "drizzle-orm";
 import Link from "next/link";
@@ -104,6 +105,18 @@ export default async function Home({
                     <Link href={`/leads/${lead.id}`} style={{ textDecoration: "none" }}>
                       {listing.title}
                     </Link>
+                    {lead.verdict && (
+                      <span
+                        style={{
+                          display: "block",
+                          color: "var(--ink-muted)",
+                          fontSize: "0.78rem",
+                          marginTop: "0.15rem",
+                        }}
+                      >
+                        {composeTriageLine(lead.verdict)}
+                      </span>
+                    )}
                   </td>
                   <td style={td}>
                     {listing.cashPriceEur != null && listing.cashPriceEur !== listing.priceEur ? (
