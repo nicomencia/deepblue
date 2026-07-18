@@ -122,6 +122,23 @@ anuncios, digest con suelo de nota + alertas A/B sin duplicados, dossiers
 en la página del lead), tabs por búsqueda, página Actividad, descubrimiento de
 modelos y adopción manual de anuncios con dossier-first. 77 tests verdes.
 
+**Cambio 2026-07-18 — informe de visita por unidad.** Al cerrar visita, el
+sistema convierte todo lo que sabe de ESA unidad en la lista de verificación
+presencial. `composeVisitChecklist` (core, determinista, testeado): riesgos
+abiertos con sus pasos `verifyBy` del dossier y su banda de coste; descartes
+`seller_stated` como «prometido por chat — pide ver la prueba» con la cita
+literal; confirmados como contexto de precio; avisos de la conversación;
+papeles (con V5/aduanas si matrícula extranjera y RHD si aplica);
+comprobaciones en frío; prueba dinámica; y precio (acordado por chat vía
+`respondToCounterEur` o el del anuncio, exposición abierta como palanca, y el
+tope duro del brief). Página imprimible con casillas en
+`/leads/[id]/visita` (enlace «📋 Informe de visita» en la ficha; las
+casillas no se guardan). Disparo automático: la lectura observa
+`negotiation.visitAgreed` (comprador y vendedor cerrando día/hora) y al
+pasar a true envía el informe en texto por email (evento `visit_agreed`,
+solo en la transición — releer no reenvía). `lib/visit.ts` centraliza el
+input (precio acordado decidido por código) para página y email.
+
 **Cambio 2026-07-17 — feedback al generar, sin inventar disponibilidad, y
 aviso de trato listo.** Tres correcciones de la primera sesión con el carril
 LLM en vivo: (1) el botón «Generar» ahora enseña «⏳ Generando…» mientras el

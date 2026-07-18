@@ -486,6 +486,8 @@ export const conversationReadingPayloadSchema = llmEnrichmentPayloadSchema.exten
     .object({
       ourLastOfferEur: z.number().positive().nullable().optional(),
       sellerLastOfferEur: z.number().positive().nullable().optional(),
+      /** Buyer and seller are settling (or have settled) a visit day/time. */
+      visitAgreed: z.boolean().optional(),
       quote: z.string().optional(),
     })
     .optional(),

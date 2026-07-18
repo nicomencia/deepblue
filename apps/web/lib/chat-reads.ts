@@ -11,6 +11,7 @@
 import {
   conversationReadingPayloadSchema,
   respondToCounterEur,
+  visitChecklistText,
   type ConversationReading,
   type ConversationReadingPayload,
   type IssueFinding,
@@ -20,6 +21,7 @@ import { zodOutputFormat } from "@anthropic-ai/sdk/helpers/zod";
 import { and, asc, eq, gt, inArray, isNull, or } from "drizzle-orm";
 import { sendEmail } from "./email";
 import { leadUrl } from "./links";
+import { visitInputForLead } from "./visit";
 import { getAnthropic, isLlmConfigured, messageText, READS_MODEL } from "./llm";
 import { newEvalCaches, reevaluateLead } from "./reevaluate";
 
@@ -123,6 +125,8 @@ Instrucciones:
   sellerLastOfferEur (la última contraoferta del VENDEDOR), con quote.
   SOLO números que aparezcan literalmente en la conversación — tú observas,
   la respuesta la decide el código. Si no se ha hablado de precio, omite.
+  visitAgreed: true si comprador y vendedor están cerrando (o han cerrado)
+  día u hora para ver el coche.
 - factorAdjustments: deltas donde la conversación aporte señal que el anuncio
   no daba (mantenimiento documentado prometido, respuestas evasivas, número de
   propietarios, transparencia del vendedor ⇒ sellerCredibility/unitEvidence).
@@ -220,6 +224,30 @@ export async function saveConversationReading(
         to: owner.email,
         subject: `deepblue · la conversación necesita tu decisión — «${listing.title}»`,
         text: `${payload.escalateReason}\n\nConversación: ${leadUrl(lead.id)}`,
+      });
+    }
+  }
+
+  // Visit agreed: the report of what to verify on THIS unit goes out by
+  // itself — the checklist is the cherry on top of everything the system
+  // learned. Fires once per transition to agreed, never on re-reads.
+  if (payload.negotiation?.visitAgreed && !lead.chatReading?.negotiation?.visitAgreed) {
+    await db.insert(events).values({
+      userId: lead.userId,
+      leadId: lead.id,
+      type: "visit_agreed",
+      payload: { quote: payload.negotiation.quote },
+    });
+    const [owner] = await db.select().from(users).where(eq(users.id, lead.userId)).limit(1);
+    if (owner) {
+      const freshLead = { ...lead, issueFindings: findings, chatReading: reading };
+      await sendEmail({
+        to: owner.email,
+        subject: `deepblue · informe de visita — «${listing.title}»`,
+        text:
+          `Visita en marcha con el vendedor. Esto es lo que hay que comprobar en esta unidad:\n\n` +
+          `${visitChecklistText(visitInputForLead(freshLead, { ...listing, ...factPatch }, brief))}\n\n` +
+          `Versión con casillas para el móvil: ${leadUrl(lead.id)}/visita`,
       });
     }
   }

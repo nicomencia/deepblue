@@ -490,6 +490,23 @@ export default async function LeadDetail({
         <p style={{ color: "var(--ink-muted)" }}>Sin veredicto todavía.</p>
       )}
 
+      {/* The visit report: what to verify on THIS unit, phone-friendly. */}
+      {v && (
+        <p style={{ margin: "1rem 0 0" }}>
+          <Link
+            href={`/leads/${lead.id}/visita`}
+            style={{
+              ...btn,
+              display: "inline-block",
+              textDecoration: "none",
+              color: "inherit",
+            }}
+          >
+            📋 Informe de visita — qué comprobar en esta unidad
+          </Link>
+        </p>
+      )}
+
       {/* Conversation with the seller — every send passes a human approval */}
       {(conversation.length > 0 || contactable) && (
         <>
