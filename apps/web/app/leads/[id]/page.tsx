@@ -5,7 +5,7 @@ import {
   composeNudgeMessage,
   composeOfferMessage,
   composeOpeningMessage,
-  composeTriageLine,
+  composeUnitLine,
   computeOfferEur,
   extractImportSignals,
   respondToCounterEur,
@@ -380,7 +380,7 @@ export default async function LeadDetail({
               </div>
             </div>
             {/* The one-phrase answer: pursue this unit or wait for the next. */}
-            <p style={{ margin: "0.5rem 0 0", fontWeight: 600 }}>{composeTriageLine(v)}</p>
+            <p style={{ margin: "0.5rem 0 0", fontWeight: 600 }}>{composeUnitLine(v)}</p>
             {v.repairExposureEur && (
               <p style={{ marginBottom: 0 }}>
                 Exposición en reparaciones sin descartar:{" "}

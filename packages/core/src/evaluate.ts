@@ -742,6 +742,9 @@ export function applyEnrichment(
     ].slice(0, 12),
     llm: {
       summary: enrichment.summary,
+      // Chained merges (ad enrichment → chat reading): keep the last keyLine
+      // seen, so a reading that omits it doesn't erase the ad's.
+      keyLine: enrichment.keyLine ?? verdict.llm?.keyLine,
       redFlags: [...scamFlag, ...enrichment.redFlags],
       greenFlags: enrichment.greenFlags,
       model: enrichment.model,

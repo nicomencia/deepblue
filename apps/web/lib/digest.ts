@@ -5,7 +5,7 @@
  * events log — safe across restarts and double-firing schedulers.
  */
 
-import { composeTriageLine, gradeAtMost, type ConfidenceGrade } from "@deepblue/core";
+import { composeUnitLine, gradeAtMost, type ConfidenceGrade } from "@deepblue/core";
 import { briefs, events, leads, listings, users, type Db } from "@deepblue/db";
 import { and, asc, desc, eq, gte, sql } from "drizzle-orm";
 import { sendEmail } from "./email";
@@ -124,7 +124,7 @@ function leadSummary({ lead, listing }: { lead: LeadRow; listing: ListingRow }):
 
   const lines = [`[${v?.overall ?? "?"}] ${listing.title} — ${specs}`];
   // The triage phrase first: pursue this one or wait for the next.
-  if (v) lines.push(`    → ${composeTriageLine(v)}`);
+  if (v) lines.push(`    → ${composeUnitLine(v)}`);
   if (lead.alertedAt) {
     const when = new Intl.DateTimeFormat("es-ES", {
       timeZone: "Europe/Madrid",

@@ -172,6 +172,17 @@ export function composeTriageLine(verdict: ConfidenceVerdict): string {
   }
 }
 
+/**
+ * The one line a reader scans per unit in a list of twenty: the enrichment's
+ * unique keyLine (recommendation + this unit's best pro and worst con) when
+ * the lead has one, the deterministic triage posture otherwise. Vetoes always
+ * override — a scam never gets a friendly one-liner.
+ */
+export function composeUnitLine(verdict: ConfidenceVerdict): string {
+  if (verdict.vetoes?.length) return composeTriageLine(verdict);
+  return verdict.llm?.keyLine?.trim() || composeTriageLine(verdict);
+}
+
 const NUDGES = [
   "Buenas! Pudiste mirar lo que te pregunté?",
   "Hola! Le pudiste echar un ojo a lo que te comenté?",

@@ -122,6 +122,21 @@ anuncios, digest con suelo de nota + alertas A/B sin duplicados, dossiers
 en la página del lead), tabs por búsqueda, página Actividad, descubrimiento de
 modelos y adopción manual de anuncios con dossier-first. 77 tests verdes.
 
+**Cambio 2026-07-18 — línea por unidad generada por IA (keyLine).** La línea
+de triaje era determinista por nota, así que todos los B se leían igual. Ahora
+el enriquecimiento produce `keyLine`: UNA frase única de esa unidad (máx 160
+chars) con recomendación + su mayor pro y su mayor pega concretos, nombrando
+lo específico (km, extra, brecha contado-financiado, golpe, propietarios).
+Va en el `llmEnrichmentPayloadSchema` (opcional) → sale en el MISMO turno de
+Haiku, cero llamadas extra; `applyEnrichment` la propaga en merges encadenados
+(una lectura que la omite no borra la del anuncio). Nuevo `composeUnitLine`
+(core): keyLine si existe, si no cae a `composeTriageLine`; los vetos siempre
+mandan (una estafa nunca recibe frase amable). Lo consumen listado, ficha,
+alertas, digest y email de bajada — todos migrados de `composeTriageLine` a
+`composeUnitLine`. `POST /api/dev/enrich {leadId}` fuerza re-enriquecimiento
+LLM inline de un lead concreto (para refrescar keyLine en dev). Validado en
+vivo: 4 Golf B re-enriquecidos, 4 keyLines distintas y específicas. 160 core.
+
 **Cambio 2026-07-18 — diffing de precio + tests de web-lib.** Los precios
 cambiaban en silencio: el upsert del sweep pisaba la columna y las sondas de
 vida tiraban el número. Ahora (1) la sonda `check_listing` lleva `priceEur`

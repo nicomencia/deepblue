@@ -4,7 +4,7 @@
  */
 
 import {
-  composeTriageLine,
+  composeUnitLine,
   evaluateListing,
   extractCashPriceEur,
   extractDedupKey,
@@ -319,7 +319,7 @@ export function composeAlert(
     specs,
     "",
     `Confianza global: ${v.overall}`,
-    `Recomendación: ${composeTriageLine(v)}`,
+    `Recomendación: ${composeUnitLine(v)}`,
     ...(v.repairExposureEur
       ? [
           `Exposición en reparaciones sin verificar: ~${v.repairExposureEur.min.toLocaleString("es-ES")}–${v.repairExposureEur.max.toLocaleString("es-ES")} €`,
@@ -357,7 +357,7 @@ export function composeAlertHtml(
     item.imageUrl
       ? `<p><a href="${href}"><img src="${item.imageUrl}" alt="" width="320" style="max-width:100%;border-radius:6px"></a></p>`
       : "",
-    `<p>Confianza global: <strong>${v.overall}</strong> — ${esc(composeTriageLine(v))}</p>`,
+    `<p>Confianza global: <strong>${v.overall}</strong> — ${esc(composeUnitLine(v))}</p>`,
     v.repairExposureEur
       ? `<p><small>Riesgos sin verificar: ~${v.repairExposureEur.min.toLocaleString("es-ES")}–${v.repairExposureEur.max.toLocaleString("es-ES")} € de exposición en reparaciones</small></p>`
       : "",

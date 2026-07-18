@@ -1,4 +1,4 @@
-import { composeTriageLine } from "@deepblue/core";
+import { composeUnitLine } from "@deepblue/core";
 import { briefs, leads, listings } from "@deepblue/db";
 import { and, asc, count, desc, eq, ne, sql } from "drizzle-orm";
 import Link from "next/link";
@@ -114,7 +114,7 @@ export default async function Home({
                           marginTop: "0.15rem",
                         }}
                       >
-                        {composeTriageLine(lead.verdict)}
+                        {composeUnitLine(lead.verdict)}
                       </span>
                     )}
                   </td>

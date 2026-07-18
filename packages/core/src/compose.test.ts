@@ -7,6 +7,7 @@ import {
   composeOfferMessage,
   composeOpeningMessage,
   composeTriageLine,
+  composeUnitLine,
   computeOfferEur,
   respondToCounterEur,
 } from "./compose.js";
@@ -98,6 +99,36 @@ describe("composeTriageLine", () => {
 
   it("vetoes override everything", () => {
     expect(composeTriageLine(verdict({ overall: "B", vetoes: ["scam_price"] }))).toContain("Descártalo");
+  });
+});
+
+describe("composeUnitLine", () => {
+  const withLlm = (keyLine?: string): ConfidenceVerdict =>
+    verdict({
+      overall: "B",
+      llm: keyLine
+        ? { summary: "s", keyLine, redFlags: [], greenFlags: [], model: "m", at: "t" }
+        : undefined,
+    });
+
+  it("uses the LLM keyLine unique to the unit when present", () => {
+    const line = composeUnitLine(
+      withLlm("Merece la pena: pocos km y full equipe, pero 1.300 € más al contado."),
+    );
+    expect(line).toContain("pocos km");
+  });
+
+  it("falls back to the deterministic triage line without a keyLine", () => {
+    expect(composeUnitLine(withLlm())).toBe(composeTriageLine(withLlm()));
+  });
+
+  it("a veto suppresses the friendly keyLine", () => {
+    const vetoed = verdict({
+      overall: "B",
+      vetoes: ["scam_price"],
+      llm: { summary: "s", keyLine: "coche estupendo", redFlags: [], greenFlags: [], model: "m", at: "t" },
+    });
+    expect(composeUnitLine(vetoed)).toContain("Descártalo");
   });
 });
 

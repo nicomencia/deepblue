@@ -249,6 +249,8 @@ export interface ConfidenceVerdict {
   llm?: {
     /** 2–3 frases en español: qué es esta unidad y qué destaca del anuncio. */
     summary: string;
+    /** One line unique to this unit: recommendation + best pro and worst con. */
+    keyLine?: string;
     redFlags: string[];
     greenFlags: string[];
     /** Model id + timestamp: every AI claim is attributable. */
@@ -421,6 +423,11 @@ export const factorAdjustmentSchema = z.object({
 export const llmEnrichmentPayloadSchema = z.object({
   /** 2–3 frases en español: qué es esta unidad y qué destaca del anuncio. */
   summary: z.string(),
+  /**
+   * One line UNIQUE to this unit (≤160 chars): clear recommendation plus its
+   * biggest pro and con — the sentence a reader scans in a list of twenty.
+   */
+  keyLine: z.string().max(200).optional(),
   factorAdjustments: z.object({
     priceFairness: factorAdjustmentSchema.optional(),
     modelReliability: factorAdjustmentSchema.optional(),

@@ -6,7 +6,7 @@
  * good unit is exactly the "contacta hoy" moment the triage line waits for.
  */
 
-import { composeTriageLine, gradeAtMost, type ConfidenceGrade, type ConfidenceVerdict } from "@deepblue/core";
+import { composeUnitLine, gradeAtMost, type ConfidenceGrade, type ConfidenceVerdict } from "@deepblue/core";
 import { briefs, events, leads, listings, users, type Db } from "@deepblue/db";
 import { and, eq, notInArray } from "drizzle-orm";
 import { sendEmail } from "./email";
@@ -31,7 +31,7 @@ export function composePriceDropEmail(d: PriceDrop): { subject: string; text: st
       `${d.title}\n` +
       `${d.oldPriceEur.toLocaleString("es-ES")} € → ${d.newPriceEur.toLocaleString("es-ES")} € (−${pct}%)\n\n` +
       `Confianza ${d.verdict.overall} · ${d.verdict.score}/100\n` +
-      `Recomendación: ${composeTriageLine(d.verdict)}\n\n` +
+      `Recomendación: ${composeUnitLine(d.verdict)}\n\n` +
       `Ficha: ${leadUrl(d.leadId)}`,
   };
 }

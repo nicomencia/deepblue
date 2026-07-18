@@ -73,7 +73,13 @@ Instrucciones:
 - extraOpenQuestions: SOLO preguntas nuevas que este anuncio concreto pide a
   gritos y que no estén ya previstas.
 - summary: 2–3 frases en español, honestas, sobre qué es esta unidad y qué
-  destaca (bueno y malo) del anuncio.`;
+  destaca (bueno y malo) del anuncio.
+- keyLine: UNA sola frase (máx 160 caracteres) ÚNICA de esta unidad, la que
+  alguien lee al escanear una lista de veinte coches: una recomendación clara
+  con su mayor punto a favor y su mayor pega concretos. Nada genérico que
+  valga para cualquier coche — nombra lo específico (km, extra, precio, golpe,
+  propietarios). Ej: "Merece la pena: pocos km y full equipe, pero el precio
+  con financiación esconde 1.300 € más al contado."`;
 }
 
 /**
