@@ -60,6 +60,12 @@ export RUNNER_TOKEN=<el mismo que en .env.local>   # sin echo, sin pegarlo en ch
 pnpm dev:runner
 ```
 
+**Arranque de un clic (Windows):** `start-deepblue.bat` en la raíz hace todo
+lo anterior: mata cualquier servidor viejo en el 3000 (el candado single-writer
+de PGlite), abre el panel web y el runner en sus propias ventanas, espera a que
+el panel responda y abre el navegador. Doble clic, o crea un acceso directo en
+el escritorio. Para pararlo, cierra las dos ventanas (web y runner).
+
 ## 3. Reglas de oro de esta base de código
 
 - **PGlite, un solo escritor**: jamás dos `pnpm dev:web` a la vez. Antes de
