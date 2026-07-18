@@ -128,6 +128,23 @@ anuncios, digest con suelo de nota + alertas A/B sin duplicados, dossiers
 en la página del lead), tabs por búsqueda, página Actividad, descubrimiento de
 modelos y adopción manual de anuncios con dossier-first. 77 tests verdes.
 
+**Cambio 2026-07-18 — el benchmark pondera por motor y cambio.** El pool de
+comparables se filtraba solo por marca+modelo+mercado, y `computeBenchmark`
+ponderaba por acabado (tokens de trim ×4), año y potencia — pero IGNORABA
+combustible y cambio, que son discriminadores de precio de primer orden
+(feedback del usuario: trim, motor y 4x4 son clave; las búsquedas ideales son
+específicas pero algún usuario busca solo por modelo). Ahora `Comparable` y
+`BenchmarkTarget` llevan `fuel` y `gearbox`; el peso se multiplica por
+coincidencia de combustible (match ×2, mismatch ×0.3 — un diésel apenas valora
+un gasolina) y de cambio (match ×1.4, mismatch ×0.6), con `normalizeFuel`/
+`normalizeGearbox` para sinónimos es/en (gasolina/petrol, gasoil, automático/
+DSG/tiptronic…). Ponderación suave, no filtro duro: si un lado no declara el
+dato se queda neutro (sin penalizar), y una búsqueda estrecha degrada con
+gracia en vez de quedarse sin benchmark. Los sistemas de tracción con nombre
+(quattro/4motion/4x4/xdrive) ya sobrevivían como tokens de trim. `lib/lookups.ts`
+proyecta fuel+gearbox y los tres constructores de target (ingest, reevaluate,
+adopt) los pasan. 163 tests core (3 nuevos de benchmark).
+
 **Cambio 2026-07-18 — línea por unidad generada por IA (keyLine).** La línea
 de triaje era determinista por nota, así que todos los B se leían igual. Ahora
 el enriquecimiento produce `keyLine`: UNA frase única de esa unidad (máx 160

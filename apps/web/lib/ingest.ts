@@ -230,7 +230,7 @@ async function ingestOne(
     item.make,
     item.model,
     item.countryCode,
-    { version: item.version, year: item.year, powerCv: item.powerCv },
+    { version: item.version, year: item.year, powerCv: item.powerCv, fuel: item.fuel, gearbox: item.gearbox },
     caches.benchmark,
   );
   const dossier = await getDossier(db, item.make, item.model, caches.dossier);

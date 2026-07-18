@@ -49,6 +49,8 @@ export async function getBenchmark(
         year: listings.year,
         version: listings.version,
         powerCv: listings.powerCv,
+        fuel: listings.fuel,
+        gearbox: listings.gearbox,
       })
       .from(listings)
       .where(
@@ -74,6 +76,8 @@ export async function getBenchmark(
       year: r.year ?? undefined,
       version: r.version ?? undefined,
       powerCv: r.powerCv ?? undefined,
+      fuel: r.fuel ?? undefined,
+      gearbox: r.gearbox ?? undefined,
     }));
     cache.set(key, comparables);
   }

@@ -26,12 +26,18 @@ export interface Comparable {
   year?: number;
   version?: string;
   powerCv?: number;
+  /** Engine class (gasoline/diesel/…) — a first-class price driver, not trim noise. */
+  fuel?: string;
+  /** Manual vs automatic — separate buyers, separate prices. */
+  gearbox?: string;
 }
 
 export interface BenchmarkTarget {
   version?: string;
   year?: number;
   powerCv?: number;
+  fuel?: string;
+  gearbox?: string;
 }
 
 // --- Trim similarity ---------------------------------------------------------
@@ -69,10 +75,36 @@ const TRIM_MATCH_WEIGHT = 4;
 const TRIM_MISMATCH_WEIGHT = 0.75;
 /** Trim unknown but power within ±10%: the poor man's trim match. */
 const POWER_MATCH_WEIGHT = 2;
+/** Engine class (gasoline≠diesel): same buyers, same prices. Mismatch barely informs. */
+const FUEL_MATCH_WEIGHT = 2;
+const FUEL_MISMATCH_WEIGHT = 0.3;
+/** Gearbox (manual≠automatic): a real price gap, softer than the fuel one. */
+const GEARBOX_MATCH_WEIGHT = 1.4;
+const GEARBOX_MISMATCH_WEIGHT = 0.6;
 /** Year decay: Δ0→1, Δ1→0.67, Δ2→0.5, Δ4→0.33. Gentler than the trim multiplier by design. */
 const yearWeight = (delta: number): number => 1 / (1 + 0.5 * delta);
 /** A comparable whose year we don't know is worth a bit less than a same-year one. */
 const UNKNOWN_YEAR_WEIGHT = 0.6;
+
+/** Fuel synonyms across sources (es/en, gasolina/petrol, gasoil/gasóleo). */
+function normalizeFuel(fuel: string | undefined): string | undefined {
+  if (!fuel) return undefined;
+  const f = fuel.trim().toLowerCase();
+  if (/gasolina|petrol|gasoline|nafta/.test(f)) return "gasoline";
+  if (/di[eé]sel|gasoil|gas[oó]leo|gasoleo/.test(f)) return "diesel";
+  if (/h[ií]brid|hybrid/.test(f)) return "hybrid";
+  if (/el[eé]ctric|electric|ev\b/.test(f)) return "electric";
+  if (/glp|gnc|gas\b/.test(f)) return "lpg";
+  return f;
+}
+
+function normalizeGearbox(gearbox: string | undefined): string | undefined {
+  if (!gearbox) return undefined;
+  const g = gearbox.trim().toLowerCase();
+  if (/autom|dsg|tiptronic|s-tronic|pdk|cvt|dct|auto\b/.test(g)) return "automatic";
+  if (/manual|man\b/.test(g)) return "manual";
+  return g;
+}
 
 function comparableWeight(target: BenchmarkTarget, targetTrim: string[], comp: Comparable): number {
   let weight = 1;
@@ -88,6 +120,16 @@ function comparableWeight(target: BenchmarkTarget, targetTrim: string[], comp: C
   ) {
     weight *= POWER_MATCH_WEIGHT;
   }
+
+  // Engine class: only when both sides state it — a diesel comparable barely
+  // prices a gasoline target, but an unknown fuel stays neutral (no penalty).
+  const tf = normalizeFuel(target.fuel);
+  const cf = normalizeFuel(comp.fuel);
+  if (tf && cf) weight *= tf === cf ? FUEL_MATCH_WEIGHT : FUEL_MISMATCH_WEIGHT;
+
+  const tg = normalizeGearbox(target.gearbox);
+  const cg = normalizeGearbox(comp.gearbox);
+  if (tg && cg) weight *= tg === cg ? GEARBOX_MATCH_WEIGHT : GEARBOX_MISMATCH_WEIGHT;
 
   if (target.year !== undefined && comp.year !== undefined) {
     weight *= yearWeight(Math.abs(comp.year - target.year));
@@ -142,7 +184,7 @@ export function computeBenchmark(
       medianEur: weightedMedian(rows),
       sampleSize: Math.round(ess),
       market,
-      basis: `mediana ponderada por acabado y año sobre ${comparables.length} anuncios del modelo`,
+      basis: `mediana ponderada por acabado, motor, cambio y año sobre ${comparables.length} anuncios del modelo`,
     };
   }
 

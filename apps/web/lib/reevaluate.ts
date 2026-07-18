@@ -136,7 +136,7 @@ export async function reevaluateLead(
     nl.make,
     nl.model,
     nl.countryCode,
-    { version: nl.version, year: nl.year, powerCv: nl.powerCv },
+    { version: nl.version, year: nl.year, powerCv: nl.powerCv, fuel: nl.fuel, gearbox: nl.gearbox },
     caches.benchmark,
   );
   const dossier = await getDossier(db, nl.make, nl.model, caches.dossier);

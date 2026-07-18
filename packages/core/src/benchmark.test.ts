@@ -44,7 +44,7 @@ describe("computeBenchmark", () => {
     const b = computeBenchmark({ version: "Advance 1.4 TSI", year: 2018 }, comps, "ES");
     // Unweighted the median would sit between the groups; trim weighting pins it to Advance.
     expect(b?.medianEur).toBe(12_000);
-    expect(b?.basis).toContain("ponderada por acabado y año");
+    expect(b?.basis).toContain("ponderada por acabado, motor, cambio y año");
     expect(b?.market).toBe("ES");
   });
 
@@ -87,6 +87,32 @@ describe("computeBenchmark", () => {
     expect(b?.basis).toBeUndefined();
     expect(b?.medianEur).toBe(15_000);
     expect(b?.sampleSize).toBe(10);
+  });
+
+  it("prices a diesel against diesels, not the gasoline half of the pool", () => {
+    const comps = [
+      ...Array.from({ length: 10 }, () => comp(14_000, { fuel: "diesel" })),
+      ...Array.from({ length: 10 }, () => comp(11_000, { fuel: "gasoline" })),
+    ];
+    // Same trim/year both sides: only fuel separates them. Diesel target pins it.
+    const b = computeBenchmark({ year: 2018, fuel: "Diésel" }, comps);
+    expect(b?.medianEur).toBe(14_000);
+  });
+
+  it("separates manual from automatic within the same engine", () => {
+    const comps = [
+      ...Array.from({ length: 10 }, () => comp(13_000, { fuel: "gasoline", gearbox: "manual" })),
+      ...Array.from({ length: 10 }, () => comp(16_000, { fuel: "gasoline", gearbox: "automático" })),
+    ];
+    const b = computeBenchmark({ year: 2018, fuel: "gasolina", gearbox: "Manual" }, comps);
+    expect(b?.medianEur).toBe(13_000);
+  });
+
+  it("unknown fuel stays neutral — no penalty, no fake match", () => {
+    const comps = Array.from({ length: 10 }, () => comp(12_500, { fuel: "diesel" }));
+    // Target fuel unknown: every comparable keeps weight 1, median is just theirs.
+    const b = computeBenchmark({ year: 2018 }, comps);
+    expect(b?.medianEur).toBe(12_500);
   });
 
   it("keeps the effective sample honest: uniform anonymous corpus ≈ raw count", () => {
