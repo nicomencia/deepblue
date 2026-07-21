@@ -14,6 +14,16 @@ const num = (v: FormDataEntryValue | null): number | undefined => {
   return Number.isFinite(n) && n > 0 ? n : undefined;
 };
 
+/** Coordinates keep their decimal point (num strips es-ES thousands dots) and
+ * accept the Spanish comma; empty → undefined so callers can default — a bare
+ * Number("") is 0, which once aimed a sweep at the Gulf of Guinea. */
+const coord = (v: FormDataEntryValue | null): number | undefined => {
+  const s = String(v ?? "").trim().replace(",", ".");
+  if (!s) return undefined;
+  const n = Number(s);
+  return Number.isFinite(n) ? n : undefined;
+};
+
 const lines = (v: FormDataEntryValue | null): string[] =>
   String(v ?? "")
     .split("\n")
@@ -57,8 +67,8 @@ export async function createBrief(formData: FormData): Promise<void> {
     fuel: fuelSchema.catch([]).parse(formData.getAll("fuel").map(String)) || undefined,
     gearbox: gearboxSchema.catch([]).parse(formData.getAll("gearbox").map(String)) || undefined,
     location: {
-      lat: Number(formData.get("lat") ?? 40.4168),
-      lon: Number(formData.get("lon") ?? -3.7038),
+      lat: coord(formData.get("lat")) ?? 40.4168,
+      lon: coord(formData.get("lon")) ?? -3.7038,
       radiusKm: num(formData.get("radiusKm")) ?? 100,
     },
     riskTolerance: riskSchema.parse(String(formData.get("riskTolerance") ?? "medium")),

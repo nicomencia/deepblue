@@ -133,6 +133,20 @@ anuncios, digest con suelo de nota + alertas A/B sin duplicados, dossiers
 en la página del lead), tabs por búsqueda, página Actividad, descubrimiento de
 modelos y adopción manual de anuncios con dossier-first. 77 tests verdes.
 
+**Cambio 2026-07-21 — lat/lon vacíos apuntaban al golfo de Guinea; suelo de
+precio con tope.** El primer barrido real del Master gen I volvió con 0
+resultados y el payload lo delató: `location {lat:0, lon:0}`. Causa:
+`Number(formData.get("lat") ?? 40.4168)` — un campo vacío es `""` (no null),
+el `??` nunca salta y `Number("")` es 0. Nuevo helper `coord()` (los
+coordinados no pueden pasar por `num()`, que quita puntos de miles es-ES y
+haría de "40.4168" un 404168; acepta coma decimal española; vacío →
+undefined → default Madrid). Segundo filtro silencioso: el suelo anti-chatarra
+del sweep era 30% del presupuesto — con 20.000 € de tope para furgos de
+3–5.000 €, el suelo de 6.000 € excluía el mercado honesto entero; ahora
+`min(30%, 1.500 €)` (los anuncios de financiación son 329–421 €, el tope no
+debilita el filtro). Además `PATCH /api/dev/briefs {id, location}` para
+reparar el centro de búsqueda de un brief existente (no hay UI de edición).
+
 **Cambio 2026-07-21 — dossier nuevo = barrido inmediato de su modelo.**
 Antes, crear búsqueda + dossier dejaba la caza esperando al siguiente tick del
 scheduler (~3 h). Ahora `insertDossier` — el punto único por el que pasan las

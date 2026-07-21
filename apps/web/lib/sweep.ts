@@ -61,8 +61,10 @@ export async function enqueueSweeps(
             model: vehicle.model,
             // Asking prices above budget within negotiation headroom still matter.
             priceMaxEur: Math.round(brief.hardLimits.maxPriceEur * NEGOTIATION_HEADROOM),
-            // Floor skips financing/installment posts (329€ "cars") and wrecks.
-            priceMinEur: Math.round(brief.hardLimits.maxPriceEur * 0.3),
+            // Floor skips financing/installment posts (329€ "cars") and
+            // wrecks — capped so a big budget on cheap old units (20k€ hunting
+            // 3–5k€ vans) never silently excludes the honest end of the market.
+            priceMinEur: Math.min(Math.round(brief.hardLimits.maxPriceEur * 0.3), 1500),
             yearMin: brief.criteria.yearMin,
             yearMax: brief.criteria.yearMax,
             kmMax: brief.criteria.kmMax,
