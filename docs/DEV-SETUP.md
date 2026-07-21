@@ -133,6 +133,20 @@ anuncios, digest con suelo de nota + alertas A/B sin duplicados, dossiers
 en la página del lead), tabs por búsqueda, página Actividad, descubrimiento de
 modelos y adopción manual de anuncios con dossier-first. 77 tests verdes.
 
+**Cambio 2026-07-22 — enriquecimiento inmediato tras el ingest.** Los leads
+del Master llegaron a las ~23:45 con la frase genérica: el keyLine lo pone el
+carril de enriquecimiento (Haiku), que solo corre en ticks del scheduler
+(08–23h Madrid) — un barrido nocturno o el primero de la mañana dejaba leads
+sin frase propia hasta horas después. Ahora el report del runner
+(search_sweep y fetch_listing con éxito) dispara `enrichPendingLeadsSoon`:
+fire-and-forget (jamás bloquea la respuesta al runner), lote acotado (6),
+flag `enrichInFlight` en módulo para no pagar dos veces el mismo lead cuando
+varios reports aterrizan en segundos (el select de pendientes no es atómico).
+El tick regular sigue drenando lo que el lote no alcance. Los emails de
+alerta instantánea siguen saliendo con la frase determinista (se componen
+DURANTE el ingest, antes de enriquecer — hacerlos esperar al LLM retrasaría
+el aviso; decisión consciente).
+
 **Cambio 2026-07-21 — lat/lon vacíos apuntaban al golfo de Guinea; suelo de
 precio con tope.** El primer barrido real del Master gen I volvió con 0
 resultados y el payload lo delató: `location {lat:0, lon:0}`. Causa:

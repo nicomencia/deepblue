@@ -10,6 +10,7 @@ import { z } from "zod";
 import { completeAdoption } from "../../../../../../lib/adopt";
 import { getDb } from "../../../../../../lib/db";
 import { sendEmail } from "../../../../../../lib/email";
+import { enrichPendingLeadsSoon } from "../../../../../../lib/enrich-verdict";
 import { ingestListingDetail, ingestSearchResults } from "../../../../../../lib/ingest";
 import { applyInboundMessages, applySendResult } from "../../../../../../lib/outreach";
 import { applyListingCheck } from "../../../../../../lib/reaper";
@@ -40,12 +41,17 @@ export async function POST(
   if (report.status === "succeeded" && job.payload.type === "search_sweep") {
     const items = z.array(normalizedListingSchema).parse(report.result ?? []);
     ingestStats = await ingestSearchResults(db, job.payload.briefId, items);
+    // New leads get their keyLine in minutes, not at the next scheduler tick
+    // (the 23–08h night window can stretch that to hours). Never blocks the
+    // runner's report; the regular tick drains whatever this doesn't reach.
+    enrichPendingLeadsSoon(db);
   } else if (report.status === "succeeded" && job.payload.type === "fetch_listing") {
     const item = normalizedListingSchema.parse(report.result);
     // Adoption intent rides the same job type; the Core decides what it means.
     ingestStats = job.payload.adopt
       ? await completeAdoption(db, job.userId, item, job.payload.adopt)
       : await ingestListingDetail(db, item);
+    enrichPendingLeadsSoon(db);
   } else if (report.status === "succeeded" && job.payload.type === "check_listing") {
     const check = listingCheckResultSchema.parse(report.result);
     ingestStats = await applyListingCheck(db, check);

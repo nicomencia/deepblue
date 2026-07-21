@@ -187,3 +187,25 @@ export async function enrichPendingLeads(db: Db, limit = 6): Promise<EnrichBatch
   }
   return stats;
 }
+
+// One batch at a time: several runner reports can land within seconds and the
+// pending-select is not atomic — a flag beats paying Haiku twice for one lead.
+let enrichInFlight = false;
+
+/**
+ * Fire-and-forget enrichment right after ingest lands new leads, so keyLines
+ * appear in minutes instead of waiting for the next scheduler tick (which the
+ * night window 23–08h can stretch to hours). Never blocks the caller; the
+ * scheduler's regular tick still drains anything this batch didn't reach.
+ */
+export function enrichPendingLeadsSoon(db: Db): void {
+  if (enrichInFlight || !isLlmConfigured()) return;
+  enrichInFlight = true;
+  void enrichPendingLeads(db)
+    .catch((err: unknown) => {
+      console.error("post-ingest enrich failed:", err instanceof Error ? err.message : err);
+    })
+    .finally(() => {
+      enrichInFlight = false;
+    });
+}
