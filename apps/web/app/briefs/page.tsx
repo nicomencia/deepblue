@@ -4,6 +4,7 @@ import Link from "next/link";
 import { getDb } from "../../lib/db";
 import { fmtEur } from "../../lib/ui";
 import { adoptAd } from "../actions";
+import { isDossierBuilding } from "../../lib/dossier-builder";
 import { SubmitButton } from "../submit-button";
 import { createBrief, deleteBrief, setBriefStatus, toggleBriefLimit } from "./actions";
 import { ConfirmDelete } from "./confirm-delete";
@@ -98,6 +99,7 @@ export default async function BriefsPage({
                 <p style={{ margin: "0.3rem 0 0", fontSize: "0.87rem", color: "var(--ink-muted)" }}>
                   {v ? `${v.make} ${v.model}` : "—"}
                   {v?.generations?.[0] ? ` · gen ${v.generations[0]}` : ""}
+                  {v && isDossierBuilding(v.make, v.model) ? " · ⏳ dossier en investigación" : ""}
                   {c.yearMin || c.yearMax
                     ? ` · ${c.yearMin ?? "…"}–${c.yearMax ?? "hoy"}`
                     : ""}

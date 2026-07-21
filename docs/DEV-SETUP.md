@@ -133,6 +133,23 @@ anuncios, digest con suelo de nota + alertas A/B sin duplicados, dossiers
 en la página del lead), tabs por búsqueda, página Actividad, descubrimiento de
 modelos y adopción manual de anuncios con dossier-first. 77 tests verdes.
 
+**Cambio 2026-07-22 — cadena cero-clics al crear una búsqueda.** Última pieza
+manual eliminada: crear un brief de un modelo/generación sin cobertura exigía
+ir a /dossiers y pulsar «Investigar». Nuevo `lib/brief-hunt.ts`
+(`startBriefHunt`, compartido por el formulario de búsquedas y el 1-clic de
+descubrimiento): al crear el brief, si la generación NO está cubierta
+(chequeo generation-aware con `dossierCoversYears` + ventana de años del
+criteria o de la etiqueta) → dispara `buildDossier` fire-and-forget y emite
+`dossier_needed(reason: brief_created)`; al terminar, `insertDossier` ya
+encadena reevaluación + barrido dirigido + enriquecimiento post-ingest. Si SÍ
+está cubierta → barrido dirigido inmediato (antes la caza esperaba el tick).
+Sin API key se mantiene el carril manual (la tarjeta en /dossiers).
+Guardas nuevas: `buildDossier` rechaza builds concurrentes del mismo modelo
+(Set en módulo — el clic manual durante una auto-investigación no paga dos
+veces) e `isDossierBuilding` alimenta la UI: la tarjeta de /dossiers muestra
+«⏳ Investigando…» en vez del botón, y la de /briefs añade «dossier en
+investigación» mientras corre.
+
 **Cambio 2026-07-22 — enriquecimiento inmediato tras el ingest.** Los leads
 del Master llegaron a las ~23:45 con la frase genérica: el keyLine lo pone el
 carril de enriquecimiento (Haiku), que solo corre en ticks del scheduler

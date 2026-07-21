@@ -5,6 +5,7 @@ import { briefs, discoveries, events, users } from "@deepblue/db";
 import { and, eq, ne } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
+import { startBriefHunt } from "../../lib/brief-hunt";
 import { getDb } from "../../lib/db";
 import { buildDiscoveryReport, recommendationToBrief } from "../../lib/discovery";
 import { isLlmConfigured } from "../../lib/llm";
@@ -117,6 +118,15 @@ export async function createBriefFromRecommendation(formData: FormData): Promise
       userId,
       type: "brief_from_discovery",
       payload: { discoveryId, briefId: created?.id, make: rec.make, model: rec.model },
+    });
+
+    // Same zero-click chain as manual brief creation: dossier-first, then
+    // sweep — the recommendation's year band scopes the coverage check.
+    await startBriefHunt(db, userId, {
+      make: rec.make,
+      model: rec.model,
+      yearMin: rec.yearMin,
+      yearMax: rec.yearMax,
     });
   }
   revalidatePath("/discovery");

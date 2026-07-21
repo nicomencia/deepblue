@@ -6,6 +6,7 @@ import { eq } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { deleteBriefCascade } from "../../lib/brief-admin";
+import { startBriefHunt } from "../../lib/brief-hunt";
 import { getDb } from "../../lib/db";
 import { reevaluateBriefLeads } from "../../lib/reevaluate";
 
@@ -89,6 +90,17 @@ export async function createBrief(formData: FormData): Promise<void> {
     String(formData.get("name") ?? "").trim() || `${make} ${model} hasta ${maxPriceEur} €`;
 
   await db.insert(briefs).values({ userId: user.id, name, criteria, hardLimits });
+
+  // Zero-click chain: uncovered generation → dossier research fires now and
+  // its completion sweeps + enriches; covered → sweep immediately.
+  await startBriefHunt(db, user.id, {
+    make,
+    model,
+    generation: generation || undefined,
+    yearMin: criteria.yearMin,
+    yearMax: criteria.yearMax,
+  });
+
   revalidatePath("/briefs");
 }
 

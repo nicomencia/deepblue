@@ -2,6 +2,7 @@ import { dossierCoversModel, dossierCoversYears, generationYearSpan } from "@dee
 import { briefs, modelDossiers } from "@deepblue/db";
 import { desc, inArray } from "drizzle-orm";
 import { getDb } from "../../lib/db";
+import { isDossierBuilding } from "../../lib/dossier-builder";
 import { isLlmConfigured } from "../../lib/llm";
 import { fmtDate } from "../../lib/ui";
 import { SubmitButton } from "../submit-button";
@@ -83,7 +84,11 @@ export default async function DossiersPage() {
                 {v.make} {v.model}
                 {v.generation ? ` (${v.generation})` : ""}
               </strong>
-              {llmReady ? (
+              {isDossierBuilding(v.make, v.model) ? (
+                <span style={{ color: "var(--ink-muted)", fontSize: "0.85rem" }}>
+                  ⏳ Investigando… (unos minutos; recarga para ver el resultado)
+                </span>
+              ) : llmReady ? (
                 <form action={generateDossier}>
                   <input type="hidden" name="make" value={v.make} />
                   <input type="hidden" name="model" value={v.model} />

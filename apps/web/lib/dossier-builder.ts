@@ -159,13 +159,32 @@ export async function insertDossier(
   return { id: inserted.id, version, dossier };
 }
 
+// Research runs for minutes; auto-build (brief creation, adoption) and the
+// manual /dossiers click can overlap on the same model — one build is enough.
+const building = new Set<string>();
+
+/** Pages render in this same process: show "investigando…" instead of a
+ * button that would only throw the duplicate-build error. */
+export function isDossierBuilding(make: string, model: string): boolean {
+  return building.has(`${make}|${model}`.toLowerCase());
+}
+
 export async function buildDossier(
   db: Db,
   req: DossierRequest,
   userId: string,
 ): Promise<BuiltDossier> {
-  const drafted = await draftWithResearch(req);
-  // Canonical identity comes from the request, whatever the model echoed.
-  const dossier: ModelDossier = { ...drafted, make: req.make, model: req.model };
-  return insertDossier(db, dossier, userId, DOSSIER_MODEL);
+  const key = `${req.make}|${req.model}`.toLowerCase();
+  if (building.has(key)) {
+    throw new Error(`ya se está investigando ${req.make} ${req.model} — espera a que termine`);
+  }
+  building.add(key);
+  try {
+    const drafted = await draftWithResearch(req);
+    // Canonical identity comes from the request, whatever the model echoed.
+    const dossier: ModelDossier = { ...drafted, make: req.make, model: req.model };
+    return await insertDossier(db, dossier, userId, DOSSIER_MODEL);
+  } finally {
+    building.delete(key);
+  }
 }
