@@ -133,6 +133,26 @@ anuncios, digest con suelo de nota + alertas A/B sin duplicados, dossiers
 en la página del lead), tabs por búsqueda, página Actividad, descubrimiento de
 modelos y adopción manual de anuncios con dossier-first. 77 tests verdes.
 
+**Cambio 2026-07-21 — búsquedas de unidades antiguas / por generación.**
+Caso real: cazar un Master gen I (1980–1997) era imposible — el formulario
+solo tenía «Año mínimo», el payload del sweep no llevaba `yearMax` (aunque
+`BriefCriteria` y `evaluateListing` ya lo soportaban) y el adapter no enviaba
+`max_year`. Ahora `yearMax` viaja entero: formulario («Año máximo») →
+criteria → `searchSweepPayload.query` → Wallapop `max_year` (VERIFICADO en
+vivo 2026-07-21: 9 resultados, todos 1982–1997 — RECON.md actualizado; AS24
+`fregto` por paridad). Además «Generación (opcional)» en el formulario →
+`vehicles[0].generations` (alimenta el dossier-first y la tarjeta). Y el
+arreglo profundo: `getDossier` elegía dossier por versión más reciente,
+ciego a generación — un dossier gen III (2010–presente) juzgaría una furgo
+de 1990, o un dossier gen I recién creado secuestraría TODOS los veredictos
+del modelo. Nuevo en core: `generationYearSpan` (parsea «I (1980–1997)» /
+«III (2010–presente)» de la etiqueta de generación) y `pickDossierForYear`
+(cubre el año > sin etiqueta [universal] > ninguno — un dossier de otra
+generación es conocimiento de OTRO coche y jamás se aplica). `getDossier`
+acepta `year` y los tres call sites (ingest, reevaluate, adopt) lo pasan.
+El descubrimiento ya pasaba `yearMax` a criteria — hasta hoy moría en
+silencio en el payload; ahora llega a la query. 168 tests core (5 nuevos).
+
 **Cambio 2026-07-21 — el runner carga su propio entorno.** `loadConfig` leía
 `CORE_API_URL`/`RUNNER_TOKEN` de `process.env` a secas y ningún framework los
 cargaba por él: `pnpm dev:runner` en una terminal limpia moría al instante — y

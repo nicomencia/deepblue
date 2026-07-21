@@ -49,6 +49,7 @@ export const autoscout24Adapter: PlatformAdapter = {
     }
     const params = new URLSearchParams();
     if (query.yearMin !== undefined) params.set("fregfrom", String(query.yearMin));
+    if (query.yearMax !== undefined) params.set("fregto", String(query.yearMax));
     if (query.priceMaxEur !== undefined) params.set("priceto", String(query.priceMaxEur));
 
     const url = `${BASE}/lst/${slugify(query.make)}/${slugify(query.model)}?${params}`;

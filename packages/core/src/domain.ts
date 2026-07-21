@@ -347,6 +347,49 @@ export const modelDossierSchema = z.object({
 });
 export type ModelDossier = z.infer<typeof modelDossierSchema>;
 
+/**
+ * Year span encoded in a generation label — "I (1980–1997)", "III (2010–
+ * presente)". The dossier builder's convention puts the range in parentheses;
+ * parsing it lets a listing year select the right generation's dossier.
+ * No parseable span → undefined (the label is informational only).
+ */
+export function generationYearSpan(
+  generation: string | undefined,
+): { yearMin: number; yearMax?: number } | undefined {
+  if (!generation) return undefined;
+  const m = generation.match(/\((\d{4})\s*[–—-]\s*(\d{4})?[^)]*\)/);
+  if (!m?.[1]) return undefined;
+  return {
+    yearMin: Number(m[1]),
+    // "presente", "actualidad", a bare dash… — anything but a year = open end.
+    yearMax: m[2] !== undefined ? Number(m[2]) : undefined,
+  };
+}
+
+/**
+ * Pick the dossier a listing of `year` should be judged by, from candidates
+ * already ordered by preference (exact model match first, then version desc —
+ * getDossier's SQL). Generation-scoped dossiers are hard-scoped: one whose
+ * span excludes the year is knowledge about a DIFFERENT car (a gen-III issue
+ * list says nothing about a gen-I van), so the pick is: span covers the year
+ * > span-less (universal) dossier > none. Without a year, first wins as before.
+ */
+export function pickDossierForYear(
+  dossiers: ModelDossier[],
+  year?: number,
+): ModelDossier | undefined {
+  if (year === undefined) return dossiers[0];
+  const covering = dossiers.find((d) => {
+    const span = generationYearSpan(d.generation);
+    return (
+      span !== undefined &&
+      year >= span.yearMin &&
+      (span.yearMax === undefined || year <= span.yearMax)
+    );
+  });
+  return covering ?? dossiers.find((d) => generationYearSpan(d.generation) === undefined);
+}
+
 // ---------------------------------------------------------------------------
 // Discovery — help the user find the right model(s) before any brief exists
 // ---------------------------------------------------------------------------

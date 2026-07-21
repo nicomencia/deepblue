@@ -139,7 +139,7 @@ export async function reevaluateLead(
     { version: nl.version, year: nl.year, powerCv: nl.powerCv, fuel: nl.fuel, gearbox: nl.gearbox },
     caches.benchmark,
   );
-  const dossier = await getDossier(db, nl.make, nl.model, caches.dossier);
+  const dossier = await getDossier(db, nl.make, nl.model, caches.dossier, nl.year);
   const evaluation = evaluateListing(
     nl,
     brief.criteria,

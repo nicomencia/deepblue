@@ -82,6 +82,7 @@ export const wallapopAdapter: PlatformAdapter = {
     if (query.priceMaxEur !== undefined) params.set("max_sale_price", String(query.priceMaxEur));
     if (query.priceMinEur !== undefined) params.set("min_sale_price", String(query.priceMinEur));
     if (query.yearMin !== undefined) params.set("min_year", String(query.yearMin));
+    if (query.yearMax !== undefined) params.set("max_year", String(query.yearMax));
     if (query.kmMax !== undefined) params.set("max_km", String(query.kmMax));
     if (query.fuel !== undefined) params.set("engine", WALLAPOP_ENGINE[query.fuel]);
 

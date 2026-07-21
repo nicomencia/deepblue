@@ -5,6 +5,7 @@ import {
   computeBenchmark,
   type BenchmarkTarget,
   type Comparable,
+  pickDossierForYear,
   type ModelDossier,
   type PriceBenchmark,
 } from "@deepblue/core";
@@ -91,9 +92,10 @@ export async function getDossier(
   make: string | undefined,
   model: string | undefined,
   cache: Map<string, ModelDossier | undefined>,
+  year?: number,
 ): Promise<ModelDossier | undefined> {
   if (!make || !model) return undefined;
-  const key = `${make.toLowerCase()}|${model.toLowerCase()}`;
+  const key = `${make.toLowerCase()}|${model.toLowerCase()}|${year ?? ""}`;
   if (cache.has(key)) return cache.get(key);
 
   // Listing model fields carry seller free text ("207 rc", "Golf GTI"); a
@@ -111,10 +113,15 @@ export async function getDossier(
         isNull(modelDossiers.disabledAt),
       ),
     )
-    .orderBy(desc(sql`lower(${modelDossiers.model}) = ${m}`), desc(modelDossiers.version))
-    .limit(1);
+    .orderBy(desc(sql`lower(${modelDossiers.model}) = ${m}`), desc(modelDossiers.version));
 
-  const dossier = rows[0]?.content;
+  // Generation-aware pick: a dossier whose generation label carries a year
+  // span only judges listings inside it (a gen-III issue list says nothing
+  // about a gen-I van). Span covering the year > span-less > none.
+  const dossier = pickDossierForYear(
+    rows.map((r) => r.content),
+    year,
+  );
   cache.set(key, dossier);
   return dossier;
 }

@@ -97,7 +97,10 @@ export default async function BriefsPage({
                 <span style={{ color: "var(--ink-muted)" }}>· {brief.status}</span>
                 <p style={{ margin: "0.3rem 0 0", fontSize: "0.87rem", color: "var(--ink-muted)" }}>
                   {v ? `${v.make} ${v.model}` : "—"}
-                  {c.yearMin ? ` · desde ${c.yearMin}` : ""}
+                  {v?.generations?.[0] ? ` · gen ${v.generations[0]}` : ""}
+                  {c.yearMin || c.yearMax
+                    ? ` · ${c.yearMin ?? "…"}–${c.yearMax ?? "hoy"}`
+                    : ""}
                   {c.kmMax ? ` · hasta ${c.kmMax.toLocaleString("es-ES")} km` : ""}
                   {" · máx "}
                   {fmtEur(brief.hardLimits.maxPriceEur)}
@@ -167,6 +170,14 @@ export default async function BriefsPage({
         <label style={lbl}>
           Año mínimo
           <input name="yearMin" type="number" placeholder="2015" style={inp} />
+        </label>
+        <label style={lbl}>
+          Año máximo (unidades antiguas / una generación)
+          <input name="yearMax" type="number" placeholder="1997" style={inp} />
+        </label>
+        <label style={lbl}>
+          Generación (opcional — orienta el dossier)
+          <input name="generation" placeholder="I (1980–1997)" style={inp} />
         </label>
         <label style={lbl}>
           Km máximos

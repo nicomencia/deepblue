@@ -233,7 +233,7 @@ async function ingestOne(
     { version: item.version, year: item.year, powerCv: item.powerCv, fuel: item.fuel, gearbox: item.gearbox },
     caches.benchmark,
   );
-  const dossier = await getDossier(db, item.make, item.model, caches.dossier);
+  const dossier = await getDossier(db, item.make, item.model, caches.dossier, item.year);
   const evaluation = evaluateListing(
     item,
     brief.criteria,

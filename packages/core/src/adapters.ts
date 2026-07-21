@@ -15,6 +15,8 @@ export interface SearchQuery {
   /** Floor to skip financing/installment posts and obvious junk. */
   priceMinEur?: number;
   yearMin?: number;
+  /** Cap for old-unit hunts (e.g. a gen-I search on a model still in production). */
+  yearMax?: number;
   kmMax?: number;
   /** Only set when the brief pins exactly one fuel. */
   fuel?: "gasoline" | "diesel" | "hybrid" | "electric";

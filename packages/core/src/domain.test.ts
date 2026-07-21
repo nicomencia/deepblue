@@ -5,13 +5,16 @@ import {
   canTransition,
   discoveryReportSchema,
   dossierCoversModel,
+  generationYearSpan,
   gradeAtMost,
   isPlatformActive,
   llmEnrichmentPayloadSchema,
   modelDossierSchema,
   normalizedListingSchema,
+  pickDossierForYear,
   PLATFORMS,
   sameModelFamily,
+  type ModelDossier,
 } from "./domain.js";
 
 describe("active platforms", () => {
@@ -43,6 +46,55 @@ describe("sameModelFamily", () => {
     expect(sameModelFamily("golf", "golf")).toBe(true);
     expect(sameModelFamily("207", "208")).toBe(false);
     expect(sameModelFamily("serie 3", "serie 5")).toBe(false);
+  });
+});
+
+describe("generationYearSpan", () => {
+  it("parses closed and open-ended spans from generation labels", () => {
+    expect(generationYearSpan("I (1980–1997)")).toEqual({ yearMin: 1980, yearMax: 1997 });
+    expect(generationYearSpan("VII (2012-2019)")).toEqual({ yearMin: 2012, yearMax: 2019 });
+    expect(generationYearSpan("III (2010–presente)")).toEqual({ yearMin: 2010, yearMax: undefined });
+    expect(generationYearSpan("Mk2 (1998–actualidad)")).toEqual({ yearMin: 1998, yearMax: undefined });
+  });
+
+  it("returns undefined when there is nothing parseable", () => {
+    expect(generationYearSpan(undefined)).toBeUndefined();
+    expect(generationYearSpan("VII")).toBeUndefined();
+    expect(generationYearSpan("Fase 2")).toBeUndefined();
+  });
+});
+
+describe("pickDossierForYear", () => {
+  const dossier = (generation?: string): ModelDossier => ({
+    make: "Renault",
+    model: "Master",
+    ...(generation ? { generation } : {}),
+    knownIssues: [],
+    recalls: [],
+    generalNotes: [],
+    sources: [],
+  });
+
+  it("a listing year selects the generation whose span covers it", () => {
+    const genIII = dossier("III (2010–presente)");
+    const genI = dossier("I (1980–1997)");
+    expect(pickDossierForYear([genIII, genI], 1990)).toBe(genI);
+    expect(pickDossierForYear([genIII, genI], 2015)).toBe(genIII);
+  });
+
+  it("a span that excludes the year is never applied — span-less wins as universal", () => {
+    const genIII = dossier("III (2010–presente)");
+    const universal = dossier(); // no generation label → applies to all years
+    expect(pickDossierForYear([genIII, universal], 1990)).toBe(universal);
+    // Only the wrong generation exists → honestly no dossier at all.
+    expect(pickDossierForYear([genIII], 1990)).toBeUndefined();
+  });
+
+  it("without a year, the pre-ordered first candidate wins (old behavior)", () => {
+    const genIII = dossier("III (2010–presente)");
+    const genI = dossier("I (1980–1997)");
+    expect(pickDossierForYear([genIII, genI], undefined)).toBe(genIII);
+    expect(pickDossierForYear([], undefined)).toBeUndefined();
   });
 });
 

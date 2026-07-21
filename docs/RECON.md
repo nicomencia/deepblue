@@ -29,11 +29,14 @@ jittered pacing), just via HTTP instead of a browser.
   - `min_year`, `max_km`, `max_sale_price`, `min_sale_price` — respected within
     the category context. `min_sale_price` also skips financing/installment posts
     (329–421 € "cars" are monthly-quota ads, not prices).
+  - `max_year` — respected (verified live 2026-07-21: `keywords=renault master`
+    + `max_year=1997` → 9 items, all years 1982–1997). Enables old-unit /
+    single-generation briefs.
   - `engine` — values: `gasoline`, `gasoil` (diesel), `hybrid`, `electric`
     (verified: `engine=gasoil` → all-Diesel results).
   - `order_by=newest` — respected (verified via created_at ordering). Default is
     `closest`.
-  - Unverified (assumed to exist, not sent): `max_year`, `min_km`, `gearbox`
+  - Unverified (assumed to exist, not sent): `min_km`, `gearbox`
     (can't verify from search payload — no gearbox field in search items).
 - `GET https://api.wallapop.com/api/v3/items/{item_id}` — **HTTP 200**, same headers.
   Detail `type_attributes` come wrapped as `{value, text}` and add what search omits:

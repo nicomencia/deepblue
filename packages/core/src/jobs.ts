@@ -31,6 +31,7 @@ export const searchSweepPayload = z.object({
     priceMaxEur: z.number().optional(),
     priceMinEur: z.number().optional(),
     yearMin: z.number().optional(),
+    yearMax: z.number().optional(),
     kmMax: z.number().optional(),
     fuel: z.enum(["gasoline", "diesel", "hybrid", "electric"]).optional(),
     location: z

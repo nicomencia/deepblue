@@ -45,8 +45,11 @@ export async function createBrief(formData: FormData): Promise<void> {
     throw new Error("marca, modelo y precio máximo son obligatorios");
   }
 
+  // Generation is advisory (dossier-first machinery + card display); the year
+  // bounds do the actual filtering — sweep query and evaluation both enforce.
+  const generation = String(formData.get("generation") ?? "").trim();
   const criteria: BriefCriteria = {
-    vehicles: [{ make, model }],
+    vehicles: [{ make, model, ...(generation ? { generations: [generation] } : {}) }],
     yearMin: num(formData.get("yearMin")),
     yearMax: num(formData.get("yearMax")),
     kmMax: num(formData.get("kmMax")),

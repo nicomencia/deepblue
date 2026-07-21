@@ -46,6 +46,7 @@ export async function enqueueSweeps(db: Db): Promise<number> {
             // Floor skips financing/installment posts (329€ "cars") and wrecks.
             priceMinEur: Math.round(brief.hardLimits.maxPriceEur * 0.3),
             yearMin: brief.criteria.yearMin,
+            yearMax: brief.criteria.yearMax,
             kmMax: brief.criteria.kmMax,
             fuel: brief.criteria.fuel?.length === 1 ? brief.criteria.fuel[0] : undefined,
             location: brief.criteria.location,

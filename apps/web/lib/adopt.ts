@@ -284,7 +284,7 @@ export async function completeAdoption(
     { version: nl.version, year: nl.year, powerCv: nl.powerCv, fuel: nl.fuel, gearbox: nl.gearbox },
     caches.benchmark,
   );
-  const reviewedDossier = await getDossier(db, nl.make, nl.model, caches.dossier);
+  const reviewedDossier = await getDossier(db, nl.make, nl.model, caches.dossier, nl.year);
   const evaluation = evaluateListing(nl, brief.criteria, brief.hardLimits, benchmark, reviewedDossier);
 
   const [lead] = await db
