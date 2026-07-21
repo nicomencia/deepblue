@@ -131,7 +131,36 @@ function hardFilterReason(
   if (price !== undefined && price > hardLimits.maxPriceEur * NEGOTIATION_HEADROOM) {
     return "price_over_budget";
   }
+  // Wallapop's API ignores distance params (verified 2026-07-22, RECON.md),
+  // so the search radius is enforced HERE. Facts only: listings without
+  // coordinates pass (can't condemn on missing data), and the slack absorbs
+  // city-centroid coordinates — sellers geocode to the town center.
+  if (
+    criteria.location &&
+    listing.lat !== undefined &&
+    listing.lon !== undefined &&
+    haversineKm(criteria.location, { lat: listing.lat, lon: listing.lon }) >
+      criteria.location.radiusKm + RADIUS_SLACK_KM
+  ) {
+    return "outside_search_radius";
+  }
   return undefined;
+}
+
+/** City-centroid coordinates put a village seller ~this far from their pin. */
+const RADIUS_SLACK_KM = 15;
+
+export function haversineKm(
+  a: { lat: number; lon: number },
+  b: { lat: number; lon: number },
+): number {
+  const R = 6371;
+  const dLat = ((b.lat - a.lat) * Math.PI) / 180;
+  const dLon = ((b.lon - a.lon) * Math.PI) / 180;
+  const s =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos((a.lat * Math.PI) / 180) * Math.cos((b.lat * Math.PI) / 180) * Math.sin(dLon / 2) ** 2;
+  return 2 * R * Math.asin(Math.sqrt(s));
 }
 
 // ---------------------------------------------------------------------------

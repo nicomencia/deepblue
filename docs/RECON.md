@@ -36,6 +36,10 @@ jittered pacing), just via HTTP instead of a browser.
     (verified: `engine=gasoil` → all-Diesel results).
   - `order_by=newest` — respected (verified via created_at ordering). Default is
     `closest`.
+  - `distance` / `dist` — NOT respected (verified live 2026-07-22: both names,
+    Madrid center + 30 km → 40 items nationwide, 37 beyond 45 km). Results are
+    country-wide regardless of coordinates; the search radius is therefore
+    enforced in the Core's evaluation (`outside_search_radius`), not the query.
   - Unverified (assumed to exist, not sent): `min_km`, `gearbox`
     (can't verify from search payload — no gearbox field in search items).
 - `GET https://api.wallapop.com/api/v3/items/{item_id}` — **HTTP 200**, same headers.

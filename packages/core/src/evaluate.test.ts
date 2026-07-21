@@ -161,6 +161,26 @@ describe("hard filters", () => {
     expect(evaluateListing(listing({ year: undefined, km: undefined }), criteria(), hardLimits).outcome).toBe("shortlisted");
   });
 
+  it("enforces the search radius in code — Wallapop ignores distance params", () => {
+    const madrid = { location: { lat: 40.4168, lon: -3.7038, radiusKm: 100 } };
+    // Zaragoza is ~274 km from Madrid: outside a 100 km hunt.
+    const zaragoza = { lat: 41.6488, lon: -0.8891 };
+    expect(
+      evaluateListing(listing(zaragoza), criteria(madrid), hardLimits).deadReason,
+    ).toBe("outside_search_radius");
+    // Toledo (~67 km) fits; missing coordinates never condemn.
+    expect(
+      evaluateListing(listing({ lat: 39.8628, lon: -4.0273 }), criteria(madrid), hardLimits).outcome,
+    ).toBe("shortlisted");
+    expect(
+      evaluateListing(listing({ lat: undefined, lon: undefined }), criteria(madrid), hardLimits).outcome,
+    ).toBe("shortlisted");
+    // Slack absorbs city-centroid pins just over the line (radius + 15 km).
+    expect(
+      evaluateListing(listing({ lat: 41.3, lon: -3.7 }), criteria(madrid), hardLimits).outcome,
+    ).toBe("shortlisted"); // ~98 km
+  });
+
   it("keeps asking prices within negotiation headroom, kills above it", () => {
     const cap = Math.round(hardLimits.maxPriceEur * NEGOTIATION_HEADROOM); // 17.825
     expect(evaluateListing(listing({ priceEur: cap }), criteria(), hardLimits).outcome).toBe("shortlisted");
