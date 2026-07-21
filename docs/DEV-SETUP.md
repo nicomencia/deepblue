@@ -133,6 +133,18 @@ anuncios, digest con suelo de nota + alertas A/B sin duplicados, dossiers
 en la página del lead), tabs por búsqueda, página Actividad, descubrimiento de
 modelos y adopción manual de anuncios con dossier-first. 77 tests verdes.
 
+**Cambio 2026-07-22 — docs/DEVELOPING.md: el playbook de features.** Guía de
+cómo se construye una feature aquí sin romper lo que funciona: el modelo
+mental (cerebro/manos), los 9 invariantes no negociables, la tabla de «¿dónde
+va mi código?», el workflow (leer primero → diseñar contra invariantes →
+core-first con tests → verificar en vivo → disciplina RECON → documentar y
+commitear), el catálogo de patrones establecidos con sus ejemplares
+(fire-and-forget + flag, carriles auto-curativos, carriles de scheduler,
+SubmitButton, /api/dev/*, eventos), la filosofía de tests (los validadores
+alrededor del LLM se testean, el LLM no) y los gotchas ganados a pulso
+(agrupación es-ES, num() vs coord(), campos vacíos ≠ null). Enlazada desde
+README. PROJECT.md manda si algún día discrepan.
+
 **Cambio 2026-07-22 — el radio de búsqueda por fin es real (en código, no en
 la query).** Sonda RECON: Wallapop IGNORA `distance` y `dist` (Madrid + 30 km
 → 40 resultados de toda España, 37 más allá de 45 km) — el radio que escribía

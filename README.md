@@ -4,6 +4,8 @@ Autonomous agent that hunts second-hand cars, evaluates their reliability like a
 negotiates with sellers on your behalf, and hands you the purchase at the final step.
 
 **Read [PROJECT.md](./PROJECT.md) first** — vision, decisions, architecture, and roadmap.
+Building a feature? [docs/DEVELOPING.md](./docs/DEVELOPING.md) — the playbook:
+invariants, where code goes, established patterns, workflow, gotchas.
 Recon findings on platform internals live in [docs/RECON.md](./docs/RECON.md).
 Moving to a new dev machine? [docs/DEV-SETUP.md](./docs/DEV-SETUP.md) — what to
 copy by hand (.env.local, PGlite data), start order, dev endpoints, current state.
