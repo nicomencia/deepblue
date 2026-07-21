@@ -5,6 +5,7 @@ import { getDb } from "../../lib/db";
 import { briefNameForRecommendation } from "../../lib/discovery";
 import { isLlmConfigured } from "../../lib/llm";
 import { fmtDate, fmtEur } from "../../lib/ui";
+import { SubmitButton } from "../submit-button";
 import {
   analyzeDiscovery,
   archiveDiscovery,
@@ -104,7 +105,7 @@ export default async function DiscoveryPage() {
           <textarea name="notes" rows={2} placeholder="tuve un Golf y me encantó, aparco en la calle…" style={input} />
         </label>
         <div>
-          <button type="submit" style={btn}>Crear perfil</button>
+          <SubmitButton label="Crear perfil" pendingLabel="⏳ Creando…" style={btn} />
         </div>
       </form>
 
@@ -126,7 +127,11 @@ export default async function DiscoveryPage() {
               {llmReady ? (
                 <form action={analyzeDiscovery}>
                   <input type="hidden" name="id" value={s.id} />
-                  <button type="submit" style={btn}>Analizar con IA</button>
+                  <SubmitButton
+                    label="Analizar con IA"
+                    pendingLabel="⏳ Analizando… (tarda unos minutos)"
+                    style={btn}
+                  />
                 </form>
               ) : (
                 <span style={{ color: "var(--ink-muted)", fontSize: "0.85rem" }}>
@@ -136,7 +141,7 @@ export default async function DiscoveryPage() {
               )}
               <form action={archiveDiscovery}>
                 <input type="hidden" name="id" value={s.id} />
-                <button type="submit" style={{ ...btn, opacity: 0.7 }}>Archivar</button>
+                <SubmitButton label="Archivar" style={{ ...btn, opacity: 0.7 }} />
               </form>
             </div>
           )}
@@ -184,7 +189,11 @@ export default async function DiscoveryPage() {
                     <form action={createBriefFromRecommendation} style={{ marginTop: "0.5rem" }}>
                       <input type="hidden" name="discoveryId" value={s.id} />
                       <input type="hidden" name="index" value={i} />
-                      <button type="submit" style={btn}>Crear búsqueda</button>
+                      <SubmitButton
+                        label="Crear búsqueda"
+                        pendingLabel="⏳ Creando búsqueda…"
+                        style={btn}
+                      />
                     </form>
                   )}
                 </div>
@@ -197,7 +206,7 @@ export default async function DiscoveryPage() {
               )}
               <form action={archiveDiscovery}>
                 <input type="hidden" name="id" value={s.id} />
-                <button type="submit" style={{ ...btn, opacity: 0.7 }}>Archivar</button>
+                <SubmitButton label="Archivar" style={{ ...btn, opacity: 0.7 }} />
               </form>
             </>
           )}

@@ -4,7 +4,7 @@ import Link from "next/link";
 import { getDb } from "../../lib/db";
 import { fmtEur } from "../../lib/ui";
 import { adoptAd } from "../actions";
-import { AdoptSubmit } from "../adopt-submit";
+import { SubmitButton } from "../submit-button";
 import { createBrief, deleteBrief, setBriefStatus, toggleBriefLimit } from "./actions";
 import { ConfirmDelete } from "./confirm-delete";
 
@@ -74,7 +74,11 @@ export default async function BriefsPage({
               </option>
             ))}
           </select>
-          <AdoptSubmit style={{ ...btn, fontWeight: 600 }} />
+          <SubmitButton
+            label="Adoptar"
+            pendingLabel="⏳ Adoptando…"
+            style={{ ...btn, fontWeight: 600 }}
+          />
         </form>
         <p style={{ color: "var(--ink-muted)", fontSize: "0.8rem", margin: "0.4rem 0 0" }}>
           El runner analizará el anuncio en su siguiente ciclo (~1 min); aparecerá como lead
@@ -128,9 +132,10 @@ export default async function BriefsPage({
                     name="status"
                     value={brief.status === "active" ? "paused" : "active"}
                   />
-                  <button type="submit" style={btn}>
-                    {brief.status === "active" ? "Pausar" : "Activar"}
-                  </button>
+                  <SubmitButton
+                    label={brief.status === "active" ? "Pausar" : "Activar"}
+                    style={btn}
+                  />
                 </form>
                 <form action={deleteBrief}>
                   <input type="hidden" name="id" value={brief.id} />
@@ -232,9 +237,11 @@ export default async function BriefsPage({
           <textarea name="notes" rows={2} placeholder={"Preferible pocos propietarios"} style={inp} />
         </label>
         <div style={{ gridColumn: "1 / -1" }}>
-          <button type="submit" style={{ ...btn, fontWeight: 600, padding: "0.5rem 1.2rem" }}>
-            Crear búsqueda
-          </button>
+          <SubmitButton
+            label="Crear búsqueda"
+            pendingLabel="⏳ Creando búsqueda…"
+            style={{ ...btn, fontWeight: 600, padding: "0.5rem 1.2rem" }}
+          />
         </div>
       </form>
     </main>

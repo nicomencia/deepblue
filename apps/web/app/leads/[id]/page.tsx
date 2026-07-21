@@ -20,6 +20,7 @@ import { notFound } from "next/navigation";
 import { getDb } from "../../../lib/db";
 import { draftSellerProse } from "../../../lib/draft-message";
 import { fmtDate, fmtEur, fmtKm, gradeVar } from "../../../lib/ui";
+import { SubmitButton } from "../../submit-button";
 import { GenerateLink } from "./generate-link";
 import {
   approveSellerMessage,
@@ -584,15 +585,18 @@ export default async function LeadDetail({
                     fontSize: "0.9rem",
                   }}
                 />
-                <button type="submit" style={{ ...btn, color: "var(--grade-a)", marginTop: "0.5rem" }}>
-                  Aprobar y enviar
-                </button>
+                <SubmitButton
+                  label="Aprobar y enviar"
+                  pendingLabel="⏳ Enviando a la cola…"
+                  style={{ ...btn, color: "var(--grade-a)", marginTop: "0.5rem" }}
+                />
               </form>
               <form action={rejectSellerMessage} style={{ display: "inline" }}>
                 <input type="hidden" name="leadId" value={lead.id} />
-                <button type="submit" style={{ ...btn, color: "var(--grade-e)", marginTop: "0.5rem" }}>
-                  Rechazar
-                </button>
+                <SubmitButton
+                  label="Rechazar"
+                  style={{ ...btn, color: "var(--grade-e)", marginTop: "0.5rem" }}
+                />
               </form>
             </div>
           ) : (
@@ -626,9 +630,11 @@ export default async function LeadDetail({
                   <p style={{ margin: "0.2rem 0 0", fontSize: "0.75rem", color: "var(--ink-muted)" }}>
                     Máx. {CHAT_MAX_CHARS} caracteres (límite del chat de Wallapop)
                   </p>
-                  <button type="submit" style={{ ...btn, marginTop: "0.4rem" }}>
-                    Enviar al vendedor
-                  </button>
+                  <SubmitButton
+                    label="Enviar al vendedor"
+                    pendingLabel="⏳ Enviando a la cola…"
+                    style={{ ...btn, marginTop: "0.4rem" }}
+                  />
                   {suggestion && !sugerir && (
                     <GenerateLink
                       href={`/leads/${lead.id}?sugerir=1`}

@@ -4,6 +4,7 @@ import { desc, inArray } from "drizzle-orm";
 import { getDb } from "../../lib/db";
 import { isLlmConfigured } from "../../lib/llm";
 import { fmtDate } from "../../lib/ui";
+import { SubmitButton } from "../submit-button";
 import { approveDossier, deleteDossier, disableDossier, enableDossier, generateDossier } from "./actions";
 
 export const dynamic = "force-dynamic";
@@ -83,9 +84,11 @@ export default async function DossiersPage() {
                   <input type="hidden" name="make" value={v.make} />
                   <input type="hidden" name="model" value={v.model} />
                   {v.generation && <input type="hidden" name="generation" value={v.generation} />}
-                  <button type="submit" style={btn}>
-                    Investigar y redactar borrador
-                  </button>
+                  <SubmitButton
+                    label="Investigar y redactar borrador"
+                    pendingLabel="⏳ Investigando… (tarda unos minutos)"
+                    style={btn}
+                  />
                 </form>
               ) : (
                 <span style={{ color: "var(--ink-muted)", fontSize: "0.85rem" }}>requiere API key</span>
@@ -142,32 +145,32 @@ export default async function DossiersPage() {
                   <>
                     <form action={approveDossier}>
                       <input type="hidden" name="id" value={d.id} />
-                      <button type="submit" style={{ ...btn, fontWeight: 600 }}>
-                        Aprobar
-                      </button>
+                      <SubmitButton
+                        label="Aprobar"
+                        pendingLabel="⏳ Aplicando…"
+                        style={{ ...btn, fontWeight: 600 }}
+                      />
                     </form>
                     <form action={deleteDossier}>
                       <input type="hidden" name="id" value={d.id} />
-                      <button type="submit" style={btn}>
-                        Descartar
-                      </button>
+                      <SubmitButton label="Descartar" style={btn} />
                     </form>
                   </>
                 )}
                 {!draft && !disabled && (
                   <form action={disableDossier}>
                     <input type="hidden" name="id" value={d.id} />
-                    <button type="submit" style={btn}>
-                      Desactivar
-                    </button>
+                    <SubmitButton label="Desactivar" pendingLabel="⏳ Aplicando…" style={btn} />
                   </form>
                 )}
                 {!draft && disabled && (
                   <form action={enableDossier}>
                     <input type="hidden" name="id" value={d.id} />
-                    <button type="submit" style={{ ...btn, fontWeight: 600 }}>
-                      Reactivar
-                    </button>
+                    <SubmitButton
+                      label="Reactivar"
+                      pendingLabel="⏳ Aplicando…"
+                      style={{ ...btn, fontWeight: 600 }}
+                    />
                   </form>
                 )}
               </div>
@@ -229,9 +232,12 @@ export default async function DossiersPage() {
           Generación (opcional)
           <input name="generation" placeholder="XII (2019–)" style={inp} />
         </label>
-        <button type="submit" style={btn} disabled={!llmReady}>
-          Investigar y redactar borrador
-        </button>
+        <SubmitButton
+          label="Investigar y redactar borrador"
+          pendingLabel="⏳ Investigando… (tarda unos minutos)"
+          style={btn}
+          disabled={!llmReady}
+        />
       </form>
     </main>
   );

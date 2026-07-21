@@ -52,13 +52,18 @@ pnpm typecheck && pnpm test
 pnpm dev:web             # backup de la BD + migraciones pendientes al arrancar
 ```
 
-Runner (segunda terminal; no tiene .env propio, hereda del entorno):
+Runner (segunda terminal). Desde 2026-07-21 carga su propio entorno — busca
+`apps/runner/.env.local`, luego `.env.local` (raíz) y por último
+`apps/web/.env.local` (gana el primer archivo que defina cada variable; el
+entorno real siempre gana sobre los archivos). `CORE_API_URL` tiene valor por
+defecto `http://localhost:3000`, así que en la misma máquina basta:
 
 ```bash
-export CORE_API_URL=http://localhost:3000
-export RUNNER_TOKEN=<el mismo que en .env.local>   # sin echo, sin pegarlo en chats
 pnpm dev:runner
 ```
+
+En un despliegue separado (runner en otra máquina), define `CORE_API_URL` y
+`RUNNER_TOKEN` en el entorno o en `apps/runner/.env.local`.
 
 **Arranque de un clic (Windows):** `start-deepblue.bat` en la raíz hace todo
 lo anterior: mata cualquier servidor viejo en el 3000 (el candado single-writer
@@ -127,6 +132,33 @@ anuncios, digest con suelo de nota + alertas A/B sin duplicados, dossiers
 (207/THP, Golf, Elise) con verificación manual de riesgos (Confirmar/Descartar
 en la página del lead), tabs por búsqueda, página Actividad, descubrimiento de
 modelos y adopción manual de anuncios con dossier-first. 77 tests verdes.
+
+**Cambio 2026-07-21 — el runner carga su propio entorno.** `loadConfig` leía
+`CORE_API_URL`/`RUNNER_TOKEN` de `process.env` a secas y ningún framework los
+cargaba por él: `pnpm dev:runner` en una terminal limpia moría al instante — y
+la ventana del runner de `start-deepblue.bat` moría igual (el launcher abría
+un panel sin manos). Ahora `config.ts` resuelve sus archivos env con
+`process.loadEnvFile` (Node 22, cero dependencias): `apps/runner/.env.local` →
+`.env.local` (raíz) → `apps/web/.env.local`; gana el primer archivo que define
+cada variable y el entorno real siempre gana sobre archivos (semántica
+verificada). `CORE_API_URL` por defecto `http://localhost:3000` (despliegue
+separado = definirlo explícito); `RUNNER_TOKEN` sigue siendo obligatorio, con
+error que lista dónde se buscó. Verificado: runner arranca sin inyectar nada
+y arrienda jobs. Prerequisito directo del despliegue en mini PC (systemd
+habría chocado con el mismo muro).
+
+**Cambio 2026-07-21 — feedback de envío en todos los formularios de acción.**
+«Investigar y redactar borrador» (minutos de investigación) y «Crear búsqueda»
+no daban señal alguna al hacer clic — el patrón `useFormStatus` existía
+(`AdoptSubmit`) pero nunca se generalizó. Nuevo `app/submit-button.tsx`
+(`SubmitButton`, cliente): etiqueta pendiente + botón deshabilitado mientras
+la server action corre (evita también el doble-submit). Aplicado a dossiers
+(investigar ×2 «⏳ Investigando… (tarda unos minutos)», aprobar/descartar/
+des-/reactivar), búsquedas (crear, pausar/activar, adoptar — `AdoptSubmit`
+eliminado, absorbido), descubrimiento (crear perfil, analizar con IA, crear
+búsqueda, archivar) y ficha del lead (aprobar y enviar / rechazar / enviar al
+vendedor «⏳ Enviando a la cola…»). `ConfirmDelete` (borrado con confirm()) y
+`GenerateLink` (navegación, no form) siguen siendo piezas aparte.
 
 **Cambio 2026-07-18 — el benchmark pondera por motor y cambio.** El pool de
 comparables se filtraba solo por marca+modelo+mercado, y `computeBenchmark`
