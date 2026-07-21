@@ -5,12 +5,30 @@
  * offline runner never causes a pileup.
  */
 
-import { ACTIVE_PLATFORMS, NEGOTIATION_HEADROOM, type JobPayload } from "@deepblue/core";
+import {
+  ACTIVE_PLATFORMS,
+  NEGOTIATION_HEADROOM,
+  sameModelFamily,
+  type JobPayload,
+} from "@deepblue/core";
 import { briefs, events, jobs, type Db } from "@deepblue/db";
 import { and, eq, sql } from "drizzle-orm";
 
-export async function enqueueSweeps(db: Db): Promise<number> {
-  const activeBriefs = await db.select().from(briefs).where(eq(briefs.status, "active"));
+export async function enqueueSweeps(
+  db: Db,
+  /** Only briefs hunting this model (e.g. right after its dossier landed). */
+  filter?: { make: string; model: string },
+): Promise<number> {
+  let activeBriefs = await db.select().from(briefs).where(eq(briefs.status, "active"));
+  if (filter) {
+    activeBriefs = activeBriefs.filter((b) =>
+      b.criteria.vehicles.some(
+        (v) =>
+          v.make.toLowerCase() === filter.make.toLowerCase() &&
+          sameModelFamily(v.model, filter.model),
+      ),
+    );
+  }
   let created = 0;
 
   for (const brief of activeBriefs) {

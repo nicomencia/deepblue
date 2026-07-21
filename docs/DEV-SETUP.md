@@ -133,6 +133,15 @@ anuncios, digest con suelo de nota + alertas A/B sin duplicados, dossiers
 en la página del lead), tabs por búsqueda, página Actividad, descubrimiento de
 modelos y adopción manual de anuncios con dossier-first. 77 tests verdes.
 
+**Cambio 2026-07-21 — dossier nuevo = barrido inmediato de su modelo.**
+Antes, crear búsqueda + dossier dejaba la caza esperando al siguiente tick del
+scheduler (~3 h). Ahora `insertDossier` — el punto único por el que pasan las
+dos vías (builder API y import manual) — encola tras `reevaluateModelLeads`
+un barrido dirigido: `enqueueSweeps(db, { make, model })` acepta filtro y
+barre solo los briefs activos que cazan ese modelo (`sameModelFamily`, marca
+insensible a mayúsculas). El dedup por brief existente evita pileup si el
+scheduler acababa de pasar. El evento `dossier_created` registra `swept`.
+
 **Cambio 2026-07-21 — la detección de dossier faltante entiende generaciones.**
 Cierre del cambio anterior: al crear la búsqueda del Master gen I, /dossiers
 NO la ofrecía en «Modelos en búsqueda sin dossier» — `isCovered` preguntaba

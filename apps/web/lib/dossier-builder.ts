@@ -12,6 +12,7 @@ import type Anthropic from "@anthropic-ai/sdk";
 import { sql } from "drizzle-orm";
 import { DOSSIER_MODEL, getAnthropic, messageText } from "./llm";
 import { reevaluateModelLeads } from "./reevaluate";
+import { enqueueSweeps } from "./sweep";
 
 export interface DossierRequest {
   make: string;
@@ -134,6 +135,11 @@ export async function insertDossier(
 
   const reevaluated = await reevaluateModelLeads(db, dossier.make, dossier.model);
 
+  // Fresh knowledge, fresh hunt: sweep the model's active briefs right away
+  // instead of waiting for the next scheduler tick — a brief created together
+  // with its dossier starts finding units the moment the knowledge lands.
+  const swept = await enqueueSweeps(db, { make: dossier.make, model: dossier.model });
+
   await db.insert(events).values({
     userId,
     type: "dossier_created",
@@ -146,6 +152,7 @@ export async function insertDossier(
       sources: dossier.sources.length,
       source,
       reevaluated,
+      swept,
     },
   });
 
