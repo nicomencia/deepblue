@@ -5,6 +5,7 @@ import {
   canTransition,
   discoveryReportSchema,
   dossierCoversModel,
+  dossierCoversYears,
   generationYearSpan,
   gradeAtMost,
   isPlatformActive,
@@ -61,6 +62,25 @@ describe("generationYearSpan", () => {
     expect(generationYearSpan(undefined)).toBeUndefined();
     expect(generationYearSpan("VII")).toBeUndefined();
     expect(generationYearSpan("Fase 2")).toBeUndefined();
+  });
+});
+
+describe("dossierCoversYears", () => {
+  it("a generation span only covers hunt windows it overlaps", () => {
+    // Gen-III dossier (2010–presente) vs a gen-I hunt capped at 1997: no cover.
+    expect(dossierCoversYears("III (2010–presente)", undefined, 1997)).toBe(false);
+    expect(dossierCoversYears("III (2010–presente)", 2012, undefined)).toBe(true);
+    // Gen-I dossier vs a modern hunt: no cover the other way round.
+    expect(dossierCoversYears("I (1980–1997)", 2010, undefined)).toBe(false);
+    expect(dossierCoversYears("I (1980–1997)", 1985, 1995)).toBe(true);
+    // Partial overlap counts as cover.
+    expect(dossierCoversYears("II (1998–2010)", 2005, 2015)).toBe(true);
+  });
+
+  it("span-less labels are universal; open windows never exclude", () => {
+    expect(dossierCoversYears(undefined, 1980, 1997)).toBe(true);
+    expect(dossierCoversYears("VII", 1980, 1997)).toBe(true);
+    expect(dossierCoversYears("I (1980–1997)", undefined, undefined)).toBe(true);
   });
 });
 

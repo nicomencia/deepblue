@@ -133,6 +133,22 @@ anuncios, digest con suelo de nota + alertas A/B sin duplicados, dossiers
 en la página del lead), tabs por búsqueda, página Actividad, descubrimiento de
 modelos y adopción manual de anuncios con dossier-first. 77 tests verdes.
 
+**Cambio 2026-07-21 — la detección de dossier faltante entiende generaciones.**
+Cierre del cambio anterior: al crear la búsqueda del Master gen I, /dossiers
+NO la ofrecía en «Modelos en búsqueda sin dossier» — `isCovered` preguntaba
+solo por marca+modelo, y el dossier gen III «cubría» el modelo. Nuevo
+`dossierCoversYears` (core, testeado): una etiqueta de generación con rango
+solo cubre ventanas de años que solapa; sin rango = universal. La página
+/dossiers calcula la ventana de caza de cada brief (años explícitos del
+criteria ganan; la etiqueta de generación rellena huecos) y el key del mapa
+lleva la generación (dos briefs del mismo modelo, distinta gen = dos
+tarjetas). `ensureDossierRequested` (adopción) igual: adopta una unidad de
+1990 con solo dossier gen III → pide dossier. Prompt del builder endurecido:
+el rango de años entre paréntesis en "generation" es OBLIGATORIO (el routing
+de veredictos selecciona por ese rango) y hints como «Primera» se traducen
+al formato canónico. Verificado en vivo: la búsqueda del Master aparece como
+«Renault Master (Primera)» con su botón de investigar. 170 tests core.
+
 **Cambio 2026-07-21 — búsquedas de unidades antiguas / por generación.**
 Caso real: cazar un Master gen I (1980–1997) era imposible — el formulario
 solo tenía «Año mínimo», el payload del sweep no llevaba `yearMax` (aunque

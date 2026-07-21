@@ -367,6 +367,23 @@ export function generationYearSpan(
 }
 
 /**
+ * Does a dossier's generation label cover a hunt window [yearMin, yearMax]?
+ * Span-less labels are universal (cover everything); a parsed span covers the
+ * window when they overlap. Open bounds on either side never exclude.
+ */
+export function dossierCoversYears(
+  generation: string | undefined,
+  yearMin?: number,
+  yearMax?: number,
+): boolean {
+  const span = generationYearSpan(generation);
+  if (!span) return true;
+  if (yearMax !== undefined && span.yearMin > yearMax) return false;
+  if (yearMin !== undefined && span.yearMax !== undefined && span.yearMax < yearMin) return false;
+  return true;
+}
+
+/**
  * Pick the dossier a listing of `year` should be judged by, from candidates
  * already ordered by preference (exact model match first, then version desc —
  * getDossier's SQL). Generation-scoped dossiers are hard-scoped: one whose

@@ -1,4 +1,4 @@
-import { dossierCoversModel } from "@deepblue/core";
+import { dossierCoversModel, dossierCoversYears, generationYearSpan } from "@deepblue/core";
 import { briefs, modelDossiers } from "@deepblue/db";
 import { desc, inArray } from "drizzle-orm";
 import { getDb } from "../../lib/db";
@@ -32,25 +32,29 @@ export default async function DossiersPage() {
     .from(briefs)
     .where(inArray(briefs.status, ["active", "paused"]));
   // Same tolerant semantics as the verdict lookup: a dossier keyed "207"
-  // covers a brief hunting "207 RC". Disabled dossiers don't cover anything —
-  // a model whose only dossier was disabled needs a fresh one.
-  const isCovered = (make: string, model: string) =>
+  // covers a brief hunting "207 RC" — but generation-aware, like
+  // pickDossierForYear: a gen-III dossier does NOT cover a gen-I hunt, so an
+  // old-unit brief still surfaces here even when the model "has" a dossier.
+  // Disabled dossiers don't cover anything.
+  const isCovered = (make: string, model: string, yearMin?: number, yearMax?: number) =>
     rows.some(
       (d) =>
         d.disabledAt === null &&
         d.make.toLowerCase() === make.toLowerCase() &&
-        dossierCoversModel(d.model, model),
+        dossierCoversModel(d.model, model) &&
+        dossierCoversYears(d.content.generation, yearMin, yearMax),
     );
   const missing = new Map<string, { make: string; model: string; generation?: string }>();
   for (const brief of activeBriefs) {
     for (const vehicle of brief.criteria.vehicles) {
-      const key = `${vehicle.make.toLowerCase()}|${vehicle.model.toLowerCase()}`;
-      if (!isCovered(vehicle.make, vehicle.model) && !missing.has(key)) {
-        missing.set(key, {
-          make: vehicle.make,
-          model: vehicle.model,
-          generation: vehicle.generations?.[0],
-        });
+      const generation = vehicle.generations?.[0];
+      // Hunt window: explicit year bounds win; the generation label fills gaps.
+      const span = generationYearSpan(generation);
+      const yearMin = brief.criteria.yearMin ?? span?.yearMin;
+      const yearMax = brief.criteria.yearMax ?? span?.yearMax;
+      const key = `${vehicle.make.toLowerCase()}|${vehicle.model.toLowerCase()}|${generation ?? `${yearMin ?? ""}-${yearMax ?? ""}`}`;
+      if (!isCovered(vehicle.make, vehicle.model, yearMin, yearMax) && !missing.has(key)) {
+        missing.set(key, { make: vehicle.make, model: vehicle.model, generation });
       }
     }
   }

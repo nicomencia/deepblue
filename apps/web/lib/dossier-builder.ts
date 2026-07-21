@@ -56,7 +56,11 @@ Reglas estrictas:
 - "sellerQuestions": preguntas directas y coloquiales en español para el vendedor.
 - "severity": minor | moderate | major | critical según coste y consecuencias.
 - Todos los textos visibles (title, description, evidence, sellerQuestions,
-  generalNotes) en español. "generation" con el formato "VII (2012–2019)".
+  generalNotes) en español. "generation" con el formato "VII (2012–2019)":
+  el rango de años entre paréntesis es OBLIGATORIO cuando investigas una
+  generación concreta — el sistema elige el dossier de cada anuncio por ese
+  rango ("presente" para generaciones aún en producción). Si el encargo nombra
+  la generación de otra forma ("Primera", "Mk2"), tradúcela a este formato.
 - En "make" y "model" usa exactamente: ${req.make} / ${req.model}.`;
 }
 

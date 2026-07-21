@@ -13,6 +13,7 @@
 
 import {
   dossierCoversModel,
+  dossierCoversYears,
   evaluateListing,
   extractCashPriceEur,
   extractDedupKey,
@@ -86,19 +87,26 @@ export async function adoptListing(
   return { ok: true, jobId: job.id };
 }
 
-/** Dossier-first rule: any non-disabled dossier covering make+model? */
+/** Dossier-first rule: any non-disabled dossier covering make+model — and,
+ * when the listing year is known, that generation (a gen-III dossier does not
+ * cover a gen-I van; pickDossierForYear would return nothing for it). */
 async function ensureDossierRequested(
   db: Db,
   userId: string,
   make?: string,
   model?: string,
+  year?: number,
 ): Promise<"ready" | "requested" | "unknown_model"> {
   if (!make || !model) return "unknown_model";
   const rows = await db
-    .select({ model: modelDossiers.model })
+    .select({ model: modelDossiers.model, content: modelDossiers.content })
     .from(modelDossiers)
     .where(and(eq(modelDossiers.make, make), isNull(modelDossiers.disabledAt)));
-  const covered = rows.some((d) => dossierCoversModel(d.model, model));
+  const covered = rows.some(
+    (d) =>
+      dossierCoversModel(d.model, model) &&
+      dossierCoversYears(d.content.generation, year, year),
+  );
   if (covered) return "ready";
 
   await db.insert(events).values({
@@ -243,7 +251,7 @@ export async function completeAdoption(
 
   // Dossier-first: request one when the model has none (any version counts —
   // the reviewedAt gate still governs whether it drives claims).
-  const dossier = await ensureDossierRequested(db, userId, item.make, item.model);
+  const dossier = await ensureDossierRequested(db, userId, item.make, item.model, item.year);
 
   // Existing lead for this brief+listing? Converge instead of duplicating —
   // and dead stays dead (terminal by design), we just report it.
