@@ -7,6 +7,7 @@ import { adoptAd } from "../actions";
 import { isDossierBuilding } from "../../lib/dossier-builder";
 import { SubmitButton } from "../submit-button";
 import { createBrief, deleteBrief, setBriefStatus, toggleBriefLimit } from "./actions";
+import { BriefForm } from "./brief-form";
 import { ConfirmDelete } from "./confirm-delete";
 
 export const dynamic = "force-dynamic";
@@ -130,6 +131,12 @@ export default async function BriefsPage({
               {/* One form per action: React server actions drop the submitter
                   button's own name/value, so status must be a hidden input. */}
               <div style={{ display: "flex", gap: "0.4rem", alignItems: "start" }}>
+                <Link
+                  href={`/briefs/${brief.id}`}
+                  style={{ ...btn, display: "inline-block", textDecoration: "none" }}
+                >
+                  Editar
+                </Link>
                 <form action={setBriefStatus}>
                   <input type="hidden" name="id" value={brief.id} />
                   <input
@@ -156,107 +163,11 @@ export default async function BriefsPage({
       })}
 
       <h2 style={{ fontSize: "1rem", margin: "2rem 0 0.5rem" }}>Nueva búsqueda</h2>
-      <form action={createBrief} style={{ ...card, display: "grid", gap: "0.7rem", gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))" }}>
-        <label style={lbl}>
-          Nombre (opcional)
-          <input name="name" placeholder="Golf VII para diario" style={inp} />
-        </label>
-        <label style={lbl}>
-          Marca *
-          <input name="make" required placeholder="Volkswagen" style={inp} />
-        </label>
-        <label style={lbl}>
-          Modelo *
-          <input name="model" required placeholder="Golf" style={inp} />
-        </label>
-        <label style={lbl}>
-          Año mínimo
-          <input name="yearMin" type="number" placeholder="2015" style={inp} />
-        </label>
-        <label style={lbl}>
-          Año máximo (unidades antiguas / una generación)
-          <input name="yearMax" type="number" placeholder="1997" style={inp} />
-        </label>
-        <label style={lbl}>
-          Generación (opcional — orienta el dossier)
-          <input name="generation" placeholder="I (1980–1997)" style={inp} />
-        </label>
-        <label style={lbl}>
-          Km máximos
-          <input name="kmMax" type="number" placeholder="140000" style={inp} />
-        </label>
-        <label style={lbl}>
-          Precio máximo (€) *
-          <input name="maxPriceEur" type="number" required placeholder="15500" style={inp} />
-        </label>
-        <label style={lbl}>
-          Precio objetivo (€)
-          <input name="targetPriceEur" type="number" placeholder="13500" style={inp} />
-        </label>
-        <label style={lbl}>
-          Tolerancia al riesgo
-          <select name="riskTolerance" defaultValue="medium" style={inp}>
-            <option value="low">Baja — prioriza fiabilidad</option>
-            <option value="medium">Media</option>
-            <option value="high">Alta — prioriza precio</option>
-          </select>
-        </label>
-        <label style={lbl}>
-          Tipo de vendedor
-          <select name="sellerPreference" defaultValue="prefer_private" style={inp}>
-            <option value="prefer_private">Prefiero particulares / vendedores pequeños</option>
-            <option value="any">Indiferente</option>
-          </select>
-        </label>
-        <fieldset style={{ ...lbl, border: "none", padding: 0, margin: 0 }}>
-          Combustible (vacío = cualquiera)
-          <span style={{ display: "flex", gap: "0.8rem", marginTop: "0.3rem" }}>
-            <label>
-              <input type="checkbox" name="fuel" value="gasoline" /> Gasolina
-            </label>
-            <label>
-              <input type="checkbox" name="fuel" value="diesel" /> Diésel
-            </label>
-            <label>
-              <input type="checkbox" name="fuel" value="hybrid" /> Híbrido
-            </label>
-          </span>
-        </fieldset>
-        <label style={lbl}>
-          Radio de búsqueda (km)
-          <input name="radiusKm" type="number" placeholder="100" style={inp} />
-        </label>
-        <label style={lbl}>
-          Latitud / Longitud
-          <span style={{ display: "flex", gap: "0.4rem" }}>
-            <input name="lat" placeholder="40.4168" style={inp} />
-            <input name="lon" placeholder="-3.7038" style={inp} />
-          </span>
-        </label>
-        <label style={{ ...lbl, gridColumn: "1 / -1" }}>
-          Innegociables (una por línea)
-          <textarea name="nonNegotiables" rows={2} placeholder={"ITV en vigor\nSin reparaciones estructurales"} style={inp} />
-        </label>
-        <fieldset style={{ border: "none", padding: 0, margin: 0, gridColumn: "1 / -1", display: "flex", gap: "1.2rem", flexWrap: "wrap" }}>
-          <label style={{ fontSize: "0.85rem" }}>
-            <input type="checkbox" name="noRhd" value="1" /> Descartar volante a la derecha (RHD)
-          </label>
-          <label style={{ fontSize: "0.85rem" }}>
-            <input type="checkbox" name="requireSpanishPlates" value="1" /> Descartar sin matricular en España
-          </label>
-        </fieldset>
-        <label style={{ ...lbl, gridColumn: "1 / -1" }}>
-          Notas para el agente (una por línea)
-          <textarea name="notes" rows={2} placeholder={"Preferible pocos propietarios"} style={inp} />
-        </label>
-        <div style={{ gridColumn: "1 / -1" }}>
-          <SubmitButton
-            label="Crear búsqueda"
-            pendingLabel="⏳ Creando búsqueda…"
-            style={{ ...btn, fontWeight: 600, padding: "0.5rem 1.2rem" }}
-          />
-        </div>
-      </form>
+      <BriefForm
+        action={createBrief}
+        submitLabel="Crear búsqueda"
+        pendingLabel="⏳ Creando búsqueda…"
+      />
     </main>
   );
 }

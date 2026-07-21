@@ -133,6 +133,27 @@ anuncios, digest con suelo de nota + alertas A/B sin duplicados, dossiers
 en la página del lead), tabs por búsqueda, página Actividad, descubrimiento de
 modelos y adopción manual de anuncios con dossier-first. 77 tests verdes.
 
+**Cambio 2026-07-22 — el radio de búsqueda por fin es real (en código, no en
+la query).** Sonda RECON: Wallapop IGNORA `distance` y `dist` (Madrid + 30 km
+→ 40 resultados de toda España, 37 más allá de 45 km) — el radio que escribía
+el usuario era decorativo de punta a punta (la evaluación tampoco miraba
+localización). Ahora `hardFilterReason` (core) lo impone:
+`outside_search_radius` si haversine(centro, anuncio) > radio + 15 km de
+holgura (las coordenadas de Wallapop son centroides de municipio). Solo con
+hechos: anuncio sin coordenadas pasa. `haversineKm` exportado de evaluate.
+RECON.md documenta el hallazgo negativo. Efecto colateral honesto: leads
+existentes fuera de radio morirán en su próxima re-evaluación.
+
+**Cambio 2026-07-22 — editar búsquedas desde la UI.** La fricción quedó
+probada al arreglar la localización del Master (hizo falta un endpoint dev).
+Nuevo `brief-form.tsx` (formulario único crear/editar, campos = criteria +
+hardLimits), `parseBriefForm` compartido en actions, `updateBrief` (conserva
+vehículos extra; re-evalúa leads del brief — límites más estrictos matan
+ahora, muerto no resucita — y relanza la cadena cero-clics por si cambió
+modelo/generación), página `/briefs/[id]` prellenada y botón «Editar» en cada
+tarjeta. La página de crear usa el mismo componente (~100 líneas de JSX
+duplicado eliminadas).
+
 **Cambio 2026-07-22 — carril de reintento de dossiers (auto-curación).** El
 eslabón frágil de la cadena cero-clics era la investigación: si fallaba (API
 caída, JSON inválido) o el servidor se reiniciaba a mitad, la cadena moría en

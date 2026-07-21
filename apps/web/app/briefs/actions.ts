@@ -4,6 +4,7 @@ import type { BriefCriteria, HardLimits } from "@deepblue/core";
 import { briefs, events, users } from "@deepblue/db";
 import { eq } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
+import { redirect } from "next/navigation";
 import { z } from "zod";
 import { deleteBriefCascade } from "../../lib/brief-admin";
 import { startBriefHunt } from "../../lib/brief-hunt";
@@ -36,19 +37,15 @@ const gearboxSchema = z.array(z.enum(["manual", "automatic"]));
 const riskSchema = z.enum(["low", "medium", "high"]).catch("medium");
 const sellerPrefSchema = z.enum(["any", "prefer_private"]).catch("any");
 
-export async function createBrief(formData: FormData): Promise<void> {
-  const db = await getDb();
-
-  // Single-user phase: everything belongs to the dev user (Firebase Auth later).
-  let [user] = await db.select().from(users).limit(1);
-  if (!user) {
-    [user] = await db
-      .insert(users)
-      .values({ email: process.env.DEV_USER_EMAIL ?? "nicomencia4@gmail.com" })
-      .returning();
-  }
-  if (!user) throw new Error("could not resolve user");
-
+/** Shared create/edit parsing: one field set, one semantics. */
+function parseBriefForm(formData: FormData): {
+  name: string;
+  make: string;
+  model: string;
+  generation?: string;
+  criteria: BriefCriteria;
+  hardLimits: HardLimits;
+} {
   const make = String(formData.get("make") ?? "").trim();
   const model = String(formData.get("model") ?? "").trim();
   const maxPriceEur = num(formData.get("maxPriceEur"));
@@ -58,7 +55,7 @@ export async function createBrief(formData: FormData): Promise<void> {
 
   // Generation is advisory (dossier-first machinery + card display); the year
   // bounds do the actual filtering — sweep query and evaluation both enforce.
-  const generation = String(formData.get("generation") ?? "").trim();
+  const generation = String(formData.get("generation") ?? "").trim() || undefined;
   const criteria: BriefCriteria = {
     vehicles: [{ make, model, ...(generation ? { generations: [generation] } : {}) }],
     yearMin: num(formData.get("yearMin")),
@@ -89,19 +86,84 @@ export async function createBrief(formData: FormData): Promise<void> {
   const name =
     String(formData.get("name") ?? "").trim() || `${make} ${model} hasta ${maxPriceEur} €`;
 
-  await db.insert(briefs).values({ userId: user.id, name, criteria, hardLimits });
+  return { name, make, model, generation, criteria, hardLimits };
+}
+
+export async function createBrief(formData: FormData): Promise<void> {
+  const db = await getDb();
+
+  // Single-user phase: everything belongs to the dev user (Firebase Auth later).
+  let [user] = await db.select().from(users).limit(1);
+  if (!user) {
+    [user] = await db
+      .insert(users)
+      .values({ email: process.env.DEV_USER_EMAIL ?? "nicomencia4@gmail.com" })
+      .returning();
+  }
+  if (!user) throw new Error("could not resolve user");
+
+  const parsed = parseBriefForm(formData);
+  await db.insert(briefs).values({
+    userId: user.id,
+    name: parsed.name,
+    criteria: parsed.criteria,
+    hardLimits: parsed.hardLimits,
+  });
 
   // Zero-click chain: uncovered generation → dossier research fires now and
   // its completion sweeps + enriches; covered → sweep immediately.
   await startBriefHunt(db, user.id, {
-    make,
-    model,
-    generation: generation || undefined,
+    make: parsed.make,
+    model: parsed.model,
+    generation: parsed.generation,
+    yearMin: parsed.criteria.yearMin,
+    yearMax: parsed.criteria.yearMax,
+  });
+
+  revalidatePath("/briefs");
+}
+
+/**
+ * Edit an existing brief with the same form. Vehicles beyond the first have
+ * no form fields — they carry over untouched. Saving re-evaluates the brief's
+ * leads (tighter limits kill now — dead never resurrects, wider limits
+ * surface on the next sweep) and re-runs the zero-click chain for the
+ * possibly-changed model/generation.
+ */
+export async function updateBrief(formData: FormData): Promise<void> {
+  const db = await getDb();
+  const id = String(formData.get("id") ?? "");
+  const [brief] = await db.select().from(briefs).where(eq(briefs.id, id)).limit(1);
+  if (!brief) throw new Error(`brief ${id} not found`);
+
+  const parsed = parseBriefForm(formData);
+  const criteria: BriefCriteria = {
+    ...parsed.criteria,
+    vehicles: [...parsed.criteria.vehicles, ...brief.criteria.vehicles.slice(1)],
+  };
+  await db
+    .update(briefs)
+    .set({ name: parsed.name, criteria, hardLimits: parsed.hardLimits })
+    .where(eq(briefs.id, id));
+
+  const reevaluated = await reevaluateBriefLeads(db, id);
+  await db.insert(events).values({
+    userId: brief.userId,
+    type: "brief_edited",
+    payload: { briefId: id, name: parsed.name, reevaluated },
+  });
+
+  await startBriefHunt(db, brief.userId, {
+    make: parsed.make,
+    model: parsed.model,
+    generation: parsed.generation,
     yearMin: criteria.yearMin,
     yearMax: criteria.yearMax,
   });
 
   revalidatePath("/briefs");
+  revalidatePath("/");
+  redirect("/briefs");
 }
 
 export async function setBriefStatus(formData: FormData): Promise<void> {
