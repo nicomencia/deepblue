@@ -1,6 +1,6 @@
-import { dossierCoversModel, dossierCoversYears, generationYearSpan } from "@deepblue/core";
-import { briefs, modelDossiers } from "@deepblue/db";
-import { desc, inArray } from "drizzle-orm";
+import { modelDossiers } from "@deepblue/db";
+import { desc } from "drizzle-orm";
+import { findUncoveredHunts } from "../../lib/brief-hunt";
 import { getDb } from "../../lib/db";
 import { isDossierBuilding } from "../../lib/dossier-builder";
 import { isLlmConfigured } from "../../lib/llm";
@@ -26,39 +26,10 @@ export default async function DossiersPage() {
     .from(modelDossiers)
     .orderBy(modelDossiers.make, modelDossiers.model, desc(modelDossiers.version));
 
-  // Active hunts AND paused "Seguimiento" briefs (manual adoptions): the
-  // dossier-first rule applies to both — anything evaluated needs coverage.
-  const activeBriefs = await db
-    .select()
-    .from(briefs)
-    .where(inArray(briefs.status, ["active", "paused"]));
-  // Same tolerant semantics as the verdict lookup: a dossier keyed "207"
-  // covers a brief hunting "207 RC" — but generation-aware, like
-  // pickDossierForYear: a gen-III dossier does NOT cover a gen-I hunt, so an
-  // old-unit brief still surfaces here even when the model "has" a dossier.
-  // Disabled dossiers don't cover anything.
-  const isCovered = (make: string, model: string, yearMin?: number, yearMax?: number) =>
-    rows.some(
-      (d) =>
-        d.disabledAt === null &&
-        d.make.toLowerCase() === make.toLowerCase() &&
-        dossierCoversModel(d.model, model) &&
-        dossierCoversYears(d.content.generation, yearMin, yearMax),
-    );
-  const missing = new Map<string, { make: string; model: string; generation?: string }>();
-  for (const brief of activeBriefs) {
-    for (const vehicle of brief.criteria.vehicles) {
-      const generation = vehicle.generations?.[0];
-      // Hunt window: explicit year bounds win; the generation label fills gaps.
-      const span = generationYearSpan(generation);
-      const yearMin = brief.criteria.yearMin ?? span?.yearMin;
-      const yearMax = brief.criteria.yearMax ?? span?.yearMax;
-      const key = `${vehicle.make.toLowerCase()}|${vehicle.model.toLowerCase()}|${generation ?? `${yearMin ?? ""}-${yearMax ?? ""}`}`;
-      if (!isCovered(vehicle.make, vehicle.model, yearMin, yearMax) && !missing.has(key)) {
-        missing.set(key, { make: vehicle.make, model: vehicle.model, generation });
-      }
-    }
-  }
+  // Hunts (active + paused "Seguimiento") whose generation no live dossier
+  // covers — shared with the retry lane, which re-fires these automatically;
+  // this card is the visibility + manual fallback.
+  const missing = await findUncoveredHunts(db);
 
   return (
     <main style={{ maxWidth: 860, margin: "0 auto", padding: "2rem 1.5rem" }}>
@@ -75,10 +46,10 @@ export default async function DossiersPage() {
         </p>
       )}
 
-      {missing.size > 0 && (
+      {missing.length > 0 && (
         <>
           <h2 style={h2}>Modelos en búsqueda sin dossier</h2>
-          {[...missing.values()].map((v) => (
+          {missing.map((v) => (
             <div key={`${v.make}|${v.model}`} style={{ ...card, display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "0.5rem" }}>
               <strong>
                 {v.make} {v.model}

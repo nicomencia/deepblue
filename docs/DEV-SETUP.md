@@ -133,6 +133,20 @@ anuncios, digest con suelo de nota + alertas A/B sin duplicados, dossiers
 en la página del lead), tabs por búsqueda, página Actividad, descubrimiento de
 modelos y adopción manual de anuncios con dossier-first. 77 tests verdes.
 
+**Cambio 2026-07-22 — carril de reintento de dossiers (auto-curación).** El
+eslabón frágil de la cadena cero-clics era la investigación: si fallaba (API
+caída, JSON inválido) o el servidor se reiniciaba a mitad, la cadena moría en
+un evento `dossier_build_failed` sin reintento. Nuevo `/api/cron/dossiers`
+(tick del scheduler, gated en API key): `retryPendingDossiers` recalcula del
+estado actual qué cazas siguen sin cobertura (`findUncoveredHunts`, ahora
+compartido con la página /dossiers — lógica única) y re-dispara UNA
+investigación por tick (fire-and-forget; los ticks no se apilan). Guardas de
+coste: enfriamiento de 60 min tras un fallo del mismo modelo y techo de 3
+fallos/24 h (algo estructural se queda visible en /dossiers para el carril
+manual en vez de quemar turnos de investigación). Auto-curación real: también
+recoge builds perdidos por reinicio y modelos cuyo dossier se desactivó
+después. Verificado en vivo: `{pending: 0}` con todo cubierto.
+
 **Cambio 2026-07-22 — cadena cero-clics al crear una búsqueda.** Última pieza
 manual eliminada: crear un brief de un modelo/generación sin cobertura exigía
 ir a /dossiers y pulsar «Investigar». Nuevo `lib/brief-hunt.ts`

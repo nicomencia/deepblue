@@ -81,5 +81,8 @@ async function tick(): Promise<void> {
     console.log("[scheduler]", await trigger("/api/cron/enrich"));
     // Fresh seller replies become findings/facts/deltas automatically.
     console.log("[scheduler]", await trigger("/api/cron/chat-reads"));
+    // Uncovered hunts (failed/lost dossier builds) re-fire their research —
+    // one per tick, with cooldown and daily ceiling.
+    console.log("[scheduler]", await trigger("/api/cron/dossiers"));
   }
 }

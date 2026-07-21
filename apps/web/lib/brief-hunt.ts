@@ -10,9 +10,9 @@
  */
 
 import { dossierCoversModel, dossierCoversYears, generationYearSpan } from "@deepblue/core";
-import { events, modelDossiers, type Db } from "@deepblue/db";
-import { and, isNull, sql } from "drizzle-orm";
-import { buildDossier } from "./dossier-builder";
+import { briefs, events, modelDossiers, type Db } from "@deepblue/db";
+import { and, eq, gte, inArray, isNull, sql } from "drizzle-orm";
+import { buildDossier, isDossierBuilding } from "./dossier-builder";
 import { isLlmConfigured } from "./llm";
 import { enqueueSweeps } from "./sweep";
 
@@ -76,4 +76,103 @@ export async function startBriefHunt(
     });
   });
   return "researching";
+}
+
+export interface UncoveredHunt extends HuntVehicle {
+  userId: string;
+}
+
+/**
+ * Every hunt (active brief, or paused "Seguimiento" from adoption) whose
+ * model+generation no live dossier covers — recomputed from current state, so
+ * it self-heals: a failed build, a server restart mid-research, or a dossier
+ * disabled later all resurface here. Shared by the /dossiers page (display)
+ * and the retry lane (action).
+ */
+export async function findUncoveredHunts(db: Db): Promise<UncoveredHunt[]> {
+  const [huntBriefs, dossierRows] = await Promise.all([
+    db.select().from(briefs).where(inArray(briefs.status, ["active", "paused"])),
+    db
+      .select({ make: modelDossiers.make, model: modelDossiers.model, content: modelDossiers.content })
+      .from(modelDossiers)
+      .where(isNull(modelDossiers.disabledAt)),
+  ]);
+
+  const isCovered = (make: string, model: string, yearMin?: number, yearMax?: number) =>
+    dossierRows.some(
+      (d) =>
+        d.make.toLowerCase() === make.toLowerCase() &&
+        dossierCoversModel(d.model, model) &&
+        dossierCoversYears(d.content.generation, yearMin, yearMax),
+    );
+
+  const missing = new Map<string, UncoveredHunt>();
+  for (const brief of huntBriefs) {
+    for (const v of brief.criteria.vehicles) {
+      const generation = v.generations?.[0];
+      const span = generationYearSpan(generation);
+      const yearMin = brief.criteria.yearMin ?? span?.yearMin;
+      const yearMax = brief.criteria.yearMax ?? span?.yearMax;
+      const key = `${v.make.toLowerCase()}|${v.model.toLowerCase()}|${generation ?? `${yearMin ?? ""}-${yearMax ?? ""}`}`;
+      if (!isCovered(v.make, v.model, yearMin, yearMax) && !missing.has(key)) {
+        missing.set(key, { userId: brief.userId, make: v.make, model: v.model, generation, yearMin, yearMax });
+      }
+    }
+  }
+  return [...missing.values()];
+}
+
+/** Retry cost guards: skip a model that failed within the hour (transient API
+ * trouble deserves patience, not a metronome) or ≥3 times in 24 h (something
+ * structural — surfacing in /dossiers beats burning research turns). */
+const RETRY_COOLDOWN_MS = 60 * 60 * 1000;
+const RETRY_DAILY_CEILING = 3;
+
+export interface DossierRetryStats {
+  pending: number;
+  started?: string;
+}
+
+/**
+ * Scheduler lane: pick ONE uncovered hunt whose build isn't running and isn't
+ * throttled, and fire its research (fire-and-forget — research takes minutes,
+ * ticks must not stack). One per tick drains a backlog steadily, cost-bounded.
+ */
+export async function retryPendingDossiers(db: Db): Promise<DossierRetryStats> {
+  if (!isLlmConfigured()) return { pending: 0 };
+  const pending = await findUncoveredHunts(db);
+
+  for (const hunt of pending) {
+    if (isDossierBuilding(hunt.make, hunt.model)) continue;
+
+    const dayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
+    const failures = await db
+      .select({ createdAt: events.createdAt })
+      .from(events)
+      .where(
+        and(
+          eq(events.type, "dossier_build_failed"),
+          gte(events.createdAt, dayAgo),
+          sql`lower(${events.payload}->>'make') = ${hunt.make.toLowerCase()}`,
+          sql`lower(${events.payload}->>'model') = ${hunt.model.toLowerCase()}`,
+        ),
+      );
+    const lastFail = failures.reduce<number>((max, f) => Math.max(max, f.createdAt.getTime()), 0);
+    if (failures.length >= RETRY_DAILY_CEILING) continue;
+    if (Date.now() - lastFail < RETRY_COOLDOWN_MS) continue;
+
+    void buildDossier(
+      db,
+      { make: hunt.make, model: hunt.model, generation: hunt.generation },
+      hunt.userId,
+    ).catch(async (err: unknown) => {
+      await db.insert(events).values({
+        userId: hunt.userId,
+        type: "dossier_build_failed",
+        payload: { make: hunt.make, model: hunt.model, error: String(err).slice(0, 300) },
+      });
+    });
+    return { pending: pending.length, started: `${hunt.make} ${hunt.model}` };
+  }
+  return { pending: pending.length };
 }
