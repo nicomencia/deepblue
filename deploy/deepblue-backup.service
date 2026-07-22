@@ -1,0 +1,15 @@
+# Daily backup by restart: the web start chain (start:web) already snapshots
+# the PGlite dir BEFORE booting — the only moment a copy is consistent
+# (single-writer). So "daily backup" is simply "daily restart at 07:30",
+# inside the scheduler's sleep window (08–23h Madrid): zero missed work,
+# one backup mechanism instead of two.
+# Install together with deepblue-backup.timer:
+#   sudo cp deploy/deepblue-backup.* /etc/systemd/system/
+#   sudo systemctl daemon-reload && sudo systemctl enable --now deepblue-backup.timer
+
+[Unit]
+Description=deepblue daily restart (backs up the DB on the way up)
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/systemctl restart deepblue-web.service

@@ -1,0 +1,27 @@
+# deepblue runner — the hands: Playwright against Wallapop, residential IP.
+# Chat sends open a HEADED browser (least detectable); on a lid-closed laptop
+# there is no display, so the unit wraps the runner in Xvfb (virtual display).
+#   sudo pacman -S --needed xorg-server-xvfb
+# Alternative without Xvfb: set CHAT_HEADLESS=1 in apps/web/.env.local and
+# replace ExecStart with the plain pnpm line.
+# Install: edit User= and paths, then
+#   sudo cp deploy/deepblue-runner.service /etc/systemd/system/
+#   sudo systemctl daemon-reload && sudo systemctl enable --now deepblue-runner
+
+[Unit]
+Description=deepblue runner (hands: marketplace jobs via Playwright)
+After=network-online.target deepblue-web.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=CHANGE_ME
+WorkingDirectory=/home/CHANGE_ME/deepblue
+# Runner resolves its own env (apps/runner/.env.local -> repo .env.local ->
+# apps/web/.env.local); CORE_API_URL defaults to http://localhost:3000.
+ExecStart=/usr/bin/xvfb-run -a /usr/bin/pnpm run start:runner
+Restart=always
+RestartSec=15
+
+[Install]
+WantedBy=multi-user.target

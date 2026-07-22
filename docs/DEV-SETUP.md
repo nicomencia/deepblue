@@ -133,6 +133,26 @@ anuncios, digest con suelo de nota + alertas A/B sin duplicados, dossiers
 en la página del lead), tabs por búsqueda, página Actividad, descubrimiento de
 modelos y adopción manual de anuncios con dossier-first. 77 tests verdes.
 
+**Cambio 2026-07-22 — despliegue listo antes de tener el hardware.** El
+portátil Arch llega en unos días; todo lo verificable sin él quedó hecho y
+ENSAYADO en producción local: scripts `build`/`start:web`/`start:runner` en el
+package.json raíz, units systemd en `deploy/` (web con auto-restart, runner
+bajo Xvfb para mantener los envíos headed sin pantalla, y backup diario POR
+REINICIO a las 07:30 — la cadena de arranque ya hace el backup con el puerto
+libre, el único momento consistente; un mecanismo, no dos), y
+`docs/DEPLOY.md` (runbook Arch completo: pacman, portátil-como-servidor con
+tapa cerrada y límite de carga de batería, Playwright sin install-deps,
+Tailscale para el panel remoto, disciplina rolling-release). El ensayo cazó
+un bug que habría matado el despliegue: en producción `isAuthorizedCron`
+EXIGE CRON_SECRET y el scheduler local no lo enviaba — cada tick habría dado
+401 contra sus propias rutas y deepblue jamás habría barrido. Arreglo
+estructural: el scheduler se auto-emite un secreto de arranque (solo en
+producción — dev sigue abierto para curls manuales; un CRON_SECRET explícito
+de cloud gana). Verificado en vivo: build limpio, rutas dev → 404, las 7
+lanes cron → 200 en el primer tick, runner arrendando jobs contra el web de
+producción. Además: PROJECT.md recoge el «Seller ad audit» (auditar tu propio
+anuncio con los ojos del comprador) como siguiente feature tras el despliegue.
+
 **Cambio 2026-07-22 — docs/DEVELOPING.md: el playbook de features.** Guía de
 cómo se construye una feature aquí sin romper lo que funciona: el modelo
 mental (cerebro/manos), los 9 invariantes no negociables, la tabla de «¿dónde

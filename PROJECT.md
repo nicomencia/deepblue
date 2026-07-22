@@ -218,6 +218,23 @@ conversation's output is a Brief; recommended models feed the dossier builder as
 effect. Architecturally: LLM + tool-use over existing tables, zero platform risk. Natural
 slot: once the LLM layer exists, before/alongside Phase 3.
 
+**Seller ad audit (scheduled 2026-07-22 — first slice of selling mode, queued
+right after the laptop deployment).** Paste the URL of *your own* ad → deepblue
+audits it through a buyer's eyes, reusing the whole intelligence stack: the
+adoption lane fetches it (new `audit` intent, no lead created), the evaluator's
+`openQuestions` + dossier `evidence` fields invert into "what buyers will ask —
+preempt it in the ad", the enrichment reading flags free-text gaps, and the
+weighted benchmark gives a price ladder (venta rápida = cheapest credible
+comparable / mercado / sin prisa + margen de regateo) positioned against the
+live corpus ("serías el 3º más barato de 14"). Honesty rules: asking prices are
+not sold prices — frame as positioning, never "this will sell for X"; thin
+corpus says so (Kish gate). Future upgrade already accruing data: reaper
+`listing_gone` events give time-on-market for comparables. MVP ≈ core
+`composeSellerAudit` (pure, tested) + `audit` intent + `/vender` page;
+re-audit after editing the ad shows the delta. Commercially notable: a
+shareable, zero-platform-risk freemium hook that monetizes the same
+intelligence twice. Account-wide audit = loop over this later.
+
 **Selling mode (very long shot — the symmetry play).** Reuses the stack with roles
 flipped: price suggestion from the market-scoped benchmark (+ condition/trim
 adjustments), LLM-generated listing from a one-time vehicle sheet, buyer conversations on

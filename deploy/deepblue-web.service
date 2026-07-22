@@ -1,0 +1,25 @@
+# deepblue web — the brain: dashboard, API, scheduler, LLM lanes.
+# Install: edit User= and the two paths below, then
+#   sudo cp deploy/deepblue-web.service /etc/systemd/system/
+#   sudo systemctl daemon-reload && sudo systemctl enable --now deepblue-web
+# pnpm path: `which pnpm` (corepack usually puts it in /usr/bin or ~/.local/share/pnpm).
+
+[Unit]
+Description=deepblue web (brain: dashboard + scheduler)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=CHANGE_ME
+WorkingDirectory=/home/CHANGE_ME/deepblue
+# start:web backs up the DB first (script skips itself if the port is busy),
+# then `next start`. NODE_ENV=production gates every /api/dev/* route to 404.
+ExecStart=/usr/bin/pnpm run start:web
+Restart=always
+RestartSec=10
+# PGlite is single-writer: systemd's default "stop before start" is the only
+# thing standing between us and two servers — never run this unit twice.
+
+[Install]
+WantedBy=multi-user.target

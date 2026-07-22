@@ -1,0 +1,10 @@
+[Unit]
+Description=deepblue daily backup-restart at 07:30
+
+[Timer]
+OnCalendar=*-*-* 07:30:00
+# Fire on next boot if the laptop was off at 07:30.
+Persistent=true
+
+[Install]
+WantedBy=timers.target

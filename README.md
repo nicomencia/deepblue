@@ -9,6 +9,8 @@ invariants, where code goes, established patterns, workflow, gotchas.
 Recon findings on platform internals live in [docs/RECON.md](./docs/RECON.md).
 Moving to a new dev machine? [docs/DEV-SETUP.md](./docs/DEV-SETUP.md) — what to
 copy by hand (.env.local, PGlite data), start order, dev endpoints, current state.
+Deploying to the always-on home server? [docs/DEPLOY.md](./docs/DEPLOY.md) —
+Arch laptop runbook: production mode, systemd units, backups, Tailscale.
 
 ## Layout
 

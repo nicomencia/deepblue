@@ -8,6 +8,8 @@
  * jittered ticks — never a metronome against the platforms.
  */
 
+import crypto from "node:crypto";
+
 const TICK_MS = 15 * 60 * 1000;
 const SWEEP_INTERVAL_MS = Number(process.env.SWEEP_INTERVAL_MINUTES ?? 180) * 60 * 1000;
 
@@ -40,6 +42,15 @@ async function trigger(path: string): Promise<string> {
 }
 
 export function startScheduler(): void {
+  // In production, cron routes REQUIRE a bearer secret — a local scheduler
+  // without CRON_SECRET would 401 against its own endpoints on every tick
+  // (caught by the first `next start` smoke test, 2026-07-22). Self-issue a
+  // boot-scoped one: same process, so the routes accept it; external callers
+  // still need the real thing. Explicit CRON_SECRET (cloud mode) wins, and
+  // dev stays open (no-secret + non-prod = allowed) for manual cron curls.
+  if (process.env.NODE_ENV === "production" && !process.env.CRON_SECRET) {
+    process.env.CRON_SECRET = crypto.randomUUID();
+  }
   console.log(
     `[scheduler] on — sweeps every ~${Math.round(SWEEP_INTERVAL_MS / 60000)} min (08–23h Madrid), digest on first tick of the day`,
   );
