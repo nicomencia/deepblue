@@ -1,5 +1,38 @@
 # Despliegue en el portátil Arch (siempre encendido)
 
+## Traspaso: sesión nueva de Claude Code en el portátil
+
+Esta sección es para la PRIMERA sesión en la máquina de despliegue — no tiene
+el contexto del desarrollo, y no lo necesita: este documento es el plan
+completo. Prompt sugerido para arrancar:
+
+> Lee docs/DEPLOY.md y ejecuta el despliegue paso a paso. El scaffolding está
+> hecho y ensayado (deploy/, scripts start:*); los 3 elementos de estado los
+> traigo copiados del PC de desarrollo. Verifica cada paso con su checklist
+> antes de seguir al siguiente.
+
+**Antes, en el PC de desarrollo (Windows) — lo hace el usuario:**
+
+1. Parar deepblue del todo (cerrar las ventanas web y runner, o matar lo que
+   escuche en el puerto 3000). La copia de la BD con el servidor vivo sale
+   corrupta.
+2. Copiar a un USB (o `scp` al portátil) las tres piezas de estado:
+   `apps\web\.env.local`, `apps\web\.data\pglite\` (carpeta entera) y
+   `apps\runner\.browser-profile\` (carpeta entera).
+3. **No volver a arrancar deepblue en el PC** una vez el portátil esté vivo:
+   dos runners con la misma cuenta de Wallapop desde dos IPs es señal de ban,
+   y las dos bases de datos divergirían. El PC vuelve a ser solo desarrollo
+   (con su PGlite local para probar; el runner de verdad vive en el portátil).
+
+**En el portátil, la sesión sigue las secciones 1→6 en orden.** Cada una
+tiene su verificación; la de humo completa está en §3. Al terminar §4, los
+dos servicios sobreviven a un reinicio (`sudo reboot` y comprobar
+`systemctl status deepblue-web deepblue-runner`) — esa es la prueba final.
+La sesión hereda las reglas de CLAUDE.md; si el despliegue exige tocar
+código (p. ej. algo específico de Arch que el ensayo en Windows no cubrió),
+se aplica el flujo normal: docs/DEVELOPING.md, nota fechada en DEV-SETUP §5,
+commit y push — así el PC de desarrollo recibe el arreglo con un `git pull`.
+
 Guía para mover deepblue del PC de desarrollo al portátil Arch Linux que hará
 de servidor 24/7 en casa (IP residencial — requisito del runner). Todo lo de
 abajo se ensayó en producción local el 2026-07-22 antes de tener el portátil:
@@ -12,7 +45,7 @@ las 7 lanes cron → 200 con el secreto auto-emitido, runner arrendando jobs).
 |---|---|---|---|
 | `apps/web/.env.local` | PC actual | igual | secretos (API keys, RUNNER_TOKEN) |
 | `apps/web/.data/pglite/` | PC actual | igual | LA base de datos (corpus, leads, dossiers) |
-| `.browser-profile/` | PC actual | igual | sesión Wallapop logueada (opcional: re-login en el portátil) |
+| `apps/runner/.browser-profile/` | PC actual | igual | sesión Wallapop logueada (opcional: re-login en el portátil) |
 
 Copiar `.data/pglite` SIEMPRE con el servidor de origen parado (single-writer:
 una copia con el server vivo sale corrupta). El backup más reciente en
