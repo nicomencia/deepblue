@@ -1,3 +1,4 @@
+import type { LeadState } from "@deepblue/core";
 import { leads, listings } from "@deepblue/db";
 import { asc, eq, sql } from "drizzle-orm";
 import { getDb } from "../../../../lib/db";
@@ -6,6 +7,9 @@ import { getDb } from "../../../../lib/db";
  * Dev-only: shortlisted leads with full verdicts, best grades first.
  * ?id=<leadId> returns that single lead whatever its state — the way to
  * inspect a contacted/negotiating lead's verdict mid-conversation.
+ * ?state=<leadState> lists another state instead — `dead` with its reason is
+ * how you answer "why did that one drop out?" without opening a DB shell
+ * (PGlite is single-writer, so there is no second connection to open).
  */
 export async function GET(req: Request): Promise<Response> {
   if (process.env.NODE_ENV === "production") return new Response(null, { status: 404 });
@@ -15,12 +19,13 @@ export async function GET(req: Request): Promise<Response> {
   const limit = Math.min(Number(url.searchParams.get("limit") ?? 10), 200);
   const platform = url.searchParams.get("platform");
   const id = url.searchParams.get("id");
+  const state = (url.searchParams.get("state") ?? "shortlisted") as LeadState;
 
   const rows = await db
     .select({ lead: leads, listing: listings })
     .from(leads)
     .innerJoin(listings, eq(leads.listingId, listings.id))
-    .where(id ? eq(leads.id, id) : eq(leads.state, "shortlisted"))
+    .where(id ? eq(leads.id, id) : eq(leads.state, state))
     .orderBy(asc(sql`${leads.verdict}->>'overall'`), asc(listings.priceEur))
     .limit(200);
 
@@ -51,6 +56,7 @@ export async function GET(req: Request): Promise<Response> {
       url: listing.url,
       imageUrl: listing.imageUrl,
       state: lead.state,
+      deadReason: lead.deadReason,
       createdAt: lead.createdAt,
       enrichedAt: lead.enrichedAt,
       verdict: lead.verdict,

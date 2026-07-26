@@ -28,14 +28,36 @@ import type {
   VerdictFactor,
 } from "./domain.js";
 
+/** Which elastic limit a near miss overshot, and by how much. */
+export interface NearMiss {
+  reason: string;
+  /** The brief's boundary and the unit's actual value, in that limit's units. */
+  limit: number;
+  actual: number;
+  /** Overshoot as a fraction of the boundary (0.08 = 8% over). */
+  overshoot: number;
+}
+
 export interface EvaluationResult {
-  outcome: "shortlisted" | "dead";
+  outcome: "shortlisted" | "near_miss" | "dead";
+  /** Set on dead AND near_miss — in both cases, why this is not shortlisted. */
   deadReason?: string;
+  nearMiss?: NearMiss;
   verdict: ConfidenceVerdict;
 }
 
 /** Asking prices above budget by up to this factor are kept — that's negotiation room. */
 export const NEGOTIATION_HEADROOM = 1.15;
+/**
+ * How far past a shortlist boundary an ELASTIC limit may stretch and still be
+ * worth surfacing. Applied on top of each boundary, so the price band compounds
+ * with the negotiation headroom above. Background constant on purpose: the user
+ * sets round numbers ("6.500", "180.000 km"), not tolerances — a unit 8% over a
+ * round number is a fact about the market, not a preference to configure.
+ */
+export const NEAR_MISS_STRETCH = 1.15;
+/** Year boundaries stretch in whole years; a ratio on a calendar year is meaningless. */
+export const NEAR_MISS_YEAR_SLACK = 1;
 /** Below this fraction of the market median, "bargain" reads as "scam" until proven otherwise. */
 const SCAM_PRICE_RATIO = 0.55;
 /** A subscore with nothing known sits here: neither reward nor punishment. */
@@ -102,13 +124,27 @@ export function evaluateListing(
     foreignPlate: listing.foreignPlates ?? extracted.foreignPlate,
   };
 
-  const deadReason = hardFilterReason(listing, criteria, hardLimits, imported);
   const verdict = buildVerdict(listing, criteria, hardLimits, imported, benchmark, dossier, findings);
-  if (deadReason) return { outcome: "dead", deadReason, verdict };
-  return { outcome: "shortlisted", verdict };
+
+  // Absolute limits first: no band, no notification, no second look.
+  const killed = absoluteKillReason(listing, criteria, hardLimits, imported);
+  if (killed) return { outcome: "dead", deadReason: killed, verdict };
+
+  // Then elastic limits, which have a stretch band beyond the boundary.
+  const found = elasticMiss(listing, criteria, hardLimits);
+  if (!found) return { outcome: "shortlisted", verdict };
+  if (found.beyondBand) {
+    return { outcome: "dead", deadReason: found.miss.reason, verdict };
+  }
+  return { outcome: "near_miss", deadReason: found.miss.reason, nearMiss: found.miss, verdict };
 }
 
-function hardFilterReason(
+/**
+ * Limits that admit no degree: the unit is simply not what the user will buy.
+ * A right-hand-drive import at a great price is not a near miss, it is a no —
+ * surfacing it would hollow out the hard-limits invariant (PROJECT.md).
+ */
+function absoluteKillReason(
   listing: NormalizedListing,
   criteria: BriefCriteria,
   hardLimits: HardLimits,
@@ -120,29 +156,71 @@ function hardFilterReason(
   // question resolves the assumption first.
   if (hardLimits.noRhd && imported.rhd && !imported.rhdAssumed) return "rhd_not_accepted";
   if (hardLimits.requireSpanishPlates && imported.foreignPlate) return "foreign_plates_not_accepted";
+  return undefined;
+}
+
+/** How far past a boundary the stretch band reaches, rounded to a whole unit. */
+const bandEdge = (boundary: number): number => Math.round(boundary * NEAR_MISS_STRETCH);
+
+/**
+ * Limits that are a matter of degree. Inside the boundary the lead is
+ * shortlisted; past it, `beyondBand` separates a near miss from a death.
+ * Bands are compared against rounded absolute edges rather than ratios —
+ * `1.15 - 1` is not 0.15 in binary floating point, and a unit sitting exactly
+ * on a round boundary must not fall through the crack that opens.
+ */
+function elasticMiss(
+  listing: NormalizedListing,
+  criteria: BriefCriteria,
+  hardLimits: HardLimits,
+): { miss: NearMiss; beyondBand: boolean } | undefined {
+  const over = (
+    reason: string,
+    limit: number,
+    actual: number,
+    beyondBand: boolean,
+  ): { miss: NearMiss; beyondBand: boolean } => ({
+    miss: {
+      reason,
+      limit,
+      actual,
+      overshoot: limit === 0 ? Number.POSITIVE_INFINITY : Math.abs(actual - limit) / limit,
+    },
+    beyondBand,
+  });
+
   if (listing.year !== undefined) {
-    if (criteria.yearMin !== undefined && listing.year < criteria.yearMin) return "year_below_minimum";
-    if (criteria.yearMax !== undefined && listing.year > criteria.yearMax) return "year_above_maximum";
+    // Years stretch by whole years — a percentage of a calendar year is meaningless.
+    if (criteria.yearMin !== undefined && listing.year < criteria.yearMin) {
+      const behind = criteria.yearMin - listing.year;
+      return over("year_below_minimum", criteria.yearMin, listing.year, behind > NEAR_MISS_YEAR_SLACK);
+    }
+    if (criteria.yearMax !== undefined && listing.year > criteria.yearMax) {
+      const ahead = listing.year - criteria.yearMax;
+      return over("year_above_maximum", criteria.yearMax, listing.year, ahead > NEAR_MISS_YEAR_SLACK);
+    }
   }
   if (listing.km !== undefined && criteria.kmMax !== undefined && listing.km > criteria.kmMax) {
-    return "km_over_limit";
+    return over("km_over_limit", criteria.kmMax, listing.km, listing.km > bandEdge(criteria.kmMax));
   }
+  // The budget boundary already includes negotiation headroom; the stretch
+  // band sits beyond it, so an asking price can be over budget twice over
+  // before it stops being worth a look.
   const price = effectivePrice(listing);
-  if (price !== undefined && price > hardLimits.maxPriceEur * NEGOTIATION_HEADROOM) {
-    return "price_over_budget";
+  const budget = Math.round(hardLimits.maxPriceEur * NEGOTIATION_HEADROOM);
+  if (price !== undefined && price > budget) {
+    return over("price_over_budget", budget, price, price > bandEdge(budget));
   }
   // Wallapop's API ignores distance params (verified 2026-07-22, RECON.md),
   // so the search radius is enforced HERE. Facts only: listings without
   // coordinates pass (can't condemn on missing data), and the slack absorbs
   // city-centroid coordinates — sellers geocode to the town center.
-  if (
-    criteria.location &&
-    listing.lat !== undefined &&
-    listing.lon !== undefined &&
-    haversineKm(criteria.location, { lat: listing.lat, lon: listing.lon }) >
-      criteria.location.radiusKm + RADIUS_SLACK_KM
-  ) {
-    return "outside_search_radius";
+  if (criteria.location && listing.lat !== undefined && listing.lon !== undefined) {
+    const boundary = criteria.location.radiusKm + RADIUS_SLACK_KM;
+    const distance = haversineKm(criteria.location, { lat: listing.lat, lon: listing.lon });
+    if (distance > boundary) {
+      return over("outside_search_radius", boundary, distance, distance > bandEdge(boundary));
+    }
   }
   return undefined;
 }

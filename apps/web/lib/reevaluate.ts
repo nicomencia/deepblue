@@ -67,14 +67,24 @@ export function listingRowToNormalized(
   };
 }
 
-/** Re-evaluate a brief's shortlisted leads — e.g. after its hard limits change. */
+/**
+ * Re-evaluate a brief's live leads — e.g. after its hard limits change.
+ * Near misses are included on purpose: widening a limit is exactly when one
+ * should be promoted into the shortlist, and tightening one is when a
+ * shortlisted lead should fall back to a near miss instead of dying.
+ */
 export async function reevaluateBriefLeads(db: Db, briefId: string): Promise<number> {
   const rows = await db
     .select({ lead: leads, listing: listings, brief: briefs })
     .from(leads)
     .innerJoin(listings, eq(leads.listingId, listings.id))
     .innerJoin(briefs, eq(leads.briefId, briefs.id))
-    .where(and(eq(leads.briefId, briefId), eq(leads.state, "shortlisted")));
+    .where(
+      and(
+        eq(leads.briefId, briefId),
+        or(eq(leads.state, "shortlisted"), eq(leads.state, "near_miss")),
+      ),
+    );
 
   const caches = newEvalCaches();
   for (const row of rows) {
@@ -160,12 +170,18 @@ export async function reevaluateLead(
     verdict = applyEnrichment(verdict, lead.chatReading, risk);
   }
 
-  // Manual (adopted) leads never die on hard filters — the user explicitly
-  // wants this ad tracked; the reason stays visible as a warning instead.
-  // The reaper still kills them honestly when the ad is truly gone.
+  // Manual (adopted) leads never fall out on hard filters — the user
+  // explicitly wants this ad tracked; the reason stays visible as a warning
+  // instead. The reaper still kills them honestly when the ad is truly gone.
+  //
+  // Everything else follows the evaluation, but only where the state machine
+  // allows it: a contacted lead is never demoted to near_miss mid-conversation
+  // (canTransition says no), while shortlisted ↔ near_miss moves both ways as
+  // the brief's limits change.
+  const target = evaluation.outcome;
   const nextState =
-    evaluation.outcome === "dead" && lead.origin !== "manual" && canTransition(lead.state, "dead")
-      ? ("dead" as const)
+    lead.origin !== "manual" && target !== lead.state && canTransition(lead.state, target)
+      ? target
       : lead.state;
 
   await db

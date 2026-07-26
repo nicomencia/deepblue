@@ -16,10 +16,11 @@ import {
   type EvaluationResult,
   type JobPayload,
   type ModelDossier,
+  type NearMiss,
   type NormalizedListing,
 } from "@deepblue/core";
 import { briefs, events, jobs, leads, listings, users, type Db } from "@deepblue/db";
-import { and, eq, ne, sql } from "drizzle-orm";
+import { and, eq, inArray, ne, sql } from "drizzle-orm";
 import { sendEmail } from "./email";
 import { leadUrl } from "./links";
 import { getBenchmark, getDossier } from "./lookups";
@@ -33,7 +34,38 @@ export interface IngestStats {
   received: number;
   newLeads: number;
   shortlisted: number;
+  nearMiss: number;
   dead: number;
+}
+
+/** How a near miss reads in an email, in the user's terms. */
+const MISS_LABEL: Record<string, (m: NearMiss) => string> = {
+  km_over_limit: (m) =>
+    `${m.actual.toLocaleString("es-ES")} km, ${Math.round(m.overshoot * 100)}% por encima de tu tope de ${m.limit.toLocaleString("es-ES")} km`,
+  price_over_budget: (m) =>
+    `${Math.round(m.actual).toLocaleString("es-ES")} €, ${Math.round(m.overshoot * 100)}% por encima de tu presupuesto con margen de negociación`,
+  year_below_minimum: (m) => `del ${m.actual}, un año por debajo de tu mínimo (${m.limit})`,
+  year_above_maximum: (m) => `del ${m.actual}, un año por encima de tu máximo (${m.limit})`,
+  outside_search_radius: (m) =>
+    `a ${Math.round(m.actual)} km, ${Math.round(m.overshoot * 100)}% más lejos de tu radio de ${Math.round(m.limit)} km`,
+};
+
+export const describeMiss = (m: NearMiss): string =>
+  MISS_LABEL[m.reason]?.(m) ?? `fuera de límites (${m.reason})`;
+
+/**
+ * The best score currently shortlisted for a brief. A near miss only earns an
+ * interruption by beating it — otherwise the user already has something better
+ * that actually meets the brief, and the email is noise.
+ */
+async function bestShortlistedScore(db: Db, briefId: string): Promise<number> {
+  const [row] = await db
+    .select({
+      best: sql<number>`coalesce(max((${leads.verdict}->>'score')::numeric), 0)::int`,
+    })
+    .from(leads)
+    .where(and(eq(leads.briefId, briefId), eq(leads.state, "shortlisted")));
+  return row?.best ?? 0;
 }
 
 export async function ingestSearchResults(
@@ -41,7 +73,13 @@ export async function ingestSearchResults(
   briefId: string,
   items: NormalizedListing[],
 ): Promise<IngestStats> {
-  const stats: IngestStats = { received: items.length, newLeads: 0, shortlisted: 0, dead: 0 };
+  const stats: IngestStats = {
+    received: items.length,
+    newLeads: 0,
+    shortlisted: 0,
+    nearMiss: 0,
+    dead: 0,
+  };
 
   const [brief] = await db.select().from(briefs).where(eq(briefs.id, briefId)).limit(1);
   if (!brief) throw new Error(`brief ${briefId} not found`);
@@ -49,6 +87,9 @@ export async function ingestSearchResults(
 
   const caches = newEvalCaches();
   let alertsSent = 0;
+  // Measured once, before this batch adds anything: the bar a near miss must
+  // clear is what the user already had, not what this same sweep just found.
+  const barToBeat = await bestShortlistedScore(db, briefId);
 
   for (const item of items) {
     // One rotten item must not kill the batch: a seller once typed "1.4"
@@ -61,18 +102,34 @@ export async function ingestSearchResults(
         // search produces more low-B candidates than a person can work. Only
         // the top of the band interrupts; the rest wait in the daily digest.
         const minScore = Number(process.env.ALERT_MIN_SCORE ?? 75);
-        if (
-          owner &&
-          alertsSent < MAX_ALERTS_PER_INGEST &&
+        const topOfBand =
           gradeAtMost(evaluation.verdict.overall, alertThreshold) &&
-          evaluation.verdict.score >= minScore
-        ) {
+          evaluation.verdict.score >= minScore;
+
+        // A near miss is outside the brief, so it has to clear a higher bar
+        // than a normal candidate: top of the band AND better than anything
+        // the user already has that actually fits. Otherwise: silence. Near
+        // misses never reach the daily digest either — the shortlist is the
+        // digest's subject, and this is explicitly not on it.
+        const nearMiss = evaluation.outcome === "near_miss";
+        const worthInterrupting =
+          topOfBand && (!nearMiss || evaluation.verdict.score > barToBeat);
+
+        if (owner && alertsSent < MAX_ALERTS_PER_INGEST && worthInterrupting) {
           alertsSent += 1;
+          const miss = evaluation.nearMiss;
+          const note = miss ? describeMiss(miss) : undefined;
           await sendEmail({
             to: owner.email,
-            subject: `deepblue · candidato ${evaluation.verdict.overall}: ${item.title}`,
-            text: composeAlert(item, evaluation, lead?.id),
-            html: composeAlertHtml(item, evaluation, lead?.id),
+            subject: note
+              ? `deepblue · fuera de límites pero interesante (${evaluation.verdict.overall}): ${item.title}`
+              : `deepblue · candidato ${evaluation.verdict.overall}: ${item.title}`,
+            text: note
+              ? `Fuera de tu búsqueda: ${note}.\nTe aviso porque puntúa por encima de todo lo que tienes en la lista.\n\n${composeAlert(item, evaluation, lead?.id)}`
+              : composeAlert(item, evaluation, lead?.id),
+            html: note
+              ? `<p style="padding:0.5rem 0.75rem;border-left:3px solid #c88"><strong>Fuera de tu búsqueda:</strong> ${note}.<br><small>Te aviso porque puntúa por encima de todo lo que tienes en la lista.</small></p>${composeAlertHtml(item, evaluation, lead?.id)}`
+              : composeAlertHtml(item, evaluation, lead?.id),
           });
           // Stamp so tomorrow's digest shows it as "ya avisado", not as news.
           if (lead) {
@@ -258,10 +315,14 @@ async function ingestOne(
 
   stats.newLeads += 1;
   if (outcome === "shortlisted") stats.shortlisted += 1;
+  else if (outcome === "near_miss") stats.nearMiss += 1;
   else stats.dead += 1;
 
   // Shortlisted → enqueue detail enrichment (gearbox, power, eco label,
   // seller reputation). Wallapop only for now; AutoScout24 detail later.
+  // Near misses deliberately skip it: they are outside the brief, and paying
+  // a runner fetch plus an LLM call on every one would make the widened band
+  // cost real money on ads the user never asked for.
   if (outcome === "shortlisted" && item.platform === "wallapop") {
     const payload: JobPayload = {
       type: "fetch_listing",
@@ -273,8 +334,9 @@ async function ingestOne(
   }
 
   // Instant alert for top-grade finds. Fires only on first evaluation —
-  // re-evaluations (digest, enrichment) never alert, so no spam.
-  if (outcome === "shortlisted") {
+  // re-evaluations (digest, enrichment) never alert, so no spam. Near misses
+  // go through the same hook, which applies a stricter bar of its own.
+  if (outcome === "shortlisted" || outcome === "near_miss") {
     await onShortlisted(lead, evaluation);
   }
 
@@ -421,7 +483,14 @@ export async function ingestListingDetail(
     .from(leads)
     .innerJoin(listings, eq(leads.listingId, listings.id))
     .innerJoin(briefs, eq(leads.briefId, briefs.id))
-    .where(and(eq(leads.listingId, updated.id), eq(leads.state, "shortlisted")));
+    // Near misses included: a refreshed detail (a price drop, a corrected
+    // odometer) is exactly what promotes one back into the shortlist.
+    .where(
+      and(
+        eq(leads.listingId, updated.id),
+        inArray(leads.state, ["shortlisted", "near_miss"]),
+      ),
+    );
 
   const caches = newEvalCaches();
   for (const row of rows) {

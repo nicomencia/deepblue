@@ -11,6 +11,7 @@ import {
   applyEnrichment,
   evaluateListing,
   MAX_ENRICHMENT_DELTA,
+  NEAR_MISS_STRETCH,
   NEGOTIATION_HEADROOM,
   scoreToGrade,
 } from "./evaluate.js";
@@ -154,10 +155,13 @@ describe("hard filters", () => {
     expect(r.deadReason).toBe("different_vehicle");
   });
 
-  it("kills year and km violations, tolerates unknown fields", () => {
+  it("flags year and km violations, tolerates unknown fields", () => {
+    // Just outside is a near miss (see the near-miss suite); far outside dies.
     expect(evaluateListing(listing({ year: 2014 }), criteria(), hardLimits).deadReason).toBe("year_below_minimum");
     expect(evaluateListing(listing({ year: 2020 }), criteria({ yearMax: 2019 }), hardLimits).deadReason).toBe("year_above_maximum");
     expect(evaluateListing(listing({ km: 150_000 }), criteria(), hardLimits).deadReason).toBe("km_over_limit");
+    expect(evaluateListing(listing({ year: 2010 }), criteria(), hardLimits).outcome).toBe("dead");
+    expect(evaluateListing(listing({ km: 400_000 }), criteria(), hardLimits).outcome).toBe("dead");
     expect(evaluateListing(listing({ year: undefined, km: undefined }), criteria(), hardLimits).outcome).toBe("shortlisted");
   });
 
@@ -181,10 +185,14 @@ describe("hard filters", () => {
     ).toBe("shortlisted"); // ~98 km
   });
 
-  it("keeps asking prices within negotiation headroom, kills above it", () => {
+  it("keeps asking prices within negotiation headroom, drops them above it", () => {
     const cap = Math.round(hardLimits.maxPriceEur * NEGOTIATION_HEADROOM); // 17.825
     expect(evaluateListing(listing({ priceEur: cap }), criteria(), hardLimits).outcome).toBe("shortlisted");
-    expect(evaluateListing(listing({ priceEur: cap + 1 }), criteria(), hardLimits).deadReason).toBe("price_over_budget");
+    const over = evaluateListing(listing({ priceEur: cap + 1 }), criteria(), hardLimits);
+    expect(over.outcome).not.toBe("shortlisted");
+    expect(over.deadReason).toBe("price_over_budget");
+    // Far above the headroom is dead, not a near miss.
+    expect(evaluateListing(listing({ priceEur: cap * 2 }), criteria(), hardLimits).outcome).toBe("dead");
   });
 
   it("budget-checks the real cash price, not the financing headline", () => {
@@ -193,7 +201,72 @@ describe("hard filters", () => {
       criteria(),
       hardLimits,
     );
+    expect(r.outcome).not.toBe("shortlisted");
     expect(r.deadReason).toBe("price_over_budget");
+  });
+});
+
+// --- Near misses: elastic limits stretch, absolute ones never do --------------
+
+describe("near misses", () => {
+  it("keeps a unit just over an elastic limit, with the overshoot measured", () => {
+    // kmMax 140.000; the band reaches 161.000.
+    const r = evaluateListing(listing({ km: 150_000 }), criteria(), hardLimits);
+    expect(r.outcome).toBe("near_miss");
+    expect(r.nearMiss).toMatchObject({ reason: "km_over_limit", limit: 140_000, actual: 150_000 });
+    expect(r.nearMiss?.overshoot).toBeCloseTo(0.0714, 3);
+  });
+
+  it("kills the same limit once it is past the band", () => {
+    const edge = Math.floor(140_000 * NEAR_MISS_STRETCH); // 161.000
+    expect(evaluateListing(listing({ km: edge }), criteria(), hardLimits).outcome).toBe("near_miss");
+    expect(evaluateListing(listing({ km: edge + 1_000 }), criteria(), hardLimits).outcome).toBe("dead");
+  });
+
+  it("stretches years by whole years, not by a ratio", () => {
+    const oneBelow = evaluateListing(listing({ year: 2014 }), criteria(), hardLimits);
+    expect(oneBelow.outcome).toBe("near_miss");
+    expect(oneBelow.nearMiss?.reason).toBe("year_below_minimum");
+    // Two years below is outside the slack — a ratio would have kept it.
+    expect(evaluateListing(listing({ year: 2013 }), criteria(), hardLimits).outcome).toBe("dead");
+  });
+
+  it("stretches the budget beyond the negotiation headroom", () => {
+    const cap = hardLimits.maxPriceEur * NEGOTIATION_HEADROOM;
+    expect(evaluateListing(listing({ priceEur: Math.round(cap * 1.1) }), criteria(), hardLimits).outcome)
+      .toBe("near_miss");
+    expect(evaluateListing(listing({ priceEur: Math.round(cap * 1.2) }), criteria(), hardLimits).outcome)
+      .toBe("dead");
+  });
+
+  it("never stretches an absolute limit — a wrong vehicle or an import is a no", () => {
+    const wrong = evaluateListing(
+      listing({ title: "Seat León FR", make: "Seat", model: "León" }),
+      criteria(),
+      hardLimits,
+    );
+    expect(wrong.outcome).toBe("dead");
+    expect(wrong.nearMiss).toBeUndefined();
+
+    const rhd = evaluateListing(
+      listing({ title: "Volkswagen Golf 1.4 TSI volante a la derecha", rhd: true }),
+      criteria(),
+      { ...hardLimits, noRhd: true },
+    );
+    expect(rhd.outcome).toBe("dead");
+    expect(rhd.deadReason).toBe("rhd_not_accepted");
+    expect(rhd.nearMiss).toBeUndefined();
+  });
+
+  it("an absolute limit wins over an elastic one on the same listing", () => {
+    // Over km AND the wrong vehicle: it must die, never surface as a near miss.
+    const r = evaluateListing(
+      listing({ title: "Seat León FR", make: "Seat", model: "León", km: 150_000 }),
+      criteria(),
+      hardLimits,
+    );
+    expect(r.outcome).toBe("dead");
+    expect(r.deadReason).toBe("different_vehicle");
   });
 });
 

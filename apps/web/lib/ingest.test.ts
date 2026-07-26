@@ -1,6 +1,11 @@
-import type { ConfidenceVerdict, EvaluationResult, NormalizedListing } from "@deepblue/core";
+import type {
+  ConfidenceVerdict,
+  EvaluationResult,
+  NearMiss,
+  NormalizedListing,
+} from "@deepblue/core";
 import { describe, expect, it } from "vitest";
-import { composeAlert, composeAlertHtml } from "./ingest";
+import { composeAlert, composeAlertHtml, describeMiss } from "./ingest";
 
 const verdict = (over: Partial<ConfidenceVerdict>): ConfidenceVerdict =>
   ({
@@ -53,6 +58,45 @@ describe("composeAlert", () => {
     );
     expect(text).toContain("2150–4950 €");
     expect(text).toContain("dentro de tu presupuesto");
+  });
+});
+
+describe("describeMiss", () => {
+  const miss = (over: Partial<NearMiss>): NearMiss => ({
+    reason: "km_over_limit",
+    limit: 180_000,
+    actual: 195_000,
+    overshoot: 15_000 / 180_000,
+    ...over,
+  });
+
+  it("says which limit was missed and by how much, in the user's units", () => {
+    expect(describeMiss(miss({}))).toBe(
+      "195.000 km, 8% por encima de tu tope de 180.000 km",
+    );
+  });
+
+  it("frames a year miss in whole years, never a percentage", () => {
+    const text = describeMiss(
+      miss({ reason: "year_below_minimum", limit: 2005, actual: 2004, overshoot: 1 / 2005 }),
+    );
+    expect(text).toBe("del 2004, un año por debajo de tu mínimo (2005)");
+    expect(text).not.toContain("%");
+  });
+
+  it("rounds distance to whole km rather than leaking haversine decimals", () => {
+    expect(
+      describeMiss({
+        reason: "outside_search_radius",
+        limit: 215,
+        actual: 231.47829,
+        overshoot: 16.47829 / 215,
+      }),
+    ).toBe("a 231 km, 8% más lejos de tu radio de 215 km");
+  });
+
+  it("degrades to the raw reason rather than throwing on an unknown limit", () => {
+    expect(describeMiss(miss({ reason: "some_future_limit" }))).toContain("some_future_limit");
   });
 });
 

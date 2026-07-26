@@ -29,6 +29,14 @@ export function isPlatformActive(platform: Platform): boolean {
 export const LEAD_STATES = [
   "discovered",
   "evaluated",
+  /**
+   * Outside an ELASTIC limit (budget, km, year, distance) but inside its
+   * stretch band. Deliberately not shortlisted — "shortlisted" must keep
+   * meaning "meets the brief" — and deliberately not dead, because a great
+   * unit just over a round number is worth telling the user about.
+   * Absolute limits (RHD, foreign plates, wrong vehicle) never land here.
+   */
+  "near_miss",
   "shortlisted",
   "contacted",
   "negotiating",
@@ -45,8 +53,12 @@ export type LeadState = (typeof LEAD_STATES)[number];
  */
 const LEAD_TRANSITIONS: Record<LeadState, readonly LeadState[]> = {
   discovered: ["evaluated"],
-  evaluated: ["shortlisted", "dead"],
-  shortlisted: ["contacted", "dead"],
+  evaluated: ["shortlisted", "near_miss", "dead"],
+  // Reversible both ways: widening a brief's limits promotes a near miss,
+  // tightening them demotes a shortlisted lead instead of killing it. Once
+  // contacted, a lead never falls back — a conversation is under way.
+  near_miss: ["shortlisted", "dead"],
+  shortlisted: ["contacted", "near_miss", "dead"],
   contacted: ["negotiating", "dead"],
   negotiating: ["agreement", "dead"],
   agreement: ["visit_proposed", "dead"],

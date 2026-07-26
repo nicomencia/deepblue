@@ -66,7 +66,11 @@ export async function enqueueListingChecks(
     .filter((s): s is string => Boolean(s));
 
   const baseWhere = and(
-    eq(leads.state, "shortlisted"),
+    // Near misses are probed too: the user may have been emailed about one,
+    // and an alert pointing at a car that sold last week is worse than no
+    // alert. They are rare by construction (only ads inside the stretch
+    // band), so this costs few extra probes.
+    inArray(leads.state, ["shortlisted", "near_miss"]),
     eq(listings.active, true),
     inArray(listings.platform, PROBEABLE_PLATFORMS),
     lt(listings.lastSeenAt, cutoff),

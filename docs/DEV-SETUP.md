@@ -133,6 +133,34 @@ anuncios, digest con suelo de nota + alertas A/B sin duplicados, dossiers
 en la página del lead), tabs por búsqueda, página Actividad, descubrimiento de
 modelos y adopción manual de anuncios con dossier-first. 77 tests verdes.
 
+**Cambio 2026-07-26 — casi-candidatos: los límites se estiran por detrás.** Un
+207 RC con 8% más de km del tope no es basura, es información — pero tampoco
+entra en la lista, porque «shortlisted» tiene que seguir significando «cumple
+tu búsqueda». Nuevo estado `near_miss` entre `evaluated` y `shortlisted`, con
+banda de estiramiento (`NEAR_MISS_STRETCH = 1.15`, y ±1 año para los límites de
+año, que en años no se miden en porcentajes). **La distinción que manda: límites
+ELÁSTICOS (precio, km, año, radio) tienen banda; límites ABSOLUTOS (vehículo
+distinto, RHD, matrícula extranjera) NO — un import a la derecha barato no es un
+casi-candidato, es un no, y avisar de él vaciaría el invariante de límites duros
+por dentro.** El precio ya tenía `NEGOTIATION_HEADROOM = 1.15`: la banda se
+aplica ENCIMA de ese borde, no lo sustituye. Bandas como constante de fondo, sin
+UI ni campo en el brief: el usuario pone números redondos, no tolerancias.
+
+Solo interrumpe lo realmente bueno: grado A/B **y** puntuación por encima de
+todo lo que ya hay en la lista de ese brief (medido ANTES del lote, para que la
+barra sea lo que el usuario ya tenía). Los casi-candidatos no entran en el
+digest, no piden enriquecimiento (ni fetch del runner ni LLM — cuestan dinero en
+anuncios que el usuario no pidió) y NUNCA se contactan solos. Sí los repasa el
+reaper (un aviso que apunta a un coche vendido es peor que ningún aviso) y sí
+los re-evalúa un cambio de precio o de límites del brief: `shortlisted ↔
+near_miss` se mueve en ambos sentidos, pero un lead ya contactado no retrocede
+(lo impide `canTransition`). Detalle de implementación: las bandas se comparan
+contra bordes absolutos redondeados, no contra ratios — `1.15 - 1` no es 0,15 en
+coma flotante y un coche justo en el borde redondo se caía por la grieta (cazado
+por un test). Verificado en vivo: 4 leads del 207 intactos, páginas 200,
+`reevaluate` estable. 187 tests verdes. `GET /api/dev/leads` acepta ahora
+`?state=` y devuelve `deadReason` — así se responde «¿por qué se cayó ése?».
+
 **Cambio 2026-07-26 — `runner:login` era inusable: el muro de cookies.** Al
 preparar el perfil de Wallapop en la segunda máquina, la ventana abría con la
 página BORROSA y sin poder pulsar nada: el gate de consentimiento de OneTrust
