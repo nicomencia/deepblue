@@ -133,6 +133,23 @@ anuncios, digest con suelo de nota + alertas A/B sin duplicados, dossiers
 en la página del lead), tabs por búsqueda, página Actividad, descubrimiento de
 modelos y adopción manual de anuncios con dossier-first. 77 tests verdes.
 
+**Cambio 2026-07-26 — el scheduler no puede importar `node:crypto`.** Al
+levantar `dev:web` en la segunda máquina de desarrollo, TODAS las rutas daban
+500: `UnhandledSchemeError: node:crypto`. Causa: el secreto de arranque que
+añadió el ensayo de despliegue (2026-07-22) trajo consigo
+`import crypto from "node:crypto"` en `lib/scheduler.ts`, y a ese módulo se
+llega desde `instrumentation.ts`, que Next compila TAMBIÉN para el runtime
+edge — donde un especificador `node:` no resuelve y rompe el build entero. El
+guard `NEXT_RUNTIME !== "nodejs"` no salva: es de ejecución, y webpack empaqueta
+igual. No se cazó el 22 porque el ensayo fue por la vía de producción
+(`build`/`start`), nunca se volvió a arrancar `dev:web`. Arreglo: Web Crypto
+desde `globalThis` (`globalThis.crypto.randomUUID()`), sin import — que es lo
+que la cabecera del propio fichero ya exigía («deliberately dependency-free»,
+instrumentation vive en una capa donde los server externals no aplican).
+Verificado en vivo: las 6 páginas → 200 y `/api/cron/reap` → 200. **Regla: en
+`lib/scheduler.ts` (y en todo lo alcanzable desde instrumentation) nada de
+`node:*`.** 177 tests verdes.
+
 **Cambio 2026-07-22 — despliegue listo antes de tener el hardware.** El
 portátil Arch llega en unos días; todo lo verificable sin él quedó hecho y
 ENSAYADO en producción local: scripts `build`/`start:web`/`start:runner` en el

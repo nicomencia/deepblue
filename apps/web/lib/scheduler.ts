@@ -8,8 +8,6 @@
  * jittered ticks — never a metronome against the platforms.
  */
 
-import crypto from "node:crypto";
-
 const TICK_MS = 15 * 60 * 1000;
 const SWEEP_INTERVAL_MS = Number(process.env.SWEEP_INTERVAL_MINUTES ?? 180) * 60 * 1000;
 
@@ -48,8 +46,12 @@ export function startScheduler(): void {
   // boot-scoped one: same process, so the routes accept it; external callers
   // still need the real thing. Explicit CRON_SECRET (cloud mode) wins, and
   // dev stays open (no-secret + non-prod = allowed) for manual cron curls.
+  // Web Crypto off globalThis, never `import "node:crypto"`: this module is
+  // reached from instrumentation, which Next also compiles for the edge
+  // runtime — a `node:` specifier there fails the build and 500s every route
+  // (dev, 2026-07-26), even though only the Node bundle ever runs this.
   if (process.env.NODE_ENV === "production" && !process.env.CRON_SECRET) {
-    process.env.CRON_SECRET = crypto.randomUUID();
+    process.env.CRON_SECRET = globalThis.crypto.randomUUID();
   }
   console.log(
     `[scheduler] on — sweeps every ~${Math.round(SWEEP_INTERVAL_MS / 60000)} min (08–23h Madrid), digest on first tick of the day`,
