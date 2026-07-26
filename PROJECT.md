@@ -220,8 +220,8 @@ its opener sent immediately, before the user has read the alert.
 
 This is the autonomy dial applied to **first contact only**, never to negotiation — the
 seller's reply goes straight back to the normal draft-only approval queue, so the user
-still owns every word that follows. Guardrails belong in code, not in the prompt: a
-grade/score floor; strictly *inside* the user's real hard limits (a near miss never
+still owns every word that follows. Guardrails belong in code, not in the prompt: the
+trigger below; strictly *inside* the user's real hard limits (a near miss never
 qualifies — by definition it is not worth jumping the queue for); a freshness window
 (first seen minutes ago, not a backfill of the corpus); per-brief and per-day ceilings;
 one opener per seller, ever; no number in the text (it asks the unit's checklist
@@ -229,12 +229,41 @@ questions and requests a visit slot, never states or accepts a price); the exist
 `CHAT_MAX_CHARS` and pacing hygiene unchanged. Per-brief kill switch, and the send is
 an ordinary approval row auto-approved by rule, so the event log reads the same.
 
-Honest risk, and the reason it is parked rather than scheduled: an autonomous send from
-the user's real account is the highest-blast-radius action in the product. A wrong
-opener is visible to a stranger and cannot be unsent, and it concentrates ban exposure
-exactly on the busiest ads. It also presumes the runner and its logged-in session are
-reliably up, so it depends on the always-on deployment. Natural slot: the first
-delegated slice of Phase 3, only after Phase 2 conversations have been proven by hand.
+*The trigger cannot be "grade A" (measured 2026-07-26).* The intent — fire on so few
+units that the volume stays sane — is right, but A is not merely rare pre-contact, it is
+structurally unreachable: two of the four weighted factors (modelReliability with
+unconfirmed issues, unitEvidence) can only climb once the seller answers, and since the
+2026-07-15 amendment unconfirmed theory is *priced*, so a dossier with live issues holds
+the model factor down by design. Across the 18 graded leads in the corpus the ceiling is
+78 (one B, dead); A starts at 85. A letter gate would simply never fire, and autocontact
+must fire before any conversation exists. Use the primitive the near-miss work already
+introduced instead: `bestShortlistedScore` — the unit must beat *everything currently on
+that brief's list* by a margin, plus a floor on `confidencePct` and a hard "clearly under
+the weighted benchmark, private seller". That bar is self-calibrating (it stays rare as
+the corpus improves and cannot be inflated by score drift) and it says the true thing:
+not "this is an A", but "this is the best thing we have ever seen for you".
+
+**Companion — message economy scales with doubt, not with politeness.** Same insight,
+and it needs no autonomy at all, so it can ship inside Phase 2: on a unit we are sure
+about, every extra question is a chance to lose it, so ask nothing and go for the visit
+slot; on a unit we doubt, questions are cheap insurance against a wasted two-hour drive,
+so ask more and take more rounds. Today `MAX_OPENING_QUESTIONS = 3` is a constant that
+ignores the verdict entirely. It should be a function of it — `confidencePct` and the
+count of live issues are already computed, and distance (brief location vs listing
+lat/lon) belongs in it too, since a 200 km round trip deserves pre-screening a 15 km one
+does not. Two floors stay in code: questions attached to a **live critical issue** are
+never dropped whatever the grade (an A-priced 1.6 THP is still a 1.6 THP), and closing
+fast means asking for a slot, never naming a number — the existing `warm && lastBatch`
+gate on `composeOfferClosing` already encodes that negotiating early gives leverage away.
+The verification does not disappear on a great unit; it moves to the inspection pack.
+
+Honest risk, and the reason autocontact is parked rather than scheduled: an autonomous
+send from the user's real account is the highest-blast-radius action in the product. A
+wrong opener is visible to a stranger and cannot be unsent, and it concentrates ban
+exposure exactly on the busiest ads. It also presumes the runner and its logged-in
+session are reliably up, so it depends on the always-on deployment. Natural slot: the
+first delegated slice of Phase 3, only after Phase 2 conversations have been proven by
+hand — and after the message-economy change has been watched working under approval.
 
 **Model discovery agent (long shot — the mass-market front door).** Conversational
 advisor for non-experts who arrive with needs ("familiar, fiable, ~12.000 €, ciudad +
