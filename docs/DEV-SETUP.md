@@ -133,6 +133,21 @@ anuncios, digest con suelo de nota + alertas A/B sin duplicados, dossiers
 en la página del lead), tabs por búsqueda, página Actividad, descubrimiento de
 modelos y adopción manual de anuncios con dossier-first. 77 tests verdes.
 
+**Cambio 2026-07-26 — borrar un lead que creó un bug, sin tocar la regla.**
+Consecuencia del arreglo anterior: el `207RC` a 5.700 € seguía muerto, y adoptar
+NO resucita (`adopt.ts` ve el lead muerto y devuelve `lead_dead` — correcto por
+diseño). Los muertos no resucitan sigue siendo absoluto: **no hay transición
+`dead → shortlisted` en ninguna parte y no se ha añadido ninguna.** Lo que se
+añade es `POST /api/dev/lead-delete` (`{leadId, reason}`, reason OBLIGATORIA y
+registrada en un evento `lead_deleted` colgado del usuario, porque los eventos
+del lead se van con él): borra filas que produjo código roto, para que el
+anuncio se adopte limpio por la vía normal. La regla se escribió para leads que
+murieron por criterio, no por bug. El listing nunca se toca. Verificado: lead
+borrado → readoptado → entra en la búsqueda 207 RC existente (no crea
+«Seguimiento», gracias al arreglo del matcher en adopt.ts) como `shortlisted`
+`origin=manual`, grado D (52): 170.000 km y exposición 2.200–6.550 € lo dejan
+tercero de los cuatro 207.
+
 **Cambio 2026-07-26 — «207RC» sin espacio no es otro coche.** Cazado mirando
 los leads muertos: un `Peugeot 207RC 2008` REAL a 5.700 € estaba descartado como
 `different_vehicle`, porque `matchesVehicle` hacía `includes("207 rc")` literal y

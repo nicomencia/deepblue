@@ -13,6 +13,23 @@ export interface BriefDeletion {
   jobs: number;
 }
 
+/**
+ * Hard-delete ONE lead and its per-lead history, same FK order as above.
+ *
+ * This is not an undo for "leads muertos no resucitan" — that rule stands, and
+ * nothing in the normal flow calls this. It exists for leads a BUG created or
+ * killed (a matcher that read "207RC" as a different car, 2026-07-26): the row
+ * is an artefact of broken code, not a judgement the agent made, so removing it
+ * lets the ad be adopted cleanly instead of poking a hole in the rule. The
+ * listing is never touched — the corpus outlives any lead.
+ */
+export async function deleteLeadCascade(db: Db, leadId: string): Promise<void> {
+  await db.delete(messages).where(eq(messages.leadId, leadId));
+  await db.delete(approvals).where(eq(approvals.leadId, leadId));
+  await db.delete(events).where(eq(events.leadId, leadId));
+  await db.delete(leads).where(eq(leads.id, leadId));
+}
+
 export async function deleteBriefCascade(db: Db, briefId: string): Promise<BriefDeletion> {
   const leadRows = await db
     .select({ id: leads.id })
