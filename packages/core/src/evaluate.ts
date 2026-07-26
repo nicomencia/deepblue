@@ -98,10 +98,34 @@ const clamp = (n: number, lo = 0, hi = 100) => Math.min(hi, Math.max(lo, Math.ro
 const effectivePrice = (listing: NormalizedListing): number | undefined =>
   listing.cashPriceEur ?? listing.priceEur;
 
+/**
+ * Sellers do not type model names the way a brief does: "207RC", "207 R.C.",
+ * "207-rc" and "Leon" for "León" are all the same car. Collapsing to bare
+ * alphanumerics makes every spelling compare equal.
+ *
+ * This trades a rare false positive (two tokens fusing into a third — "G Turbo"
+ * reading as "GT") for never again silently discarding the exact car the user
+ * is hunting. That trade is deliberate and asymmetric: a wrong car in the
+ * shortlist is visible and one click to dismiss, while a missed one is invisible
+ * and, because dead leads stay dead, permanent.
+ */
+export function normalizeVehicleText(s: string): string {
+  return s
+    .toLowerCase()
+    // NFD splits "ó" into "o" + a combining mark, which the alphanumeric
+    // filter below then drops — so "león" and "leon" normalize alike.
+    .normalize("NFD")
+    .replace(/[^a-z0-9]/g, "");
+}
+
 function matchesVehicle(listing: NormalizedListing, criteria: BriefCriteria): boolean {
-  const haystack = `${listing.make ?? ""} ${listing.model ?? ""} ${listing.title}`.toLowerCase();
+  const haystack = normalizeVehicleText(
+    `${listing.make ?? ""} ${listing.model ?? ""} ${listing.title}`,
+  );
   return criteria.vehicles.some(
-    (v) => haystack.includes(v.make.toLowerCase()) && haystack.includes(v.model.toLowerCase()),
+    (v) =>
+      haystack.includes(normalizeVehicleText(v.make)) &&
+      haystack.includes(normalizeVehicleText(v.model)),
   );
 }
 

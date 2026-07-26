@@ -133,6 +133,21 @@ anuncios, digest con suelo de nota + alertas A/B sin duplicados, dossiers
 en la página del lead), tabs por búsqueda, página Actividad, descubrimiento de
 modelos y adopción manual de anuncios con dossier-first. 77 tests verdes.
 
+**Cambio 2026-07-26 — «207RC» sin espacio no es otro coche.** Cazado mirando
+los leads muertos: un `Peugeot 207RC 2008` REAL a 5.700 € estaba descartado como
+`different_vehicle`, porque `matchesVehicle` hacía `includes("207 rc")` literal y
+el vendedor lo escribió sin espacio. Los vendedores escriben `207RC`, `207 R.C.`,
+`207-rc`, y `Leon` por `León`. Arreglo: normalizar ambos lados a alfanuméricos
+puros (`normalizeVehicleText`, con `NFD` para que los acentos caigan solos).
+**El intercambio es deliberado y asimétrico**: se acepta un falso positivo raro
+(dos tokens fundiéndose en un tercero, «G Turbo» leído como «GT») a cambio de no
+volver a tirar en silencio justo el coche que el usuario busca — un coche de más
+en la lista se ve y se descarta de un clic; uno de menos es invisible y, como los
+muertos no resucitan, permanente. Tests: las cuatro grafías entran, y un 207 a
+secas o un 207 GT siguen fuera. **Ojo: esto NO revive los leads ya muertos** (es
+la regla, no un olvido); para recuperar uno concreto, adoptarlo a mano — las
+adopciones sobreviven a los filtros duros por diseño.
+
 **Cambio 2026-07-26 — casi-candidatos: los límites se estiran por detrás.** Un
 207 RC con 8% más de km del tope no es basura, es información — pero tampoco
 entra en la lista, porque «shortlisted» tiene que seguir significando «cumple

@@ -155,6 +155,49 @@ describe("hard filters", () => {
     expect(r.deadReason).toBe("different_vehicle");
   });
 
+  // Regression: a real 5.700 € "Peugeot 207RC 2008" was discarded as a
+  // different vehicle because the brief says "207 RC" and the seller wrote it
+  // without the space (2026-07-26).
+  it("matches however the seller spelled the model", () => {
+    const rc = criteria({ vehicles: [{ make: "Peugeot", model: "207 RC" }], yearMin: 2005 });
+    const spellings = [
+      "Peugeot 207RC 2008",
+      "Peugeot 207 RC 2008",
+      "peugeot 207-rc",
+      "PEUGEOT 207 R.C. impecable",
+    ];
+    for (const title of spellings) {
+      const r = evaluateListing(
+        listing({ title, make: "Peugeot", model: "207", year: 2008, km: 120_000, priceEur: 6_000 }),
+        rc,
+        hardLimits,
+      );
+      expect(r.outcome, title).not.toBe("dead");
+    }
+  });
+
+  it("still refuses a plain 207 and a 207 GT when the brief wants the RC", () => {
+    const rc = criteria({ vehicles: [{ make: "Peugeot", model: "207 RC" }], yearMin: 2005 });
+    for (const title of ["Peugeot 207 1.6 VTI 2008", "Peugeot 207 GT 2008"]) {
+      const r = evaluateListing(
+        listing({ title, make: "Peugeot", model: "207", year: 2008, km: 120_000, priceEur: 6_000 }),
+        rc,
+        hardLimits,
+      );
+      expect(r.deadReason, title).toBe("different_vehicle");
+    }
+  });
+
+  it("ignores accents, so a León brief matches a Leon ad", () => {
+    const leon = criteria({ vehicles: [{ make: "Seat", model: "León" }] });
+    const r = evaluateListing(
+      listing({ title: "Seat Leon FR 2018", make: "Seat", model: "Leon" }),
+      leon,
+      hardLimits,
+    );
+    expect(r.outcome).not.toBe("dead");
+  });
+
   it("flags year and km violations, tolerates unknown fields", () => {
     // Just outside is a near miss (see the near-miss suite); far outside dies.
     expect(evaluateListing(listing({ year: 2014 }), criteria(), hardLimits).deadReason).toBe("year_below_minimum");
