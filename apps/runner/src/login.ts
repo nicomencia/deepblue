@@ -8,7 +8,7 @@
  */
 
 import { setTimeout as sleep } from "node:timers/promises";
-import { hasWallapopSession, openWallapopProfile } from "./wallapop-chat.js";
+import { dismissCookieBanner, hasWallapopSession, openWallapopProfile } from "./wallapop-chat.js";
 
 const LOGIN_TIMEOUT_MS = 10 * 60 * 1000;
 
@@ -25,6 +25,10 @@ async function main(): Promise<void> {
 
   const page = context.pages()[0] ?? (await context.newPage());
   await page.goto("https://es.wallapop.com", { waitUntil: "domcontentloaded" });
+  // The consent gate blurs and blocks the whole page until it is answered, so
+  // the user cannot reach the login button behind it. Same call every chat
+  // send already makes — dismiss it here too, or login is unusable.
+  await dismissCookieBanner(page);
   console.log("\nInicia sesión en Wallapop en la ventana abierta (Regístrate o inicia sesión).");
   console.log("Este script detecta la sesión solo y cierra el navegador al terminar.\n");
 

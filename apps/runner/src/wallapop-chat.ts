@@ -30,10 +30,18 @@ export async function openWallapopProfile(
 ): Promise<BrowserContext> {
   return chromium.launchPersistentContext(profileDir, {
     headless,
-    viewport: { width: 1366, height: 850 },
+    // Headed: viewport null makes the page track the real OS window. A fixed
+    // viewport leaves the two out of sync, and bottom-anchored overlays (the
+    // OneTrust consent gate) land off the visible edge — unclickable, with
+    // the page blurred behind them (2026-07-26). Headless has no window, so
+    // it keeps an explicit size.
+    viewport: headless ? { width: 1366, height: 850 } : null,
     locale: "es-ES",
     timezoneId: "Europe/Madrid",
-    args: ["--disable-blink-features=AutomationControlled"],
+    args: [
+      "--disable-blink-features=AutomationControlled",
+      ...(headless ? [] : ["--window-size=1366,900"]),
+    ],
   });
 }
 
@@ -43,7 +51,7 @@ export async function hasWallapopSession(context: BrowserContext): Promise<boole
   return cookies.some((c) => /accesstoken|refreshtoken/i.test(c.name) && c.value.length > 0);
 }
 
-async function dismissCookieBanner(page: Page): Promise<void> {
+export async function dismissCookieBanner(page: Page): Promise<void> {
   const accept = page.locator("#onetrust-accept-btn-handler");
   if (await accept.isVisible({ timeout: 4000 }).catch(() => false)) {
     await accept.click();

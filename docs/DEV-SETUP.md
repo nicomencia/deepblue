@@ -133,6 +133,22 @@ anuncios, digest con suelo de nota + alertas A/B sin duplicados, dossiers
 en la página del lead), tabs por búsqueda, página Actividad, descubrimiento de
 modelos y adopción manual de anuncios con dossier-first. 77 tests verdes.
 
+**Cambio 2026-07-26 — `runner:login` era inusable: el muro de cookies.** Al
+preparar el perfil de Wallapop en la segunda máquina, la ventana abría con la
+página BORROSA y sin poder pulsar nada: el gate de consentimiento de OneTrust
+bloquea la página entera hasta contestarlo, y `login.ts` iba directo a esperar
+la cookie de sesión sin descartarlo — aunque `dismissCookieBanner()` ya existía
+en `wallapop-chat.ts` y TODO envío de chat lo llamaba. Sólo el login se lo
+saltaba. Segundo factor: `openWallapopProfile` fijaba `viewport` también en
+modo headed, así que página y ventana real iban desacopladas (4011x1737 en el
+caso visto) y el banner, anclado al borde inferior del viewport, caía fuera de
+lo visible. Arreglo: `dismissCookieBanner()` exportado y llamado desde el
+login, y en headed `viewport: null` + `--window-size=1366,900` (headless
+conserva su tamaño explícito — no tiene ventana). Verificado en vivo: sesión
+detectada y guardada en el perfil al primer intento. **Ojo: descartar el banner
+pulsa «aceptar» de OneTrust** — es lo que ya hacía cada envío de chat, pero es
+una decisión de privacidad; para rechazar hay que hacerlo a mano en la ventana.
+
 **Cambio 2026-07-26 — el scheduler no puede importar `node:crypto`.** Al
 levantar `dev:web` en la segunda máquina de desarrollo, TODAS las rutas daban
 500: `UnhandledSchemeError: node:crypto`. Causa: el secreto de arranque que
