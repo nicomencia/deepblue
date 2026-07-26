@@ -17,6 +17,7 @@ import {
   evaluateListing,
   extractCashPriceEur,
   extractDedupKey,
+  normalizeVehicleText,
   type BriefCriteria,
   type HardLimits,
   type JobPayload,
@@ -213,10 +214,15 @@ export async function completeAdoption(
       .select()
       .from(briefs)
       .where(and(eq(briefs.userId, userId), eq(briefs.status, "active")));
-    const haystack = `${item.make ?? ""} ${item.model ?? ""} ${item.title}`.toLowerCase();
+    // Same normalisation as evaluateListing's matcher, and deliberately the
+    // same helper: a second literal copy is how "207RC" ended up adopted into
+    // a new "Seguimiento" brief instead of the 207 RC hunt the user already had.
+    const haystack = normalizeVehicleText(`${item.make ?? ""} ${item.model ?? ""} ${item.title}`);
     brief = actives.find((b) =>
       b.criteria.vehicles.some(
-        (v) => haystack.includes(v.make.toLowerCase()) && haystack.includes(v.model.toLowerCase()),
+        (v) =>
+          haystack.includes(normalizeVehicleText(v.make)) &&
+          haystack.includes(normalizeVehicleText(v.model)),
       ),
     );
   }
