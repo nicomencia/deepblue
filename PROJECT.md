@@ -229,33 +229,52 @@ questions and requests a visit slot, never states or accepts a price); the exist
 `CHAT_MAX_CHARS` and pacing hygiene unchanged. Per-brief kill switch, and the send is
 an ordinary approval row auto-approved by rule, so the event log reads the same.
 
-*The trigger cannot be "grade A" (measured 2026-07-26).* The intent — fire on so few
-units that the volume stays sane — is right, but A is not merely rare pre-contact, it is
-structurally unreachable: two of the four weighted factors (modelReliability with
-unconfirmed issues, unitEvidence) can only climb once the seller answers, and since the
-2026-07-15 amendment unconfirmed theory is *priced*, so a dossier with live issues holds
-the model factor down by design. Across the 18 graded leads in the corpus the ceiling is
-78 (one B, dead); A starts at 85. A letter gate would simply never fire, and autocontact
-must fire before any conversation exists. Use the primitive the near-miss work already
-introduced instead: `bestShortlistedScore` — the unit must beat *everything currently on
-that brief's list* by a margin, plus a floor on `confidencePct` and a hard "clearly under
-the weighted benchmark, private seller". That bar is self-calibrating (it stays rare as
-the corpus improves and cannot be inflated by score drift) and it says the true thing:
-not "this is an A", but "this is the best thing we have ever seen for you".
+*Trigger: grade A, decided 2026-07-26, adjustable later.* Rare by construction is the
+whole point — A starts at 85 and the live corpus tops out at 78 — but "rare" is not
+"impossible", and an earlier reading of this file said it was. That reading measured 18
+leads *after* the Golf brief's 143 were cascaded away, and generalised from the 207 RC,
+where every unit inherits the same unconfirmed 1.6 THP issues and the 2026-07-15 pricing
+amendment holds the model factor down on purpose. The mechanism that makes A reachable
+without any seller input is issue **applicability** (`evaluate.ts`): a dossier issue that
+does not apply to this unit's fuel/gearbox/km/year is ruled out, and ruled-out issues
+cost zero exposure — so a Golf VII whose engine dodges most of its own dossier can clear
+85 cold. Consequence to accept knowingly: on the 207 RC hunt autocontact will never fire.
+For the highest-blast-radius action in the product, a gate that errs toward silence is
+the right way to be wrong, and the bar is one constant to move. If it proves *too* silent
+across every brief, the fallback is not a lower letter but the self-calibrating bar the
+near-miss work already introduced — `bestShortlistedScore`, beat everything on that
+brief's list by a margin — which says the truer thing: not "this is an A", but "this is
+the best thing we have ever seen for you".
 
 **Companion — message economy scales with doubt, not with politeness.** Same insight,
-and it needs no autonomy at all, so it can ship inside Phase 2: on a unit we are sure
-about, every extra question is a chance to lose it, so ask nothing and go for the visit
-slot; on a unit we doubt, questions are cheap insurance against a wasted two-hour drive,
-so ask more and take more rounds. Today `MAX_OPENING_QUESTIONS = 3` is a constant that
-ignores the verdict entirely. It should be a function of it — `confidencePct` and the
-count of live issues are already computed, and distance (brief location vs listing
-lat/lon) belongs in it too, since a 200 km round trip deserves pre-screening a 15 km one
-does not. Two floors stay in code: questions attached to a **live critical issue** are
-never dropped whatever the grade (an A-priced 1.6 THP is still a 1.6 THP), and closing
-fast means asking for a slot, never naming a number — the existing `warm && lastBatch`
-gate on `composeOfferClosing` already encodes that negotiating early gives leverage away.
-The verification does not disappear on a great unit; it moves to the inspection pack.
+needs no autonomy at all, so it ships inside Phase 2: on a unit we are sure about every
+extra question is a chance to lose it, so ask little and go for the visit slot; on a unit
+we doubt, questions are cheap insurance against a wasted two-hour drive, so ask more and
+take more rounds. Two halves, and the order matters.
+
+*First, ranking — and this is a bug, not a preference.* `composeOpeningMessage` sends
+`openQuestions.slice(0, 3)` under a comment saying "best first", but `buildVerdict`
+assembles that array in construction order: `assessUnit` pushes the four generic
+questions (libro de mantenimiento, propietarios, accidentes, ITV) before
+`reliability.questions` is appended, so the **dossier-driven questions never reach the
+opener**. Verified live 2026-07-26 on the shortlisted 207 RCs: positions 1–3 are the
+generic four; "¿se ha cambiado la cadena de distribución y el tensor? ¿hay factura?" —
+the question that separates a 6.000 € car from a 12.000 € one on a 1.6 THP — sits at
+position 6 and is never asked. So `openQuestions` must carry a rank (live critical issue
+with repair exposure > import/paperwork > missing hard fact > generic courtesy), and the
+opener must take the top of that rank.
+
+*Then the budget.* `MAX_OPENING_QUESTIONS = 3` ignores the verdict entirely; it should be
+a function of it — `confidencePct` and live-issue count are already computed, and
+distance (brief location vs listing lat/lon) belongs in it too, since a 200 km round trip
+deserves pre-screening a 15 km one does not. Cutting the budget **before** fixing the
+rank would make things strictly worse: the one surviving question would be "¿tiene libro
+de mantenimiento?". Two floors stay in code: questions attached to a live critical issue
+are never dropped however good the grade (an A-priced 1.6 THP is still a 1.6 THP), and
+closing fast means asking for a slot, never naming a number — the existing
+`warm && lastBatch` gate on `composeOfferClosing` already encodes that negotiating early
+gives leverage away. Verification does not vanish on a great unit; it moves to the visit,
+where the inspection pack already covers it.
 
 Honest risk, and the reason autocontact is parked rather than scheduled: an autonomous
 send from the user's real account is the highest-blast-radius action in the product. A
