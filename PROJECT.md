@@ -210,6 +210,32 @@ known weak points of that engine at that mileage, not a generic used-car checkli
 
 ## Future bets (parked 2026-07-07, not scheduled)
 
+**Autocontact (parked 2026-07-26, not scheduled).** The scarce good unit is won on
+minutes, not on analysis. A well-priced 207 RC collects a dozen messages in its first
+hour; the third buyer to write finds the seller already agreed a visit with someone
+else. Today deepblue's edge is *knowing first* and then spending it waiting for a human
+to open an email — the analysis advantage evaporates in the approval queue. Autocontact
+converts it into a speed advantage: a freshly-ingested unit that clears a high bar gets
+its opener sent immediately, before the user has read the alert.
+
+This is the autonomy dial applied to **first contact only**, never to negotiation — the
+seller's reply goes straight back to the normal draft-only approval queue, so the user
+still owns every word that follows. Guardrails belong in code, not in the prompt: a
+grade/score floor; strictly *inside* the user's real hard limits (a near miss never
+qualifies — by definition it is not worth jumping the queue for); a freshness window
+(first seen minutes ago, not a backfill of the corpus); per-brief and per-day ceilings;
+one opener per seller, ever; no number in the text (it asks the unit's checklist
+questions and requests a visit slot, never states or accepts a price); the existing
+`CHAT_MAX_CHARS` and pacing hygiene unchanged. Per-brief kill switch, and the send is
+an ordinary approval row auto-approved by rule, so the event log reads the same.
+
+Honest risk, and the reason it is parked rather than scheduled: an autonomous send from
+the user's real account is the highest-blast-radius action in the product. A wrong
+opener is visible to a stranger and cannot be unsent, and it concentrates ban exposure
+exactly on the busiest ads. It also presumes the runner and its logged-in session are
+reliably up, so it depends on the always-on deployment. Natural slot: the first
+delegated slice of Phase 3, only after Phase 2 conversations have been proven by hand.
+
 **Model discovery agent (long shot — the mass-market front door).** Conversational
 advisor for non-experts who arrive with needs ("familiar, fiable, ~12.000 €, ciudad +
 escapadas"), not models. Differentiator vs generic LLM advice: grounded in our live
