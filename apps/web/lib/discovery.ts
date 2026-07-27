@@ -58,7 +58,43 @@ Reglas estrictas:
   suelen estar detrás de logins o romper el hotlink: Commons tiene fotos de
   salones y ruedas de prensa que dan el mismo resultado y no caducan.
   Si no encuentras una fiable, omite el campo — nunca inventes la URL.
-- Todos los textos visibles en español.`;
+- Todos los textos visibles en español.
+${constraintRules(profile)}`;
+}
+
+/**
+ * The profile's hard constraints spelled out as rules. They are already in the
+ * JSON above, but a recommendation that violates them is worthless: it becomes
+ * a brief that inherits the same limits and then kills or downgrades every ad
+ * it finds. Naming them costs a few tokens and saves a whole research run.
+ */
+function constraintRules(profile: DiscoveryProfile): string {
+  const rules: string[] = [];
+  if (profile.yearMin !== undefined || profile.yearMax !== undefined) {
+    rules.push(
+      `- SOLO generaciones que se vendan dentro de ${profile.yearMin ?? "…"}–${profile.yearMax ?? "hoy"}: ` +
+        "el rango de años del comprador es un filtro real, y una recomendación fuera de él no le sirve. " +
+        "Ajusta 'yearMin'/'yearMax' de cada recomendación a la intersección.",
+    );
+  }
+  if (profile.kmMax !== undefined) {
+    rules.push(
+      `- Descarta modelos cuya oferta a este precio esté casi toda por encima de ${profile.kmMax.toLocaleString("es-ES")} km, ` +
+        "y dilo en 'discarded' si es el motivo.",
+    );
+  }
+  if (profile.ecoLabelMin) {
+    rules.push(
+      `- Etiqueta DGT mínima ${profile.ecoLabelMin}: comprueba que la motorización y el año la consiguen ` +
+        "(un diésel anterior a 2006 o un gasolina anterior a 2000 no tienen etiqueta y quedan fuera de las ZBE). " +
+        "Si un modelo solo la alcanza en ciertos años o motores, dilo en 'versions'.",
+    );
+  }
+  if (profile.noRhd) rules.push("- Nada de volante a la derecha (importaciones de UK).");
+  if (profile.requireSpanishPlates) {
+    rules.push("- Solo coches ya matriculados en España: nada que exija rematriculación.");
+  }
+  return rules.length ? `\nRestricciones duras del comprador:\n${rules.join("\n")}` : "";
 }
 
 /** One research turn; loops while the server pauses long tool interactions. */
@@ -200,12 +236,21 @@ export function recommendationToBrief(
   rec: ModelRecommendation,
 ): { name: string; criteria: BriefCriteria; hardLimits: HardLimits } {
   const maxPriceEur = Math.min(profile.budgetEur, rec.priceBandEur.max);
+
+  // The two year bands mean different things and both must hold: the
+  // recommendation's is the generation it is proposing, the profile's is what
+  // the user will actually buy. Intersect — taking either alone would either
+  // hunt outside the generation or ignore what the user asked for.
+  const bounds = (a: number | undefined, b: number | undefined, pick: (x: number, y: number) => number) =>
+    a !== undefined && b !== undefined ? pick(a, b) : (a ?? b);
+
   const criteria: BriefCriteria = {
     vehicles: [
       { make: rec.make, model: rec.model, ...(rec.generation ? { generations: [rec.generation] } : {}) },
     ],
-    yearMin: rec.yearMin,
-    yearMax: rec.yearMax,
+    yearMin: bounds(rec.yearMin, profile.yearMin, Math.max),
+    yearMax: bounds(rec.yearMax, profile.yearMax, Math.min),
+    kmMax: profile.kmMax,
     targetPriceEur: rec.priceBandEur.min,
     fuel: profile.fuelPreference?.length ? profile.fuelPreference : undefined,
     gearbox:
@@ -213,11 +258,22 @@ export function recommendationToBrief(
     location: { lat: 40.4168, lon: -3.7038, radiusKm: 200 },
     riskTolerance: "medium",
     sellerPreference: "prefer_private",
-    notes: [...rec.versions.map((v) => `Buscar versión: ${v}`), ...rec.watchouts],
+    notes: [
+      ...rec.versions.map((v) => `Buscar versión: ${v}`),
+      ...rec.watchouts,
+      // No ecoLabel field on BriefCriteria yet, so it rides as a stated
+      // condition rather than being silently dropped between the two.
+      ...(profile.ecoLabelMin ? [`Etiqueta DGT mínima: ${profile.ecoLabelMin}`] : []),
+    ],
   };
   return {
     name: briefNameForRecommendation(rec),
     criteria,
-    hardLimits: { maxPriceEur, nonNegotiables: ["ITV en vigor"] },
+    hardLimits: {
+      maxPriceEur,
+      nonNegotiables: ["ITV en vigor"],
+      ...(profile.noRhd ? { noRhd: true } : {}),
+      ...(profile.requireSpanishPlates ? { requireSpanishPlates: true } : {}),
+    },
   };
 }

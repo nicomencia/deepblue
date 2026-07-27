@@ -1,6 +1,6 @@
 "use server";
 
-import { discoveryProfileSchema, type DiscoveryProfile } from "@deepblue/core";
+import { discoveryProfileSchema, ECO_LABELS, type DiscoveryProfile } from "@deepblue/core";
 import { briefs, discoveries, events, users } from "@deepblue/db";
 import { and, eq, ne } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
@@ -77,8 +77,24 @@ export async function createDiscovery(
     mustHaves: lines(formData.get("mustHaves")),
     dealBreakers: lines(formData.get("dealBreakers")),
     notes: String(formData.get("notes") ?? "").trim() || undefined,
+    yearMin: num(formData.get("yearMin")),
+    yearMax: num(formData.get("yearMax")),
+    kmMax: num(formData.get("kmMax")),
+    // Unchecked boxes are absent from FormData: absent means "not required",
+    // never `false` stored as an opinion the user didn't express.
+    noRhd: formData.get("noRhd") ? true : undefined,
+    requireSpanishPlates: formData.get("requireSpanishPlates") ? true : undefined,
+    ecoLabelMin: z
+      .enum(ECO_LABELS)
+      .optional()
+      .catch(undefined)
+      .parse(String(formData.get("ecoLabelMin") ?? "") || undefined),
   });
   if (profile.fuelPreference?.length === 0) delete profile.fuelPreference;
+
+  if (profile.yearMin && profile.yearMax && profile.yearMin > profile.yearMax) {
+    return actionError("El año mínimo no puede ser mayor que el máximo");
+  }
 
   await db.insert(discoveries).values({ userId, profile });
   await db.insert(events).values({

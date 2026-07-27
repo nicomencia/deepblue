@@ -133,6 +133,33 @@ anuncios, digest con suelo de nota + alertas A/B sin duplicados, dossiers
 en la página del lead), tabs por búsqueda, página Actividad, descubrimiento de
 modelos y adopción manual de anuncios con dossier-first. 77 tests verdes.
 
+**Cambio 2026-07-27 — límites opcionales en el perfil de descubrimiento.** Años
+(mín/máx), km máximos, RHD, matrícula española y etiqueta DGT mínima. La idea de
+Nico era enriquecer la recomendación, pero estos cinco no son gusto sino filtro,
+así que hacen las dos cosas: entran en el prompt como «restricciones duras del
+comprador» (una recomendación que las viola no sirve: se convierte en un brief
+que hereda los mismos límites y luego mata todo lo que encuentra) y se heredan
+en el brief, para no volver a escribirlos búsqueda a búsqueda.
+
+El detalle que importa es la **intersección de años**: la recomendación trae los
+años de la generación que propone y el perfil los del comprador, y ambos tienen
+que cumplirse — `yearMin = max(rec, perfil)`, `yearMax = min(rec, perfil)`.
+Quedarse con uno solo cazaría fuera de la generación o ignoraría lo que pidió el
+usuario. Con test, junto al resto de `recommendationToBrief` (nuevo
+`lib/discovery.test.ts`).
+
+La etiqueta DGT es **orientativa, no filtro**: `BriefCriteria` no tiene campo
+`ecoLabel`, así que guía la recomendación y viaja al brief como nota
+(«Etiqueta DGT mínima: C») en vez de perderse por el camino. Convertirla en
+filtro real pide campo nuevo + soporte en el evaluador; queda dicho, no hecho.
+Los checkbox sin marcar no llegan en el FormData y se guardan como `undefined`,
+nunca `false`: ausencia de dato no es una opinión del usuario.
+
+Ubicación, tolerancia al riesgo y tipo de vendedor **siguen cableados** en
+`recommendationToBrief` (Madrid ±200 km, `medium`, `prefer_private`) — se lo
+propuse a Nico y decidió dejarlos así de momento. Está aquí escrito para que no
+sorprenda: toda búsqueda creada desde un descubrimiento nace centrada en Madrid.
+
 **Cambio 2026-07-27 — foto de modelo en búsquedas y dossiers (y el schema roto
 que casi se lleva por delante el descubrimiento).** Nico pidió las fotos también
 en búsquedas y dossiers, «para identificarlo todo más rápido». Antes de tocar

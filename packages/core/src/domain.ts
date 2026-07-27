@@ -430,6 +430,14 @@ export function pickDossierForYear(
 // Discovery — help the user find the right model(s) before any brief exists
 // ---------------------------------------------------------------------------
 
+/**
+ * DGT environmental badges, best first. Spain-specific and decisive for city
+ * access: no badge at all (pre-2000 petrol, pre-2006 diesel) means locked out
+ * of the low-emission zones in Madrid and Barcelona.
+ */
+export const ECO_LABELS = ["0", "ECO", "C", "B"] as const;
+export type EcoLabel = (typeof ECO_LABELS)[number];
+
 /** The intake: what the user actually needs, structured but in their words. */
 export const discoveryProfileSchema = z.object({
   budgetEur: z.number(),
@@ -444,6 +452,23 @@ export const discoveryProfileSchema = z.object({
   mustHaves: z.array(z.string()),
   dealBreakers: z.array(z.string()),
   notes: z.string().optional(),
+  /**
+   * Constraints that are real filters, not taste: they narrow what the advisor
+   * should propose AND carry into every brief a recommendation becomes, so the
+   * hunt inherits them instead of the user re-typing them per search.
+   */
+  yearMin: z.number().optional(),
+  yearMax: z.number().optional(),
+  kmMax: z.number().optional(),
+  noRhd: z.boolean().optional(),
+  requireSpanishPlates: z.boolean().optional(),
+  /**
+   * Minimum DGT badge. Advisory: it steers the recommendation (a 2005 diesel
+   * has no badge at all, which rules out most Spanish low-emission zones) and
+   * is recorded in the brief's notes, but `BriefCriteria` has no ecoLabel
+   * field, so nothing filters on it yet.
+   */
+  ecoLabelMin: z.enum(ECO_LABELS).optional(),
 });
 export type DiscoveryProfile = z.infer<typeof discoveryProfileSchema>;
 

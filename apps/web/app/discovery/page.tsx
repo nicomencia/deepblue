@@ -1,4 +1,4 @@
-import { normalizeImageUrl } from "@deepblue/core";
+import { ECO_LABELS, normalizeImageUrl } from "@deepblue/core";
 import { briefs, discoveries } from "@deepblue/db";
 import { desc, ne } from "drizzle-orm";
 import Link from "next/link";
@@ -102,6 +102,49 @@ export default async function DiscoveryPage() {
           Descartes (una por línea)
           <textarea name="dealBreakers" rows={2} placeholder={"nada de SUV\nni renting ni compraventas"} style={input} />
         </label>
+
+        {/* Optional limits. They steer the recommendation AND are inherited by
+            every búsqueda created from it, so they are not typed twice. */}
+        <fieldset style={{ border: "1px solid var(--border)", borderRadius: 6, padding: "0.6rem 0.8rem", display: "grid", gap: "0.6rem" }}>
+          <legend style={{ fontSize: "0.8rem", color: "var(--ink-muted)", padding: "0 0.3rem" }}>
+            Límites (opcional) — afinan la recomendación y se heredan en la búsqueda
+          </legend>
+          <div style={grid2}>
+            <label style={lbl}>
+              Año mínimo
+              <input name="yearMin" placeholder="2010" style={input} />
+            </label>
+            <label style={lbl}>
+              Año máximo
+              <input name="yearMax" placeholder="2018" style={input} />
+            </label>
+          </div>
+          <div style={grid2}>
+            <label style={lbl}>
+              Km máximos
+              <input name="kmMax" placeholder="150.000" style={input} />
+            </label>
+            <label style={lbl}>
+              Etiqueta DGT mínima
+              <select name="ecoLabelMin" style={input} defaultValue="">
+                <option value="">Indiferente</option>
+                {ECO_LABELS.map((e) => (
+                  <option key={e} value={e}>
+                    {e === "0" ? "0 (cero emisiones)" : e}
+                  </option>
+                ))}
+              </select>
+            </label>
+          </div>
+          <div style={{ display: "flex", gap: "1.2rem", flexWrap: "wrap", fontSize: "0.85rem" }}>
+            <label>
+              <input type="checkbox" name="noRhd" value="1" /> Descartar volante a la derecha
+            </label>
+            <label>
+              <input type="checkbox" name="requireSpanishPlates" value="1" /> Solo matriculados en España
+            </label>
+          </div>
+        </fieldset>
         <label style={lbl}>
           Notas libres
           <textarea name="notes" rows={2} placeholder="tuve un Golf y me encantó, aparco en la calle…" style={input} />
