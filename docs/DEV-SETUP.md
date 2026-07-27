@@ -133,6 +133,50 @@ anuncios, digest con suelo de nota + alertas A/B sin duplicados, dossiers
 en la página del lead), tabs por búsqueda, página Actividad, descubrimiento de
 modelos y adopción manual de anuncios con dossier-first. 77 tests verdes.
 
+**Cambio 2026-07-27 — ninguna foto es mejor que la foto de otra generación.**
+Nico lo cortó en seco: enseñar un Swift de 2024 en una caza de 2005-2017 «es
+venderle al usuario algo que no es real». Tiene razón y es la misma regla que ya
+aplicaba `normalizeImageUrl` («mejor sin foto que rota»), llevada un paso más:
+**mejor sin foto que equivocada**. Una foto rota se nota; una foto guapa del
+coche que no es, no — y eso es peor.
+
+Ahora cada candidata pasa una **puerta de época** (`photoMatchesEra`) antes de
+mostrarse. Los nombres de archivo de Commons llevan por convención el año del
+coche (`2008-2010_Honda_Jazz_(GE)_…`, `2024_Toyota_Yaris_…`): si algún año del
+nombre cae dentro de la banda de la caza (con holgura +2 por facelifts y fotos
+posteriores, −1 por año-modelo adelantado) pasa; si hay años y todos quedan
+fuera, se rechaza; si no hay ningún año, pasa — la ausencia de dato no es prueba
+de desajuste, la misma regla que aplica el evaluador con las coordenadas que
+faltan. La banda sale del sitio correcto en cada página: `criteria.yearMin/Max`
+en búsquedas, `generationYearSpan(content.generation)` en dossiers y
+`rec.yearMin/Max` en recomendaciones. La reserva del corpus se filtra por el
+`year` real del anuncio, que es dato duro y no heurística de nombre.
+
+Y una escalera nueva en medio: **Wikidata**. La mayoría de generaciones son
+ítem propio con imagen curada (P18) aunque no tengan artículo — verificado en
+vivo, «Toyota Yaris XP90» → `Q106612215` con foto de un NCP91 real de 2011. Va
+entre el artículo con generación y el artículo a secas.
+
+Tres fallos encontrados al verificarlo, ninguno visible en typecheck:
+1. La puerta leía solo el último segmento de la URL, y las miniaturas de
+   Wikipedia repiten el nombre un directorio más arriba (`/thumb/…/File.jpg/
+   960px-File.jpg`), a veces abreviado sin el año. Ahora mira la ruta entera.
+2. Filtrar por marca no basta: «Mazda Mazda2 DE» devolvía el artículo del
+   **Mazda CX-3** y «Suzuki Swift MZ» el de **Suzuki la empresa**, cuya foto no
+   tiene año y por tanto cruzaba la puerta tan feliz. `titleMatches` exige
+   además el modelo, salvo en artículos de generación, que pueden usar el otro
+   nombre de mercado («Honda Fit (second generation)» ES el Jazz GE).
+3. **Envenenamiento de caché**: «falló la API» y «la API dice que no hay» se
+   guardaban igual. Una ráfaga de consultas en paralelo tocó el límite de
+   Wikimedia, los fallos se cachearon como ausencias 24 h, y fichas que SÍ
+   tenían foto se quedaron sin ella hasta reiniciar. Ahora solo se cachea la
+   respuesta definitiva; lo transitorio se reintenta en el siguiente render.
+
+Coste asumido: **menos fotos**. En /discovery quedan 2 de 4 — Yaris
+(investigada) y Jazz (artículo de la GE, foto 2008-2010 auténtica); Mazda2 y
+Swift se quedan en blanco porque su única candidata libre era la generación
+actual. Es exactamente lo pedido.
+
 **Cambio 2026-07-27 — las recomendaciones también caen a Wikipedia.** Nico creó
 un perfil nuevo y solo 1 de 4 recomendaciones traía foto. No era un fallo de
 normalización: tres venían **sin `imageUrl` en absoluto**. Es razonable — la

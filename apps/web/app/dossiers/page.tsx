@@ -1,4 +1,4 @@
-import { sameModelFamily, splitModelAndGeneration } from "@deepblue/core";
+import { generationYearSpan, sameModelFamily, splitModelAndGeneration } from "@deepblue/core";
 import { briefs, modelDossiers } from "@deepblue/db";
 import { desc, inArray } from "drizzle-orm";
 import { findUncoveredHunts } from "../../lib/brief-hunt";
@@ -34,7 +34,18 @@ export default async function DossiersPage() {
   // otherwise — dossiers built before the photo field still get a face.
   const photos = await resolveModelPhotos(
     db,
-    rows.map((d) => ({ make: d.make, model: d.model, generation: d.content.generation })),
+    rows.map((d) => {
+      // The generation label carries its own era ("II (2006–2011)") — the
+      // photo must be from it, not from whatever the model looks like today.
+      const span = generationYearSpan(d.content.generation);
+      return {
+        make: d.make,
+        model: d.model,
+        generation: d.content.generation,
+        yearMin: span?.yearMin,
+        yearMax: span?.yearMax,
+      };
+    }),
   );
 
   // Hunts (active + paused "Seguimiento") whose generation no live dossier

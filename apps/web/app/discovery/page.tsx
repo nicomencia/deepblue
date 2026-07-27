@@ -46,6 +46,10 @@ export default async function DiscoveryPage() {
         make: rec.make,
         model: rec.model,
         generation: rec.generation,
+        // Era gate: the recommendation names the generation being proposed;
+        // a current-generation stock photo would misrepresent it.
+        yearMin: rec.yearMin,
+        yearMax: rec.yearMax,
       })),
     ),
   );

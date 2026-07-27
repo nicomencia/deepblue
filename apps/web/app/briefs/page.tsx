@@ -43,6 +43,10 @@ export default async function BriefsPage({
         make: v.make,
         model: v.model,
         generation: v.generations?.[0],
+        // The hunt's era: a photo of another generation would show the user
+        // a car they are explicitly not looking for.
+        yearMin: brief.criteria.yearMin,
+        yearMax: brief.criteria.yearMax,
       })),
     ),
   );

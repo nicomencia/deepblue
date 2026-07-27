@@ -26,6 +26,13 @@ export interface ModelKey {
   model: string;
   /** Sharpens the Wikipedia lookup toward the right generation's article. */
   generation?: string;
+  /**
+   * The era being hunted. Every candidate photo is gated on it: a photo of
+   * the wrong generation is worse than no photo — it shows the user a car
+   * that is not the one being discussed.
+   */
+  yearMin?: number;
+  yearMax?: number;
 }
 
 export const modelPhotoKey = (make: string, model: string): string =>
@@ -49,7 +56,7 @@ export async function resolveModelPhotos(
       .from(modelDossiers)
       .where(isNull(modelDossiers.disabledAt)),
     db
-      .select({ make: listings.make, model: listings.model, imageUrl: listings.imageUrl })
+      .select({ make: listings.make, model: listings.model, year: listings.year, imageUrl: listings.imageUrl })
       .from(listings)
       .where(and(isNotNull(listings.imageUrl), isNotNull(listings.make)))
       .orderBy(desc(listings.lastSeenAt))
@@ -88,7 +95,12 @@ export async function resolveModelPhotos(
   // In parallel and each with its own timeout, so the slowest lookup bounds
   // the page instead of the sum of them.
   const found = await Promise.all(
-    needsWikipedia.map(({ key }) => fetchWikipediaPhoto(key.make, key.model, key.generation)),
+    needsWikipedia.map(({ key }) =>
+      fetchWikipediaPhoto(key.make, key.model, key.generation, {
+        yearMin: key.yearMin,
+        yearMax: key.yearMax,
+      }),
+    ),
   );
   needsWikipedia.forEach(({ id, key }, i) => {
     const url = found[i];
@@ -96,11 +108,17 @@ export async function resolveModelPhotos(
       photos.set(id, url);
       return;
     }
+    // Corpus fallback, era-checked on REAL data: the listing's own year. An
+    // ad photo of an in-band car is by definition the right generation; one
+    // of an out-of-band car is the exact lie this ladder exists to avoid.
     const listing = listingRows.find(
       (l) =>
         (l.make ?? "").toLowerCase() === key.make.trim().toLowerCase() &&
         !!l.model &&
-        sameModelFamily(l.model, key.model),
+        sameModelFamily(l.model, key.model) &&
+        (l.year === null ||
+          ((key.yearMin === undefined || l.year >= key.yearMin) &&
+            (key.yearMax === undefined || l.year <= key.yearMax))),
     );
     if (listing?.imageUrl) photos.set(id, listing.imageUrl);
   });
