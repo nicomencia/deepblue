@@ -133,6 +133,34 @@ anuncios, digest con suelo de nota + alertas A/B sin duplicados, dossiers
 en la página del lead), tabs por búsqueda, página Actividad, descubrimiento de
 modelos y adopción manual de anuncios con dossier-first. 77 tests verdes.
 
+**Cambio 2026-07-27 — «Crear perfil» dice si funcionó, y no se come lo escrito.**
+El botón ya tenía `SubmitButton` desde el 21-07, pero en una acción rápida (un
+insert) la etiqueta «⏳ Creando…» parpadea y desaparece, y lo único que cambia
+—una ficha nueva al final de un formulario de doce campos— se dibuja fuera de
+pantalla. El clic se leía como muerto. Nuevo `app/action-form.tsx` (`ActionForm`,
+cliente, campos como children para que sigan siendo servidor): envuelve la
+server action con `useActionState`, pinta el resultado JUNTO AL BOTÓN que lo
+provocó (verde `role=status` / rojo `role=alert`) y limpia el formulario al
+crear — conservar los valores tras un alta es justo lo que invita al duplicado
+accidental. `lib/action-result.ts` lleva el tipo (`ActionResult`, `actionOk`,
+`actionError`) porque un módulo `"use server"` solo puede exportar funciones
+async. `createDiscovery` deja de lanzar: un presupuesto mal tecleado («ocho
+mil») devolvía el overlay de error de Next, un callejón sin salida para una
+errata recuperable; ahora devuelve una línea bajo el botón y el mensaje de éxito
+dice qué toca después («pulsa Analizar con IA»), que era el otro hueco: el
+perfil nace `pending` y no hace nada solo.
+
+Lo caro lo encontró la verificación en vivo, no el typecheck: **React 19 resetea
+un formulario no controlado después de CUALQUIER action**, así que mi primera
+versión borraba los tres textareas por una errata en el presupuesto — peor que
+el problema que venía a arreglar. `ActionForm` guarda lo tecleado antes de
+llamar a la acción y lo repone si la acción rechaza; los checkboxes se reponen
+por pertenencia al snapshot (ausente = desmarcado de verdad, no falsy).
+Verificado con Playwright contra el stack real: los 12 campos sobreviven al
+rechazo (incluidos dos combustibles marcados y dos sin marcar, y el select),
+el alta limpia el formulario y la ficha nueva aparece. Los perfiles de prueba
+quedaron archivados.
+
 **Cambio 2026-07-26 — borrar un lead que creó un bug, sin tocar la regla.**
 Consecuencia del arreglo anterior: el `207RC` a 5.700 € seguía muerto, y adoptar
 NO resucita (`adopt.ts` ve el lead muerto y devuelve `lead_dead` — correcto por

@@ -5,6 +5,7 @@ import { getDb } from "../../lib/db";
 import { briefNameForRecommendation } from "../../lib/discovery";
 import { isLlmConfigured } from "../../lib/llm";
 import { fmtDate, fmtEur } from "../../lib/ui";
+import { ActionForm } from "../action-form";
 import { SubmitButton } from "../submit-button";
 import {
   analyzeDiscovery,
@@ -42,7 +43,7 @@ export default async function DiscoveryPage() {
       </p>
 
       {/* Intake form */}
-      <form action={createDiscovery} style={{ ...card, display: "grid", gap: "0.6rem" }}>
+      <ActionForm action={createDiscovery} style={{ ...card, display: "grid", gap: "0.6rem" }}>
         <strong>Nuevo perfil de búsqueda</strong>
         <div style={grid2}>
           <label style={lbl}>
@@ -107,7 +108,7 @@ export default async function DiscoveryPage() {
         <div>
           <SubmitButton label="Crear perfil" pendingLabel="⏳ Creando…" style={btn} />
         </div>
-      </form>
+      </ActionForm>
 
       {/* Sessions */}
       {sessions.map((s) => (

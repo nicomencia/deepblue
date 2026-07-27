@@ -5,6 +5,7 @@ import { briefs, discoveries, events, users } from "@deepblue/db";
 import { and, eq, ne } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
+import { actionError, actionOk, type ActionResult } from "../../lib/action-result";
 import { startBriefHunt } from "../../lib/brief-hunt";
 import { getDb } from "../../lib/db";
 import { buildDiscoveryReport, recommendationToBrief } from "../../lib/discovery";
@@ -35,13 +36,25 @@ const lines = (v: FormDataEntryValue | null): string[] =>
     .map((s) => s.trim())
     .filter(Boolean);
 
-export async function createDiscovery(formData: FormData): Promise<void> {
+/**
+ * Returns its outcome instead of throwing: budget and usage are typed by hand,
+ * and a recoverable typo ("ocho mil") deserves a line under the button, not
+ * Next's error overlay. The message names what happens next — the profile is
+ * created `pending` and does nothing until it is analysed.
+ */
+export async function createDiscovery(
+  _prev: ActionResult,
+  formData: FormData,
+): Promise<ActionResult> {
   const db = await getDb();
   const userId = await resolveUserId();
 
   const budgetEur = num(formData.get("budgetEur"));
   const usage = String(formData.get("usage") ?? "").trim();
-  if (!budgetEur || !usage) throw new Error("presupuesto y uso son obligatorios");
+  if (!budgetEur) {
+    return actionError("Indica un presupuesto en números, por ejemplo 8.000");
+  }
+  if (!usage) return actionError("Indica para qué quieres el coche");
 
   const profile: DiscoveryProfile = discoveryProfileSchema.parse({
     budgetEur,
@@ -70,6 +83,11 @@ export async function createDiscovery(formData: FormData): Promise<void> {
     payload: { budgetEur, usage },
   });
   revalidatePath("/discovery");
+  return actionOk(
+    isLlmConfigured()
+      ? "Perfil creado. Pulsa «Analizar con IA» en la ficha de abajo para recibir modelos concretos."
+      : "Perfil creado. Sin API key el análisis se pide desde Claude Code; la ficha está abajo.",
+  );
 }
 
 /** API lane only: gated on the key, like dossier generation. */
