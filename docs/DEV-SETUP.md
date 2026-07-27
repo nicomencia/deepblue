@@ -133,6 +133,34 @@ anuncios, digest con suelo de nota + alertas A/B sin duplicados, dossiers
 en la página del lead), tabs por búsqueda, página Actividad, descubrimiento de
 modelos y adopción manual de anuncios con dossier-first. 77 tests verdes.
 
+**Cambio 2026-07-27 — foto de modelo en búsquedas y dossiers (y el schema roto
+que casi se lleva por delante el descubrimiento).** Nico pidió las fotos también
+en búsquedas y dossiers, «para identificarlo todo más rápido». Antes de tocar
+nada comprobé el cambio anterior y estaba **roto**: había metido la reparación
+de `model`/`imageUrl` como `.transform()` dentro de `modelRecommendationSchema`,
+que es justo el schema que se le pasa al SDK como formato de salida estructurada
+— `zodOutputFormat` lo rechaza («Transforms cannot be represented in JSON
+Schema»). O sea: «Analizar con IA» reventaba ANTES de empezar, y ni el typecheck
+ni los 193 tests lo veían porque solo salta en tiempo de petición. La reparación
+pasa a ser `parseDiscoveryReport(raw)` (valida con el schema plano y luego
+arregla), por la que pasan las dos vías, y hay test de regresión en core que
+exige que `z.toJSONSchema` siga aceptando los schemas que ve el modelo. La
+lección aplicada al resto: nada de `.transform()` en un schema que viaje al SDK.
+
+Las fotos: `content.imageUrl` en el dossier (jsonb, sin migración) con la misma
+regla Wikimedia que descubrimiento, pedido en el prompt y normalizado **después**
+de parsear. Y `lib/model-photo.ts` resuelve la foto de cada modelo en dos
+consultas para toda la página (nada de una por fila: la BD de dev es
+single-writer): primero la foto investigada del dossier, y si no hay, cualquier
+foto de anuncio del corpus para ese modelo — gratis, inmediata, y cubre los
+dossiers anteriores al campo. El anuncio es una unidad concreta, no el modelo,
+así que va de reserva y nunca pisa a la investigada. Nada de esto dispara
+investigación: sin foto es sin foto, no una excusa para gastar. Verificado en
+vivo: las 5 imágenes de /briefs y /dossiers decodifican de verdad
+(`naturalWidth > 0`, no basta con que la página devuelva 200). El Yaris se queda
+sin foto y es correcto — ni foto investigada ni un solo anuncio en el corpus,
+porque su sweep buscaba `"Toyota Yaris (XP90, 2006-2011)"`.
+
 **Cambio 2026-07-27 — analizar un descubrimiento deja de poder pagarse dos veces
 (y el informe deja de nacer inservible).** Nico clicó «Analizar con IA», recargó
 la página y se encontró el botón otra vez: lo clicó de nuevo y salieron modelos

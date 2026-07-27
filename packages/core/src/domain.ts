@@ -349,6 +349,13 @@ export const modelDossierSchema = z.object({
   make: z.string(),
   model: z.string(),
   generation: z.string().optional(),
+  /**
+   * Representative photo of this generation, same rule as a discovery
+   * recommendation: a real file URL found during research. Normalised by
+   * `normalizeImageUrl` after parsing — never as a schema transform, since
+   * this schema is handed to the model as a structured-output format.
+   */
+  imageUrl: z.string().optional(),
   engineCode: z.string().optional(),
   knownIssues: z.array(knownIssueSchema),
   recalls: z.array(

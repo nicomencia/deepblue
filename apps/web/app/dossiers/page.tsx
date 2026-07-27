@@ -4,7 +4,9 @@ import { findUncoveredHunts } from "../../lib/brief-hunt";
 import { getDb } from "../../lib/db";
 import { isDossierBuilding } from "../../lib/dossier-builder";
 import { isLlmConfigured } from "../../lib/llm";
+import { modelPhotoKey, resolveModelPhotos } from "../../lib/model-photo";
 import { fmtDate } from "../../lib/ui";
+import { ModelPhoto } from "../model-photo";
 import { SubmitButton } from "../submit-button";
 import { approveDossier, deleteDossier, disableDossier, enableDossier, generateDossier } from "./actions";
 
@@ -25,6 +27,10 @@ export default async function DossiersPage() {
     .select()
     .from(modelDossiers)
     .orderBy(modelDossiers.make, modelDossiers.model, desc(modelDossiers.version));
+
+  // Researched photo when the dossier has one, an ad photo from the corpus
+  // otherwise — dossiers built before the photo field still get a face.
+  const photos = await resolveModelPhotos(db, rows.map((d) => ({ make: d.make, model: d.model })));
 
   // Hunts (active + paused "Seguimiento") whose generation no live dossier
   // covers — shared with the retry lane, which re-fires these automatically;
@@ -91,7 +97,12 @@ export default async function DossiersPage() {
         return (
           <div key={d.id} style={card}>
             <div style={{ display: "flex", justifyContent: "space-between", flexWrap: "wrap", gap: "0.5rem" }}>
-              <div>
+              <div style={{ display: "flex", gap: "0.7rem", alignItems: "flex-start" }}>
+                <ModelPhoto
+                  src={photos.get(modelPhotoKey(d.make, d.model))}
+                  alt={`${d.make} ${d.model}`}
+                />
+                <div>
                 <strong>
                   {d.make} {d.model}
                 </strong>{" "}
@@ -119,6 +130,7 @@ export default async function DossiersPage() {
                   {c.knownIssues.length} problemas conocidos · {c.recalls.length} recalls ·{" "}
                   {c.sources.length} fuentes · creado {fmtDate(d.createdAt)}
                 </p>
+                </div>
               </div>
               <div style={{ display: "flex", gap: "0.4rem", alignItems: "start" }}>
                 {draft && (

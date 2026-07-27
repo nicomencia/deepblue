@@ -5,7 +5,7 @@
  * verdicts immediately (getDossier skips disabled rows). PROJECT.md, Reliability.
  */
 
-import { modelDossierSchema, type ModelDossier } from "@deepblue/core";
+import { modelDossierSchema, normalizeImageUrl, type ModelDossier } from "@deepblue/core";
 import { events, modelDossiers, type Db } from "@deepblue/db";
 import { zodOutputFormat } from "@anthropic-ai/sdk/helpers/zod";
 import type Anthropic from "@anthropic-ai/sdk";
@@ -62,6 +62,13 @@ Reglas estrictas:
   generación concreta — el sistema elige el dossier de cada anuncio por ese
   rango ("presente" para generaciones aún en producción). Si el encargo nombra
   la generación de otra forma ("Primera", "Mk2"), tradúcela a este formato.
+- "imageUrl": una foto representativa de ESTA generación para reconocerla de un
+  vistazo en la lista de búsquedas y dossiers. URL REAL hallada en tus búsquedas,
+  y tiene que ser el ARCHIVO, no la página de descripción: vale
+  "https://commons.wikimedia.org/wiki/Special:FilePath/NOMBRE.jpg", nunca
+  ".../wiki/File:NOMBRE.jpg", que devuelve HTML y se ve como imagen rota.
+  Calidad de prensa: tres cuartos frontal, coche limpio. Si no encuentras una
+  fiable, omite el campo — nunca inventes la URL.
 - En "make" y "model" usa exactamente: ${req.make} / ${req.model}.`;
 }
 
@@ -86,8 +93,12 @@ async function draftWithResearch(req: DossierRequest): Promise<ModelDossier> {
       messages = [...messages, { role: "assistant", content: msg.content }];
       continue;
     }
-    // Trust boundary: LLM output must pass the domain schema before storage.
-    return modelDossierSchema.parse(JSON.parse(messageText(msg)));
+    // Trust boundary: validate, then repair the photo URL the same way the
+    // discovery lane does — research hands back the Wikimedia description
+    // page, which renders as a broken image. Not a schema transform: the
+    // schema above must stay convertible to JSON Schema for zodOutputFormat.
+    const dossier = modelDossierSchema.parse(JSON.parse(messageText(msg)));
+    return { ...dossier, imageUrl: normalizeImageUrl(dossier.imageUrl) };
   }
   throw new Error(`la investigación del dossier no convergió en ${MAX_TURNS} turnos`);
 }

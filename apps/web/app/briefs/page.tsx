@@ -5,6 +5,8 @@ import { getDb } from "../../lib/db";
 import { fmtEur } from "../../lib/ui";
 import { adoptAd } from "../actions";
 import { isDossierBuilding } from "../../lib/dossier-builder";
+import { modelPhotoKey, resolveModelPhotos } from "../../lib/model-photo";
+import { ModelPhoto } from "../model-photo";
 import { SubmitButton } from "../submit-button";
 import { createBrief, deleteBrief, setBriefStatus, toggleBriefLimit } from "./actions";
 import { BriefForm } from "./brief-form";
@@ -30,6 +32,13 @@ export default async function BriefsPage({
     .leftJoin(leads, eq(leads.briefId, briefs.id))
     .groupBy(briefs.id)
     .orderBy(desc(briefs.createdAt));
+
+  // One resolve for the whole list, not one per row: the dev DB is a single
+  // writer and this page renders every search the user has.
+  const photos = await resolveModelPhotos(
+    db,
+    rows.flatMap(({ brief }) => brief.criteria.vehicles.slice(0, 1)),
+  );
 
   return (
     <main style={{ maxWidth: 860, margin: "0 auto", padding: "2rem 1.5rem" }}>
@@ -94,7 +103,14 @@ export default async function BriefsPage({
         return (
           <div key={brief.id} style={card}>
             <div style={{ display: "flex", justifyContent: "space-between", flexWrap: "wrap", gap: "0.5rem" }}>
-              <div>
+              <div style={{ display: "flex", gap: "0.7rem", alignItems: "flex-start" }}>
+                {v && (
+                  <ModelPhoto
+                    src={photos.get(modelPhotoKey(v.make, v.model))}
+                    alt={`${v.make} ${v.model}`}
+                  />
+                )}
+                <div>
                 <strong>{brief.name}</strong>{" "}
                 <span style={{ color: "var(--ink-muted)" }}>· {brief.status}</span>
                 <p style={{ margin: "0.3rem 0 0", fontSize: "0.87rem", color: "var(--ink-muted)" }}>
@@ -126,6 +142,7 @@ export default async function BriefsPage({
                     enabled={brief.hardLimits.requireSpanishPlates === true}
                     label="Sin matricular en España"
                   />
+                </div>
                 </div>
               </div>
               {/* One form per action: React server actions drop the submitter
