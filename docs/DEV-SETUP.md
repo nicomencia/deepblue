@@ -133,6 +133,23 @@ anuncios, digest con suelo de nota + alertas A/B sin duplicados, dossiers
 en la página del lead), tabs por búsqueda, página Actividad, descubrimiento de
 modelos y adopción manual de anuncios con dossier-first. 77 tests verdes.
 
+**Cambio 2026-07-27 — las recomendaciones también caen a Wikipedia.** Nico creó
+un perfil nuevo y solo 1 de 4 recomendaciones traía foto. No era un fallo de
+normalización: tres venían **sin `imageUrl` en absoluto**. Es razonable — la
+investigación tiene 12 búsquedas y las gasta en precios y fiabilidad, y el
+prompt le dice explícitamente que omita el campo antes que inventarse una URL
+(la que sí trajo usaba ya `Special:FilePath`, así que el cambio del prompt
+funciona). El fallo era otro: **/discovery era la única de las tres listas sin
+reserva**, justo la que le dio la idea al resto. Ahora usa el mismo
+`resolveModelPhotos`: arte investigada primero (específica de generación) y
+Wikipedia si no hay.
+
+Y una escalera más en `fetchWikipediaPhoto`: primero con generación, luego sin
+ella. La etiqueta de generación es texto libre de la investigación y puede ser
+imposible de buscar — «Suzuki Swift MZ/EZ y FZ/NZ» no encontraba nada mientras
+que «Suzuki Swift» acierta a la primera. Mejor la foto del modelo que ninguna.
+De 1 de 4 a **4 de 4**, verificado con `naturalWidth > 0`.
+
 **Cambio 2026-07-27 — borrado permanente de dossiers.** Antes `deleteDossier`
 solo tocaba borradores (`isNull(reviewedAt)`), así que pedir el borrado de un
 dossier en uso **borraba cero filas en silencio** y la página se repintaba

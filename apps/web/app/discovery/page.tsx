@@ -4,6 +4,7 @@ import { desc, ne } from "drizzle-orm";
 import Link from "next/link";
 import { getDb } from "../../lib/db";
 import { briefNameForRecommendation } from "../../lib/discovery";
+import { modelPhotoKey, resolveModelPhotos } from "../../lib/model-photo";
 import { isLlmConfigured } from "../../lib/llm";
 import { fmtDate, fmtEur } from "../../lib/ui";
 import { ActionForm } from "../action-form";
@@ -33,6 +34,21 @@ export default async function DiscoveryPage() {
     .from(briefs)
     .where(ne(briefs.status, "archived"));
   const liveBriefNames = new Set(liveBriefs.map((b) => b.name));
+
+  // Research emits a photo for some recommendations and not others — it has 12
+  // searches to spend and prices matter more than pictures, so it drops the
+  // field rather than inventing a URL (asked for it, got 1 of 4 on 2026-07-27).
+  // Same free fallback the other lists use, so a card is never faceless.
+  const recPhotos = await resolveModelPhotos(
+    db,
+    sessions.flatMap((s) =>
+      (s.report?.recommendations ?? []).map((rec) => ({
+        make: rec.make,
+        model: rec.model,
+        generation: rec.generation,
+      })),
+    ),
+  );
 
   return (
     <main style={{ maxWidth: 860, margin: "0 auto", padding: "2rem 1.5rem" }}>
@@ -255,25 +271,31 @@ export default async function DiscoveryPage() {
                       {fmtEur(rec.priceBandEur.min)}–{fmtEur(rec.priceBandEur.max)}
                     </span>
                   </div>
-                  {normalizeImageUrl(rec.imageUrl) && (
-                    // eslint-disable-next-line @next/next/no-img-element -- external research URL, unknown domains
-                    <img
-                      // Repaired on read too, not only at the trust boundary:
-                      // reports stored before the fix hold Wikimedia *page*
-                      // URLs, and they should show a photo without re-running
-                      // minutes of paid research.
-                      src={normalizeImageUrl(rec.imageUrl)}
-                      alt={`${rec.make} ${rec.model}`}
-                      loading="lazy"
-                      style={{
-                        maxWidth: "100%",
-                        width: 340,
-                        borderRadius: 6,
-                        display: "block",
-                        margin: "0.5rem 0 0.25rem",
-                      }}
-                    />
-                  )}
+                  {(() => {
+                    // Researched art first — it is specific to the generation
+                    // being recommended. The fallback is repaired on read too:
+                    // reports stored before the URL fix hold Wikimedia *page*
+                    // URLs, and they should show a photo without re-running
+                    // minutes of paid research.
+                    const src =
+                      normalizeImageUrl(rec.imageUrl) ??
+                      recPhotos.get(modelPhotoKey(rec.make, rec.model));
+                    return src ? (
+                      // eslint-disable-next-line @next/next/no-img-element -- external research URL, unknown domains
+                      <img
+                        src={src}
+                        alt={`${rec.make} ${rec.model}`}
+                        loading="lazy"
+                        style={{
+                          maxWidth: "100%",
+                          width: 340,
+                          borderRadius: 6,
+                          display: "block",
+                          margin: "0.5rem 0 0.25rem",
+                        }}
+                      />
+                    ) : null;
+                  })()}
                   <List label="Buscar" items={rec.versions} />
                   <List label="Evitar" items={rec.avoidVersions} />
                   <List label="Por qué encaja" items={rec.whyFits} />

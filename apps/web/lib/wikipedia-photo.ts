@@ -73,19 +73,33 @@ export async function fetchWikipediaPhoto(
   const cleanModel = splitModelAndGeneration(model).model;
   // "VII (2012–2019)" → "VII": the year range is noise in a search query.
   const cleanGen = generation?.replace(/\([^)]*\)/g, "").trim();
-  const query = [make, cleanModel, cleanGen].filter(Boolean).join(" ").trim();
   if (!make.trim() || !cleanModel) return undefined;
 
-  const hit = cache.get(query);
-  if (hit && Date.now() - hit.at < TTL_MS) return hit.url;
+  // With the generation first (it can land on a generation-specific article),
+  // then without. A generation label is free text from research and can be
+  // unsearchable — "Suzuki Swift MZ/EZ y FZ/NZ" matched nothing at all while
+  // plain "Suzuki Swift" matches immediately (2026-07-27). Better the model's
+  // photo than no photo.
+  const queries = [
+    [make, cleanModel, cleanGen].filter(Boolean).join(" ").trim(),
+    [make, cleanModel].join(" ").trim(),
+  ].filter((q, i, all) => q && all.indexOf(q) === i);
 
-  let url: string | undefined;
-  try {
-    url = (await lookup("es", query, make)) ?? (await lookup("en", query, make));
-  } catch {
-    // Timeout, offline, rate limit: cache the miss briefly and move on.
-    url = undefined;
+  for (const query of queries) {
+    const hit = cache.get(query);
+    if (hit && Date.now() - hit.at < TTL_MS) {
+      if (hit.url) return hit.url;
+      continue;
+    }
+    let url: string | undefined;
+    try {
+      url = (await lookup("es", query, make)) ?? (await lookup("en", query, make));
+    } catch {
+      // Timeout, offline, rate limit: cache the miss briefly and move on.
+      url = undefined;
+    }
+    cache.set(query, { url, at: Date.now() });
+    if (url) return url;
   }
-  cache.set(query, { url, at: Date.now() });
-  return url;
+  return undefined;
 }
