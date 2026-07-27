@@ -37,7 +37,13 @@ export default async function BriefsPage({
   // writer and this page renders every search the user has.
   const photos = await resolveModelPhotos(
     db,
-    rows.flatMap(({ brief }) => brief.criteria.vehicles.slice(0, 1)),
+    rows.flatMap(({ brief }) =>
+      brief.criteria.vehicles.slice(0, 1).map((v) => ({
+        make: v.make,
+        model: v.model,
+        generation: v.generations?.[0],
+      })),
+    ),
   );
 
   return (

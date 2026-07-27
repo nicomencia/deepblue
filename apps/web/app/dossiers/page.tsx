@@ -30,7 +30,10 @@ export default async function DossiersPage() {
 
   // Researched photo when the dossier has one, an ad photo from the corpus
   // otherwise — dossiers built before the photo field still get a face.
-  const photos = await resolveModelPhotos(db, rows.map((d) => ({ make: d.make, model: d.model })));
+  const photos = await resolveModelPhotos(
+    db,
+    rows.map((d) => ({ make: d.make, model: d.model, generation: d.content.generation })),
+  );
 
   // Hunts (active + paused "Seguimiento") whose generation no live dossier
   // covers — shared with the retry lane, which re-fires these automatically;

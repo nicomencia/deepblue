@@ -149,17 +149,29 @@ lección aplicada al resto: nada de `.transform()` en un schema que viaje al SDK
 
 Las fotos: `content.imageUrl` en el dossier (jsonb, sin migración) con la misma
 regla Wikimedia que descubrimiento, pedido en el prompt y normalizado **después**
-de parsear. Y `lib/model-photo.ts` resuelve la foto de cada modelo en dos
-consultas para toda la página (nada de una por fila: la BD de dev es
-single-writer): primero la foto investigada del dossier, y si no hay, cualquier
-foto de anuncio del corpus para ese modelo — gratis, inmediata, y cubre los
-dossiers anteriores al campo. El anuncio es una unidad concreta, no el modelo,
-así que va de reserva y nunca pisa a la investigada. Nada de esto dispara
-investigación: sin foto es sin foto, no una excusa para gastar. Verificado en
-vivo: las 5 imágenes de /briefs y /dossiers decodifican de verdad
-(`naturalWidth > 0`, no basta con que la página devuelva 200). El Yaris se queda
-sin foto y es correcto — ni foto investigada ni un solo anuncio en el corpus,
-porque su sweep buscaba `"Toyota Yaris (XP90, 2006-2011)"`.
+de parsear. `lib/model-photo.ts` resuelve la foto de cada modelo para toda la
+página de una vez (nada de una consulta por fila: la BD de dev es single-writer)
+en tres niveles: foto investigada del dossier → **imagen de cabecera del
+artículo de Wikipedia** (`lib/wikipedia-photo.ts`, sin LLM, sin clave, sin
+coste, caché de 24 h con negativos y timeout de 2,5 s para que ninguna página
+dependa de que Wikipedia responda) → foto de anuncio del corpus como último
+recurso, que es una unidad concreta y a veces con marca de agua del
+concesionario encima.
+
+Probé antes la búsqueda de archivos en Commons, que sí acierta la generación, y
+la descarté por poco fiable: devolvió un **logo** para «Suzuki Swift», primeros
+planos de bisagra y tapa de depósito para «Golf VII», y fotos de un Toyota Yaris
+Cross para «Mazda2 DE». La cabecera de un artículo siempre es una foto decente
+del coche.
+
+**Limitación conocida y aceptada**: cuando Wikipedia cubre todas las
+generaciones en un solo artículo, su foto es la generación ACTUAL. Verificado en
+vivo: el Golf VII y el 207 salen bien (hay artículo por generación), pero el
+dossier del Yaris XP90 (2006-2011) enseña un Yaris de 2024 y el del Elise S1/S2
+un Elise moderno. Por eso la foto investigada del dossier manda: es específica
+de generación por construcción, y todos los dossiers nuevos la traen. Los cuatro
+dossiers actuales son anteriores al campo. Verificado preguntando al DOM qué
+imágenes decodifican de verdad (`naturalWidth > 0`): 6 de 6.
 
 **Cambio 2026-07-27 — analizar un descubrimiento deja de poder pagarse dos veces
 (y el informe deja de nacer inservible).** Nico clicó «Analizar con IA», recargó

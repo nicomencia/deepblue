@@ -2,25 +2,30 @@
  * One photo per model, so a search and a dossier are recognisable at a glance
  * the way a discovery recommendation already is.
  *
- * Two sources, in order:
- *  1. the dossier's own researched photo (`content.imageUrl`) — model-level and
- *     press-quality, the same Wikimedia rule discovery uses;
- *  2. any ad photo for that model already in the corpus — free, instant, and
- *     available for every model the user actually hunts, including the ones
- *     whose dossier predates the photo field.
+ * Three sources, best first:
+ *  1. the dossier's own researched photo (`content.imageUrl`) — generation
+ *     specific, the same Wikimedia rule discovery uses;
+ *  2. the Wikipedia article's lead image — free, deterministic, encyclopedic,
+ *     and available for every model, which is what makes the lists look like
+ *     one thing instead of a mix of press art and dealer snapshots;
+ *  3. an ad photo for that model from the corpus — last resort, because it is
+ *     one specific unit (often with a dealer's watermark across it) rather
+ *     than the model in the abstract.
  *
- * A real ad photo is a specific unit rather than the model in the abstract, so
- * it is a fallback and never overrides researched art. Nothing here triggers
- * research: a missing photo is a missing photo, not a reason to spend.
+ * Nothing here triggers research: a missing photo is a missing photo, not a
+ * reason to spend.
  */
 
 import { normalizeImageUrl, sameModelFamily } from "@deepblue/core";
 import { listings, modelDossiers, type Db } from "@deepblue/db";
 import { and, desc, isNotNull, isNull } from "drizzle-orm";
+import { fetchWikipediaPhoto } from "./wikipedia-photo";
 
 export interface ModelKey {
   make: string;
   model: string;
+  /** Sharpens the Wikipedia lookup toward the right generation's article. */
+  generation?: string;
 }
 
 export const modelPhotoKey = (make: string, model: string): string =>
@@ -51,10 +56,16 @@ export async function resolveModelPhotos(
       .limit(500),
   ]);
 
+  // Deduplicate first: two briefs on the same car must not fetch twice.
+  const unique = new Map<string, ModelKey>();
   for (const key of keys) {
     const id = modelPhotoKey(key.make, key.model);
-    if (photos.has(id)) continue;
+    if (!unique.has(id)) unique.set(id, key);
+  }
 
+  const needsWikipedia: Array<{ id: string; key: ModelKey }> = [];
+
+  for (const [id, key] of unique) {
     // Family matching, not equality: a "Yaris" brief and a "Yaris XP90"
     // dossier are the same car, and that is the matcher the rest of the
     // system already uses for coverage.
@@ -68,7 +79,23 @@ export async function resolveModelPhotos(
       photos.set(id, researched);
       continue;
     }
+    needsWikipedia.push({
+      id,
+      key: { ...key, generation: key.generation ?? dossier?.content.generation },
+    });
+  }
 
+  // In parallel and each with its own timeout, so the slowest lookup bounds
+  // the page instead of the sum of them.
+  const found = await Promise.all(
+    needsWikipedia.map(({ key }) => fetchWikipediaPhoto(key.make, key.model, key.generation)),
+  );
+  needsWikipedia.forEach(({ id, key }, i) => {
+    const url = found[i];
+    if (url) {
+      photos.set(id, url);
+      return;
+    }
     const listing = listingRows.find(
       (l) =>
         (l.make ?? "").toLowerCase() === key.make.trim().toLowerCase() &&
@@ -76,7 +103,7 @@ export async function resolveModelPhotos(
         sameModelFamily(l.model, key.model),
     );
     if (listing?.imageUrl) photos.set(id, listing.imageUrl);
-  }
+  });
 
   return photos;
 }
