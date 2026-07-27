@@ -22,8 +22,19 @@ real en vez de PGlite), `PUBLIC_BASE_URL` (base de los deep links de email a
 la ficha del lead; def. http://localhost:3000), `ALERT_MAX_GRADE` (def. B),
 `DIGEST_MAX_GRADE` (def. C), `SWEEP_INTERVAL_MINUTES` (def. 180),
 `LISTING_RECHECK_HOURS` (def. 36),
-`DEEPBLUE_DOSSIER_MODEL` / `DEEPBLUE_ENRICH_MODEL` / `DEEPBLUE_DISCOVERY_MODEL`
-(def. claude-opus-5), `DEV_USER_EMAIL`, `CRON_SECRET` (solo producción).
+`DEV_USER_EMAIL`, `CRON_SECRET` (solo producción).
+
+Un modelo por vía de LLM, todos overridable por env. El criterio es qué pasa si
+la vía se equivoca, no cuánto cuesta — y los vetos y límites duros siguen en
+código en las cinco, así que el modelo refina pero nunca manda:
+
+| Variable | Def. en código | Recomendado | Por qué |
+| --- | --- | --- | --- |
+| `DEEPBLUE_DOSSIER_MODEL` | `claude-opus-5` | Opus 5 | Búsqueda web + salida larga; un dossier flojo estropea el veredicto de cada unidad de ese modelo durante meses |
+| `DEEPBLUE_DISCOVERY_MODEL` | `claude-opus-5` | Opus 5 | Igual: investigación, y de aquí salen las búsquedas |
+| `DEEPBLUE_ENRICH_MODEL` | `claude-opus-5` | Sonnet 5 | Mueve subnotas ±15, y eso mueve nota, alertas y euros ofrecidos |
+| `DEEPBLUE_READS_MODEL` | `claude-opus-5` | Sonnet 5 | Volumen mínimo, pero decide exposición a reparaciones |
+| `DEEPBLUE_DRAFT_MODEL` | `claude-haiku-4-5-20251001` | Haiku 4.5 | Redactar no es juzgar; lo valida `isValidDraft()` y cae a texto determinista |
 
 ### `apps/web/.data/pglite/` — muy recomendable
 
