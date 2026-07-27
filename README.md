@@ -67,7 +67,7 @@ Set `ANTHROPIC_API_KEY` in `apps/web/.env.local` to enable:
   each shortlisted ad's free text and refine the rule-based verdict within hard
   bounds (±15 per factor, vetoes stay code). Runs once per lead, best-scored first.
 
-Models default to `claude-opus-4-8`; override with `DEEPBLUE_DOSSIER_MODEL` /
+Models default to `claude-opus-5`; override with `DEEPBLUE_DOSSIER_MODEL` /
 `DEEPBLUE_ENRICH_MODEL`. Without the key both features stay off and say so.
 
 **No API key? Subscription mode.** A Claude Code session can play the LLM role on

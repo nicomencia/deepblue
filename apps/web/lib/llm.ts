@@ -6,16 +6,26 @@
 
 import Anthropic from "@anthropic-ai/sdk";
 
-/** Dossier research wants the strongest model; all overridable per env. */
-export const DOSSIER_MODEL = process.env.DEEPBLUE_DOSSIER_MODEL ?? "claude-opus-4-8";
-export const ENRICH_MODEL = process.env.DEEPBLUE_ENRICH_MODEL ?? "claude-opus-4-8";
+/**
+ * Every judgement lane runs on Opus 5. It replaces Opus 4.8 at the SAME price
+ * ($5/$25 per millón), so this costs nothing and the guards downstream —
+ * lotes acotados, marcas una-vez-por-lead, banderas en vuelo, enfriamientos —
+ * no cambian. Verificado 2026-07-27 con la forma exacta que manda la
+ * investigación (adaptive thinking + web_search_20260318 + salida
+ * estructurada): aceptada sin 400.
+ *
+ * Todos overridables por env, que es la vía para probar un modelo sin tocar
+ * código. La prosa barata (DRAFT_MODEL) sigue en Haiku a propósito.
+ */
+export const DOSSIER_MODEL = process.env.DEEPBLUE_DOSSIER_MODEL ?? "claude-opus-5";
+export const ENRICH_MODEL = process.env.DEEPBLUE_ENRICH_MODEL ?? "claude-opus-5";
 /**
  * Conversation readings get their own dial: tiny volume, highest stakes
  * (issue rulings move repair exposure and therefore the euros we offer;
  * escalation detection is a safety net) — downgrade with care.
  */
-export const READS_MODEL = process.env.DEEPBLUE_READS_MODEL ?? "claude-opus-4-8";
-export const DISCOVERY_MODEL = process.env.DEEPBLUE_DISCOVERY_MODEL ?? "claude-opus-4-8";
+export const READS_MODEL = process.env.DEEPBLUE_READS_MODEL ?? "claude-opus-5";
+export const DISCOVERY_MODEL = process.env.DEEPBLUE_DISCOVERY_MODEL ?? "claude-opus-5";
 
 export function isLlmConfigured(): boolean {
   return Boolean(process.env.ANTHROPIC_API_KEY);

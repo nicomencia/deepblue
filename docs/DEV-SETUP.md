@@ -23,7 +23,7 @@ la ficha del lead; def. http://localhost:3000), `ALERT_MAX_GRADE` (def. B),
 `DIGEST_MAX_GRADE` (def. C), `SWEEP_INTERVAL_MINUTES` (def. 180),
 `LISTING_RECHECK_HOURS` (def. 36),
 `DEEPBLUE_DOSSIER_MODEL` / `DEEPBLUE_ENRICH_MODEL` / `DEEPBLUE_DISCOVERY_MODEL`
-(def. claude-opus-4-8), `DEV_USER_EMAIL`, `CRON_SECRET` (solo producción).
+(def. claude-opus-5), `DEV_USER_EMAIL`, `CRON_SECRET` (solo producción).
 
 ### `apps/web/.data/pglite/` — muy recomendable
 
@@ -132,6 +132,19 @@ anuncios, digest con suelo de nota + alertas A/B sin duplicados, dossiers
 (207/THP, Golf, Elise) con verificación manual de riesgos (Confirmar/Descartar
 en la página del lead), tabs por búsqueda, página Actividad, descubrimiento de
 modelos y adopción manual de anuncios con dossier-first. 77 tests verdes.
+
+**Cambio 2026-07-27 — todas las vías de juicio pasan a Opus 5.** Sustituye a
+Opus 4.8 al MISMO precio ($5/$25 por millón), así que no cuesta nada y ninguna
+de las guardas de gasto cambia. Antes de tocar nada se probó la forma exacta que
+manda la investigación —adaptive thinking + `web_search_20260318` + salida
+estructurada— contra los dos modelos: aceptada sin 400 en ambos. La prosa barata
+(`DRAFT_MODEL`) se queda en Haiku 4.5 a propósito; sigue todo overridable por
+env, que es la vía para probar un modelo sin tocar código.
+
+Se cambia a la vez que el arreglo de profundidad de abajo, y eso son dos
+variables en la misma tirada. Es asumible porque la profundidad ya no depende
+del modelo: está escrita en el prompt, y `thin` en el evento `discovery_report`
+la mide venga de donde venga.
 
 **Cambio 2026-07-27 — la profundidad de las recomendaciones deja de ser azar.**
 Nico notó que los informes nuevos se leían peor que los primeros. Medido sobre
