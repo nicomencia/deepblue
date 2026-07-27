@@ -16,9 +16,9 @@
  * reason to spend.
  */
 
-import { normalizeImageUrl, sameModelFamily } from "@deepblue/core";
+import { generationYearSpan, normalizeImageUrl, sameModelFamily } from "@deepblue/core";
 import { listings, modelDossiers, type Db } from "@deepblue/db";
-import { and, desc, isNotNull, isNull } from "drizzle-orm";
+import { and, desc, eq, isNotNull, isNull } from "drizzle-orm";
 import { fetchWikipediaPhoto } from "./wikipedia-photo";
 
 export interface ModelKey {
@@ -52,7 +52,12 @@ export async function resolveModelPhotos(
 
   const [dossierRows, listingRows] = await Promise.all([
     db
-      .select({ make: modelDossiers.make, model: modelDossiers.model, content: modelDossiers.content })
+      .select({
+        id: modelDossiers.id,
+        make: modelDossiers.make,
+        model: modelDossiers.model,
+        content: modelDossiers.content,
+      })
       .from(modelDossiers)
       .where(isNull(modelDossiers.disabledAt)),
     db
@@ -70,7 +75,7 @@ export async function resolveModelPhotos(
     if (!unique.has(id)) unique.set(id, key);
   }
 
-  const needsWikipedia: Array<{ id: string; key: ModelKey }> = [];
+  const needsWikipedia: Array<{ id: string; key: ModelKey; dossierId?: string }> = [];
 
   for (const [id, key] of unique) {
     // Family matching, not equality: a "Yaris" brief and a "Yaris XP90"
@@ -86,9 +91,25 @@ export async function resolveModelPhotos(
       photos.set(id, researched);
       continue;
     }
+    // When a dossier covers this car, resolve from ITS identity rather than
+    // the caller's. A search for "207 RC" (no generation, open-ended years)
+    // and the "207 · 207 RC / THP (2007-2012)" dossier are the same vehicle,
+    // and asking two different questions got two different photos of it —
+    // which reads as two different cars. The dossier is the model-level
+    // authority everywhere else; it decides the photo too.
+    const span = generationYearSpan(dossier?.content.generation);
     needsWikipedia.push({
       id,
-      key: { ...key, generation: key.generation ?? dossier?.content.generation },
+      dossierId: dossier?.id,
+      key: dossier
+        ? {
+            make: dossier.make,
+            model: dossier.model,
+            generation: dossier.content.generation,
+            yearMin: span?.yearMin ?? key.yearMin,
+            yearMax: span?.yearMax ?? key.yearMax,
+          }
+        : key,
     });
   }
 
@@ -102,6 +123,25 @@ export async function resolveModelPhotos(
       }),
     ),
   );
+  // Persist what was resolved onto the dossier that owns the model.
+  //
+  // Wikimedia rate-limits anonymous bursts, so a page that fires several
+  // lookups at once gets a different rung of the ladder each render — which
+  // is why the 207 search and the 207 dossier showed two different photos of
+  // the same car. Storing the first answer makes it THE answer: every page
+  // reads the same field afterwards, and the lookup never runs again.
+  const persist = needsWikipedia
+    .map(({ dossierId, key }, i) => ({ dossierId, key, url: found[i] }))
+    .filter((p): p is { dossierId: string; key: ModelKey; url: string } => !!p.dossierId && !!p.url);
+  for (const { dossierId, url } of persist) {
+    const row = dossierRows.find((d) => d.id === dossierId);
+    if (!row || row.content.imageUrl) continue;
+    await db
+      .update(modelDossiers)
+      .set({ content: { ...row.content, imageUrl: url } })
+      .where(eq(modelDossiers.id, dossierId));
+  }
+
   needsWikipedia.forEach(({ id, key }, i) => {
     const url = found[i];
     if (url) {

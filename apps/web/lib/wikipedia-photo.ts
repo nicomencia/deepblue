@@ -125,6 +125,13 @@ async function wikipediaLead(
   make: string,
   model: string,
   band?: YearBand,
+  /**
+   * Only accept an article that is genuinely about ONE generation. Searching
+   * "Peugeot 207 RC" happily returns the plain "Peugeot 207" article, whose
+   * lead photo carries no year and therefore passes the era gate — so the RC
+   * search showed the generic 207 while its dossier showed something else.
+   */
+  requireGeneration?: string,
 ): Promise<string | undefined> {
   const data = (await apiJson(
     `https://${lang}.wikipedia.org/w/api.php?action=query&format=json&origin=*` +
@@ -139,6 +146,11 @@ async function wikipediaLead(
   for (const page of pages) {
     if (!page.thumbnail?.source || !page.title) continue;
     if (!titleMatches(page.title, make, model)) continue;
+    if (requireGeneration) {
+      const t = normalizeVehicleText(page.title);
+      const named = t.includes(normalizeVehicleText(requireGeneration));
+      if (!named && !/generation|generacion|series|serie/.test(t)) continue;
+    }
     if (!photoMatchesEra(page.thumbnail.source, band)) continue;
     return page.thumbnail.source;
   }
@@ -301,19 +313,32 @@ export async function fetchWikipediaPhoto(
   const cleanModel = splitModelAndGeneration(model).model;
   if (!make.trim() || !cleanModel) return undefined;
   // "VII (2012–2019)" → "VII"; "MZ/EZ y FZ/NZ" → "MZ" — free text from
-  // research, so only the first code is worth putting in a search box.
+  // research, so only the first usable code is worth putting in a search box.
+  // Tokens that merely repeat the model are skipped: "207 RC / THP (2007-2012)"
+  // must yield "RC", not "207", or the search degenerates to "Peugeot 207 207"
+  // and lands on the model's generic article instead of the RC's photos.
   const genCode = generation
     ?.replace(/\([^)]*\)/g, "")
-    .trim()
-    .split(/[\s/]/)[0]
-    ?.replace(/[^A-Za-z0-9]/g, "");
+    .split(/[\s/]+/)
+    .map((t) => t.replace(/[^A-Za-z0-9]/g, ""))
+    .find(
+      (t) =>
+        t.length > 0 &&
+        normalizeVehicleText(t) !== normalizeVehicleText(cleanModel) &&
+        !/^\d+$/.test(t),
+    );
 
   const bandKey = `${band?.yearMin ?? ""}-${band?.yearMax ?? ""}`;
   const attempts: Array<[string, () => Promise<string | undefined>]> = [];
 
   if (genCode) {
     const q = `${make} ${cleanModel} ${genCode}`;
-    attempts.push([`wp:${q}`, async () => (await wikipediaLead("es", q, make, cleanModel, band)) ?? wikipediaLead("en", q, make, cleanModel, band)]);
+    attempts.push([
+      `wp:${q}`,
+      async () =>
+        (await wikipediaLead("es", q, make, cleanModel, band, genCode)) ??
+        wikipediaLead("en", q, make, cleanModel, band, genCode),
+    ]);
   }
   // Before the loose fallbacks: a curated per-generation category is the only
   // source that guarantees the CAR, leaving the era gate to pick the year.

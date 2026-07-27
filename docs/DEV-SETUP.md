@@ -133,6 +133,36 @@ anuncios, digest con suelo de nota + alertas A/B sin duplicados, dossiers
 en la página del lead), tabs por búsqueda, página Actividad, descubrimiento de
 modelos y adopción manual de anuncios con dossier-first. 77 tests verdes.
 
+**Cambio 2026-07-27 — una foto por coche, y guardada.** Nico vio que la búsqueda
+del 207 RC y su dossier enseñaban fotos distintas del mismo coche. No era un
+desacuerdo de criterio, era **suerte**: cada render dispara varias consultas a
+la vez, Wikimedia limita las ráfagas anónimas, y la página que perdía la carrera
+caía a otro peldaño de la escalera. Consultar en tiempo de render contra una API
+limitada no puede dar una respuesta estable.
+
+Tres arreglos, en orden de importancia:
+1. **Se persiste lo resuelto en `content.imageUrl` del dossier.** La primera
+   respuesta pasa a ser LA respuesta: las tres páginas leen el mismo campo
+   después y la consulta no vuelve a ejecutarse. Verificado reiniciando el
+   servidor (caché en memoria vacía): las dos páginas siguen enseñando
+   `Peugeot_207_RC_Facelift_front_20100416.jpg` al instante y sin llamadas.
+2. **El dossier manda sobre la identidad del modelo.** Una búsqueda de «207 RC»
+   sin generación y el dossier «207 · 207 RC / THP (2007-2012)» son el mismo
+   coche; se preguntaban cosas distintas y salían fotos distintas. Cuando hay
+   dossier que cubre el coche, la consulta se hace con SU identidad.
+3. **El código de generación ya no puede ser el propio modelo.** De
+   «207 RC / THP (2007-2012)» se sacaba «207», así que se buscaba
+   «Peugeot 207 207» y se aterrizaba en el artículo genérico. Ahora se salta los
+   tokens numéricos y los que repiten el modelo → «RC». Y el peldaño del
+   artículo con generación exige que el TÍTULO nombre la generación (o sea de
+   tipo «second generation»): buscar «Peugeot 207 RC» devolvía tan feliz el
+   artículo «Peugeot 207», cuya foto no tiene año y por tanto cruzaba la puerta
+   de época. Con eso el 207 pasa de la foto genérica a la del RC de verdad.
+
+Límite que queda: las recomendaciones sin dossier no tienen dónde persistir, así
+que siguen expuestas al límite de peticiones y pueden quedarse sin foto en un
+render y tenerla en el siguiente.
+
 **Cambio 2026-07-27 — ninguna foto es mejor que la foto de otra generación.**
 Nico lo cortó en seco: enseñar un Swift de 2024 en una caza de 2005-2017 «es
 venderle al usuario algo que no es real». Tiene razón y es la misma regla que ya
