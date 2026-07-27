@@ -1,7 +1,7 @@
 "use server";
 
 import { events, modelDossiers, users } from "@deepblue/db";
-import { and, eq, isNull } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { getDb } from "../../lib/db";
 import { buildDossier } from "../../lib/dossier-builder";
@@ -98,12 +98,54 @@ export async function enableDossier(formData: FormData): Promise<void> {
   );
 }
 
-/** Drafts can be discarded; reviewed dossiers are knowledge in use — keep them. */
+/**
+ * Permanent delete, draft or in use. There is no undo: the research is gone
+ * and getting it back costs another run.
+ *
+ * Previously this only touched drafts (`isNull(reviewedAt)`), so asking to
+ * delete a live dossier silently deleted nothing and re-rendered unchanged.
+ * Deleting for real has two consequences the draft path never had, and both
+ * are handled here rather than left to surprise:
+ *
+ *  - verdicts built on it are now wrong, so the model's leads are re-evaluated
+ *    immediately (same as disabling). Grades will move — that is the point;
+ *  - `findUncoveredHunts` will see the model as uncovered again, and if any
+ *    active or paused brief still hunts it the scheduler's retry lane
+ *    researches it on its own. Deleting a dossier for a car you are still
+ *    hunting therefore SPENDS MONEY unless the brief goes too. The confirm
+ *    text says so; disabling is the free way to silence one.
+ *
+ * Per-lead `findings` reference dossier issues by title, so they are orphaned
+ * rather than deleted: if a rebuilt dossier names the same issue, the user's
+ * confirmations apply again instead of having to be re-entered.
+ */
 export async function deleteDossier(formData: FormData): Promise<void> {
   const db = await getDb();
   const id = String(formData.get("id") ?? "");
-  await db
+
+  const [dossier] = await db
     .delete(modelDossiers)
-    .where(and(eq(modelDossiers.id, id), isNull(modelDossiers.reviewedAt)));
+    .where(eq(modelDossiers.id, id))
+    .returning();
+  if (!dossier) throw new Error(`dossier ${id} not found`);
+
+  const reevaluated = await reevaluateModelLeads(db, dossier.make, dossier.model);
+
+  await db.insert(events).values({
+    userId: await resolveUserId(),
+    type: "dossier_deleted",
+    payload: {
+      dossierId: dossier.id,
+      make: dossier.make,
+      model: dossier.model,
+      generation: dossier.content.generation,
+      version: dossier.version,
+      wasLive: dossier.reviewedAt !== null && dossier.disabledAt === null,
+      issues: dossier.content.knownIssues.length,
+      reevaluated,
+    },
+  });
+
   revalidatePath("/dossiers");
+  revalidatePath("/");
 }

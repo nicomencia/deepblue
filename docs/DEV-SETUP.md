@@ -133,6 +133,31 @@ anuncios, digest con suelo de nota + alertas A/B sin duplicados, dossiers
 en la página del lead), tabs por búsqueda, página Actividad, descubrimiento de
 modelos y adopción manual de anuncios con dossier-first. 77 tests verdes.
 
+**Cambio 2026-07-27 — borrado permanente de dossiers.** Antes `deleteDossier`
+solo tocaba borradores (`isNull(reviewedAt)`), así que pedir el borrado de un
+dossier en uso **borraba cero filas en silencio** y la página se repintaba
+igual. Ahora borra cualquiera, y se hace cargo de las dos consecuencias que el
+camino de borrador no tenía:
+
+- los veredictos construidos sobre él quedan mal, así que se reevalúan los leads
+  de ese modelo en el acto (igual que al desactivar). Las notas se mueven: es el
+  objetivo, no un efecto secundario;
+- `findUncoveredHunts` vuelve a ver el modelo como descubierto y, si queda
+  alguna búsqueda activa o pausada de ese coche, **el carril de reintentos lo
+  investiga solo y eso cuesta dinero**. El `confirm()` lo dice, y solo en ese
+  caso: la página mira qué modelos siguen cazándose y añade el AVISO únicamente
+  al dossier afectado (verificado: de los cuatro, el aviso sale solo en el
+  Peugeot 207, que es el único con búsqueda viva). Para callar un dossier sin
+  gastar sigue estando Desactivar.
+
+Los `findings` por lead referencian las incidencias por título, así que quedan
+huérfanos en vez de borrarse: si un dossier reconstruido nombra la misma
+incidencia, las confirmaciones del usuario vuelven a aplicar solas. Queda evento
+`dossier_deleted` con lo que se perdió. `ConfirmDelete` sube a `app/` (lo usan
+ya dos páginas) con `label` opcional. Verificado en vivo importando un dossier
+de pega, borrándolo desde la UI y leyendo el texto del confirm — nunca sobre los
+dossiers reales del usuario.
+
 **Cambio 2026-07-27 — límites opcionales en el perfil de descubrimiento.** Años
 (mín/máx), km máximos, RHD, matrícula española y etiqueta DGT mínima. La idea de
 Nico era enriquecer la recomendación, pero estos cinco no son gusto sino filtro,

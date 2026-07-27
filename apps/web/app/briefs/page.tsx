@@ -11,7 +11,7 @@ import { ModelPhoto } from "../model-photo";
 import { SubmitButton } from "../submit-button";
 import { createBrief, deleteBrief, setBriefStatus, toggleBriefLimit } from "./actions";
 import { BriefForm } from "./brief-form";
-import { ConfirmDelete } from "./confirm-delete";
+import { ConfirmDelete } from "../confirm-delete";
 
 export const dynamic = "force-dynamic";
 

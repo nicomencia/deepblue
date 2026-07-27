@@ -1,12 +1,13 @@
-import { splitModelAndGeneration } from "@deepblue/core";
-import { modelDossiers } from "@deepblue/db";
-import { desc } from "drizzle-orm";
+import { sameModelFamily, splitModelAndGeneration } from "@deepblue/core";
+import { briefs, modelDossiers } from "@deepblue/db";
+import { desc, inArray } from "drizzle-orm";
 import { findUncoveredHunts } from "../../lib/brief-hunt";
 import { getDb } from "../../lib/db";
 import { isDossierBuilding } from "../../lib/dossier-builder";
 import { isLlmConfigured } from "../../lib/llm";
 import { modelPhotoKey, resolveModelPhotos } from "../../lib/model-photo";
 import { fmtDate } from "../../lib/ui";
+import { ConfirmDelete } from "../confirm-delete";
 import { ModelPhoto } from "../model-photo";
 import { SubmitButton } from "../submit-button";
 import { approveDossier, deleteDossier, disableDossier, enableDossier, generateDossier } from "./actions";
@@ -40,6 +41,20 @@ export default async function DossiersPage() {
   // covers — shared with the retry lane, which re-fires these automatically;
   // this card is the visibility + manual fallback.
   const missing = await findUncoveredHunts(db);
+
+  // Which models are still being hunted: deleting the dossier of a live hunt
+  // makes the retry lane research it again on its own, which costs money. The
+  // confirm text has to say so, so it needs to know.
+  const hunted = await db
+    .select({ criteria: briefs.criteria })
+    .from(briefs)
+    .where(inArray(briefs.status, ["active", "paused"]));
+  const stillHunted = (make: string, model: string): boolean =>
+    hunted.some((b) =>
+      b.criteria.vehicles.some(
+        (v) => v.make.toLowerCase() === make.toLowerCase() && sameModelFamily(v.model, model),
+      ),
+    );
 
   return (
     <main style={{ maxWidth: 860, margin: "0 auto", padding: "2rem 1.5rem" }}>
@@ -170,6 +185,24 @@ export default async function DossiersPage() {
                       label="Reactivar"
                       pendingLabel="⏳ Aplicando…"
                       style={{ ...btn, fontWeight: 600 }}
+                    />
+                  </form>
+                )}
+                {!draft && (
+                  <form action={deleteDossier}>
+                    <input type="hidden" name="id" value={d.id} />
+                    <ConfirmDelete
+                      style={btn}
+                      message={
+                        `¿Eliminar para siempre el dossier de ${d.make} ${splitModelAndGeneration(d.model).model}` +
+                        `${c.generation ? ` (${c.generation})` : ""}?\n\n` +
+                        `Se pierden ${c.knownIssues.length} problemas conocidos y ${c.sources.length} fuentes, ` +
+                        "y los veredictos de los leads de este modelo se recalculan sin él (las notas cambiarán).\n\n" +
+                        (stillHunted(d.make, d.model)
+                          ? "AVISO: sigues teniendo una búsqueda de este modelo, así que el sistema volverá a investigarlo por su cuenta y ESO CUESTA DINERO. Si solo quieres que deje de contar, usa Desactivar.\n\n"
+                          : "") +
+                        "No se puede deshacer: recuperarlo exige otra investigación."
+                      }
                     />
                   </form>
                 )}
