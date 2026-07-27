@@ -133,6 +133,55 @@ anuncios, digest con suelo de nota + alertas A/B sin duplicados, dossiers
 en la página del lead), tabs por búsqueda, página Actividad, descubrimiento de
 modelos y adopción manual de anuncios con dossier-first. 77 tests verdes.
 
+**Cambio 2026-07-27 — analizar un descubrimiento deja de poder pagarse dos veces
+(y el informe deja de nacer inservible).** Nico clicó «Analizar con IA», recargó
+la página y se encontró el botón otra vez: lo clicó de nuevo y salieron modelos
+distintos. No era la UI, eran cuatro fallos encadenados y todos con factura.
+
+1. **Sin marca de en-curso.** El spinner vivía solo en el navegador
+   (`useFormStatus`); `discoveries.status` era `pending | ready | archived`, sin
+   estado intermedio, así que al recargar la fila seguía `pending` y la página
+   dibujaba el botón otra vez. Y recargar NO cancela nada: la petición sigue
+   viva en el servidor. Dos clics = dos investigaciones completas de Opus con
+   búsqueda web — la acción más cara del producto, la única sin guardia, contra
+   el invariante «cost guards everywhere» del CLAUDE.md. **Pasó de verdad**: el
+   descubrimiento `61c226a6` tiene dos eventos `discovery_report` del mismo
+   modelo, y el segundo pisó al primero (por eso el Yaris XP130 se convirtió en
+   XP90: el informe no se versiona, se sobrescribe, y el XP130 ya no existe).
+   Ahora `analysis_started_at` + estado `analyzing`, tomados con un UPDATE
+   condicional (`claimDiscoveryAnalysis`): dos clics simultáneos compiten por la
+   misma fila y gana exactamente uno, el otro recibe «ya se está analizando».
+   Se libera si el análisis falla, y `ANALYSIS_STALE_MS` (20 min) permite
+   recuperar una marca huérfana por reinicio.
+2. **El `model` traía la generación dentro.** La investigación devolvía
+   `"Yaris (XP90, 2006-2011)"`, y ese campo NO es cosmético: es la keyword del
+   sweep y la aguja del matcher. La búsqueda se lanzó con
+   `keywords: "Toyota Yaris (XP90, 2006-2011)"`, que no existe en ningún
+   anuncio → cero resultados, con pinta de «no se buscó nada». `startBriefHunt`,
+   el dossier y la búsqueda funcionaron perfectamente; el dato de entrada
+   estaba envenenado. `splitModelAndGeneration` lo parte en el trust boundary
+   (vale para las dos vías, API e importación) y la generación se guarda en
+   `generation` en vez de tirarse: es lo que distingue un XP90 de un XP130
+   cuando los años ya no están. Va al nombre del brief y a `criteria.vehicles`.
+3. **Las fotos eran páginas HTML.** `imageUrl` llegaba como
+   `commons.wikimedia.org/wiki/File:X.jpg`, que sirve `text/html` — imagen rota
+   en todas las fichas. `normalizeImageUrl` lo reescribe a
+   `Special:FilePath/X.jpg?width=640` (el redirect estable de Wikimedia, y de
+   paso miniatura: el Yaris original pesa 2,8 MB, el de 640 px 129 KB) y
+   descarta lo que no sea imagen — mejor sin foto que rota. Se aplica también al
+   pintar, para que los informes ya guardados se vean sin repetir minutos de
+   investigación pagada.
+4. El prompt pide ahora las dos cosas explícitamente, pero la reparación vive en
+   el schema: pedirlo por prompt es una sugerencia, `parse, don't trust` es la
+   regla.
+
+`POST /api/dev/discovery-claim` (`{id, action: "claim"|"release"}`) existe para
+verificar la carrera sin pagar dos investigaciones — `claim` dos veces devuelve
+`true` y luego `false` — y para desatascar a mano una fila `analyzing` colgada.
+Verificado en vivo con Playwright: carrera correcta, la página recargada ya no
+ofrece el botón sino «⏳ Analizando…», el release la vuelve a dejar reclamable,
+y la foto del Yaris ya se ve en el informe viejo. 193 tests verdes.
+
 **Cambio 2026-07-27 — «Crear perfil» dice si funcionó, y no se come lo escrito.**
 El botón ya tenía `SubmitButton` desde el 21-07, pero en una acción rápida (un
 insert) la etiqueta «⏳ Creando…» parpadea y desaparece, y lo único que cambia

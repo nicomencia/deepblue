@@ -440,29 +440,97 @@ export const discoveryProfileSchema = z.object({
 });
 export type DiscoveryProfile = z.infer<typeof discoveryProfileSchema>;
 
+/** A year range ("2006-2011", "2011+") rather than a generation code. */
+const YEARS_ONLY = /^\d{4}\s*(?:[-–—/]\s*\d{4}|\+)?$/;
+
+/**
+ * Split "Yaris (XP90, 2006-2011)" into a searchable model and its generation.
+ *
+ * The model string is not cosmetic: it becomes the Wallapop sweep keyword and
+ * the vehicle matcher's needle. A generation left inside it produced the query
+ * "Toyota Yaris (XP90, 2006-2011)", which matches no ad ever written — the
+ * hunt ran and found nothing, looking like the search had never started
+ * (verified live 2026-07-27). The generation is kept, not dropped: it is what
+ * separates an XP90 from an XP130 once the years are gone.
+ */
+export function splitModelAndGeneration(raw: string): { model: string; generation?: string } {
+  const inside = raw.match(/\(([^)]*)\)/)?.[1] ?? "";
+  const model = raw
+    .replace(/\([^)]*\)/g, " ")
+    .replace(/\s{2,}/g, " ")
+    .replace(/[\s,;/–—-]+$/, "")
+    .trim();
+
+  const generation = inside
+    .split(/[,/]/)
+    .map((part) => part.trim())
+    .find((part) => part.length > 0 && !YEARS_ONLY.test(part) && !/generaci|gen\.?$/i.test(part));
+
+  // A model that is *only* a parenthetical leaves nothing to search for.
+  return { model: model || raw.trim(), generation };
+}
+
+/**
+ * A URL that an <img> tag can actually render.
+ *
+ * Research reliably returns the Wikimedia *description page*
+ * (`/wiki/File:Foo.jpg`), which serves text/html — the browser shows a broken
+ * image and the page looks unfinished (verified live 2026-07-27: every photo
+ * in the first two reports). `Special:FilePath` is Wikimedia's documented
+ * stable redirect to the file itself, and `width` asks for a thumbnail: the
+ * Yaris original is 2,8 MB, the 640 px version 129 KB. Anything else without
+ * an image extension is dropped — no photo beats a broken one.
+ */
+export function normalizeImageUrl(raw?: string): string | undefined {
+  if (!raw) return undefined;
+  const url = raw.trim();
+  const wikiFile = url.match(
+    /^https?:\/\/([a-z0-9.-]*\bwiki(?:media|pedia)\.org)\/wiki\/(?:File|Archivo|Datei|Fichier|Immagine):(.+)$/i,
+  );
+  if (wikiFile) return `https://${wikiFile[1]}/wiki/Special:FilePath/${wikiFile[2]}?width=640`;
+  if (/\/Special:FilePath\//i.test(url)) return url.includes("width=") ? url : `${url}?width=640`;
+  return /\.(jpe?g|png|webp|gif|avif)(\?|#|$)/i.test(url) ? url : undefined;
+}
+
 /** One concrete hunt proposal: specific enough to become a brief in one click. */
-export const modelRecommendationSchema = z.object({
-  make: z.string(),
-  model: z.string(),
-  /**
-   * Representative photo of the recommended generation (real URL found during
-   * research — Wikimedia preferred for hotlink stability). Buyers who don't
-   * know the model by heart decide with their eyes first.
-   */
-  imageUrl: z.string().optional(),
-  /** Trims/engines worth hunting ("1.6 THP 175", "GTI Performance DSG"). */
-  versions: z.array(z.string()),
-  /** Trims/engines to avoid, each with the reason inline. */
-  avoidVersions: z.array(z.string()),
-  yearMin: z.number().optional(),
-  yearMax: z.number().optional(),
-  /** Realistic Spanish second-hand band for the recommended config. */
-  priceBandEur: z.object({ min: z.number(), max: z.number() }),
-  whyFits: z.array(z.string()),
-  /** Known weak points, one line each — the dossier deepens them later. */
-  watchouts: z.array(z.string()),
-  sources: z.array(z.string()),
-});
+export const modelRecommendationSchema = z
+  .object({
+    make: z.string(),
+    model: z.string(),
+    /** Generation code ("XP90", "GE", "VII") — never folded into `model`. */
+    generation: z.string().optional(),
+    /**
+     * Representative photo of the recommended generation (real URL found during
+     * research — Wikimedia preferred for hotlink stability). Buyers who don't
+     * know the model by heart decide with their eyes first.
+     */
+    imageUrl: z.string().optional(),
+    /** Trims/engines worth hunting ("1.6 THP 175", "GTI Performance DSG"). */
+    versions: z.array(z.string()),
+    /** Trims/engines to avoid, each with the reason inline. */
+    avoidVersions: z.array(z.string()),
+    yearMin: z.number().optional(),
+    yearMax: z.number().optional(),
+    /** Realistic Spanish second-hand band for the recommended config. */
+    priceBandEur: z.object({ min: z.number(), max: z.number() }),
+    whyFits: z.array(z.string()),
+    /** Known weak points, one line each — the dossier deepens them later. */
+    watchouts: z.array(z.string()),
+    sources: z.array(z.string()),
+  })
+  // Parse, don't trust: the prompt asks for a clean model and a direct image
+  // URL, and research answers with "Yaris (XP90, 2006-2011)" and a Wikimedia
+  // description page anyway. Repairing here covers both lanes (API and the
+  // Claude Code import) instead of hoping each one asks nicely.
+  .transform((rec) => {
+    const { model, generation } = splitModelAndGeneration(rec.model);
+    return {
+      ...rec,
+      model,
+      generation: rec.generation ?? generation,
+      imageUrl: normalizeImageUrl(rec.imageUrl),
+    };
+  });
 export type ModelRecommendation = z.infer<typeof modelRecommendationSchema>;
 
 /** Validated at the LLM trust boundary, whichever lane produced it. */

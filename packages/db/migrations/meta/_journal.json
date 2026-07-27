@@ -99,6 +99,13 @@
       "when": 1784240572825,
       "tag": "0013_empty_stick",
       "breakpoints": true
+    },
+    {
+      "idx": 14,
+      "version": "7",
+      "when": 1785155284588,
+      "tag": "0014_vengeful_wind_dancer",
+      "breakpoints": true
     }
   ]
 }

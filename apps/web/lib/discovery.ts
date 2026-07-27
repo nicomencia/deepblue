@@ -19,7 +19,7 @@ import {
 import { discoveries, events, type Db } from "@deepblue/db";
 import { zodOutputFormat } from "@anthropic-ai/sdk/helpers/zod";
 import type Anthropic from "@anthropic-ai/sdk";
-import { eq } from "drizzle-orm";
+import { and, eq, lt, or } from "drizzle-orm";
 import { DISCOVERY_MODEL, getAnthropic, messageText } from "./llm";
 
 const MAX_SEARCHES = 12;
@@ -34,6 +34,10 @@ Perfil del comprador:
 ${JSON.stringify(profile, null, 2)}
 
 Reglas estrictas:
+- "model": SOLO el nombre comercial con el que se anuncia el coche ("Yaris",
+  "Jazz", "Mazda2"). Es la palabra con la que se busca en el portal: si le
+  añades la generación o los años no encuentra NADA. La generación va en
+  "generation" ("XP90", "GE", "VII") y los años en "yearMin"/"yearMax".
 - Recomendaciones accionables: versiones/motores exactos a buscar y a evitar
   ("versions" y "avoidVersions" con el motivo en la propia línea).
 - "priceBandEur": horquilla realista HOY en el mercado español de segunda mano
@@ -45,6 +49,9 @@ Reglas estrictas:
   inventes fuentes. Pocas recomendaciones bien fundadas valen más que muchas.
 - "imageUrl": una foto representativa de la generación recomendada, con URL REAL
   hallada en tus búsquedas (preferible Wikimedia Commons: estable y enlazable).
+  Tiene que ser el ARCHIVO, no la página de descripción: sirve
+  "https://commons.wikimedia.org/wiki/Special:FilePath/NOMBRE.jpg", nunca
+  ".../wiki/File:NOMBRE.jpg", que devuelve HTML y se ve como imagen rota.
   Calidad de prensa: tres cuartos frontal, coche limpio, buena luz — evita fotos
   de aparcamiento cutres, interiores o traseras. Las notas de prensa oficiales
   suelen estar detrás de logins o romper el hotlink: Commons tiene fotos de
@@ -111,6 +118,46 @@ export async function saveDiscoveryReport(
   });
 }
 
+/**
+ * A run left `analyzing` for longer than this is treated as dead (server
+ * restart mid-research, process killed) and may be reclaimed. Generous on
+ * purpose: MAX_TURNS × 12 web searches is minutes of work, and reclaiming a
+ * run that is merely slow buys the double billing this guard exists to stop.
+ */
+export const ANALYSIS_STALE_MS = 20 * 60 * 1000;
+
+/** Nobody else is analysing this profile → the caller may. Atomic. */
+export async function claimDiscoveryAnalysis(db: Db, discoveryId: string): Promise<boolean> {
+  const staleBefore = new Date(Date.now() - ANALYSIS_STALE_MS);
+  // One UPDATE, so two concurrent clicks contend for the same row and exactly
+  // one comes back with it. Reading-then-writing would let both read `pending`.
+  const claimed = await db
+    .update(discoveries)
+    .set({ status: "analyzing", analysisStartedAt: new Date() })
+    .where(
+      and(
+        eq(discoveries.id, discoveryId),
+        or(
+          eq(discoveries.status, "pending"),
+          and(
+            eq(discoveries.status, "analyzing"),
+            lt(discoveries.analysisStartedAt, staleBefore),
+          ),
+        ),
+      ),
+    )
+    .returning({ id: discoveries.id });
+  return claimed.length > 0;
+}
+
+/** Give the mark back so a failed run can be retried instead of stranding. */
+async function releaseDiscoveryAnalysis(db: Db, discoveryId: string): Promise<void> {
+  await db
+    .update(discoveries)
+    .set({ status: "pending", analysisStartedAt: null })
+    .where(and(eq(discoveries.id, discoveryId), eq(discoveries.status, "analyzing")));
+}
+
 export async function buildDiscoveryReport(db: Db, discoveryId: string): Promise<void> {
   const [row] = await db
     .select()
@@ -119,14 +166,26 @@ export async function buildDiscoveryReport(db: Db, discoveryId: string): Promise
     .limit(1);
   if (!row) throw new Error(`discovery ${discoveryId} not found`);
 
-  const report = await draftReport(row.profile);
-  await saveDiscoveryReport(db, discoveryId, report, DISCOVERY_MODEL);
+  try {
+    const report = await draftReport(row.profile);
+    await saveDiscoveryReport(db, discoveryId, report, DISCOVERY_MODEL);
+  } catch (err) {
+    await releaseDiscoveryAnalysis(db, discoveryId);
+    throw err;
+  }
 }
 
-/** Canonical brief name for a recommendation — also how the UI and the
- * accept action recognize "this rec already became a brief". */
-export function briefNameForRecommendation(rec: Pick<ModelRecommendation, "make" | "model">): string {
-  return `Descubrimiento: ${rec.make} ${rec.model}`;
+/**
+ * Canonical brief name for a recommendation — also how the UI and the accept
+ * action recognize "this rec already became a brief". The generation is part
+ * of the name because `model` no longer carries it: without it a Yaris XP90
+ * and a Yaris XP130 collide on one name and the second never gets its brief.
+ */
+export function briefNameForRecommendation(
+  rec: Pick<ModelRecommendation, "make" | "model" | "generation">,
+): string {
+  const gen = rec.generation ? ` (${rec.generation})` : "";
+  return `Descubrimiento: ${rec.make} ${rec.model}${gen}`;
 }
 
 /**
@@ -139,7 +198,9 @@ export function recommendationToBrief(
 ): { name: string; criteria: BriefCriteria; hardLimits: HardLimits } {
   const maxPriceEur = Math.min(profile.budgetEur, rec.priceBandEur.max);
   const criteria: BriefCriteria = {
-    vehicles: [{ make: rec.make, model: rec.model }],
+    vehicles: [
+      { make: rec.make, model: rec.model, ...(rec.generation ? { generations: [rec.generation] } : {}) },
+    ],
     yearMin: rec.yearMin,
     yearMax: rec.yearMax,
     targetPriceEur: rec.priceBandEur.min,

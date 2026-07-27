@@ -240,9 +240,19 @@ export const discoveries = pgTable(
     report: jsonb("report").$type<DiscoveryReport>(),
     /** Which lane produced the report: model id or "claude-code-session". */
     reportSource: text("report_source"),
-    status: text("status").$type<"pending" | "ready" | "archived">()
+    /**
+     * `analyzing` is the in-flight mark, and it is a cost guard before it is a
+     * UI state: research is the priciest action in the product (Opus + web
+     * search, minutes long) and the pending spinner lives only in the browser,
+     * so a refresh used to hand back a live button and a second click bought a
+     * second full run. Claimed with a conditional UPDATE so concurrent clicks
+     * race for one row and exactly one wins.
+     */
+    status: text("status").$type<"pending" | "analyzing" | "ready" | "archived">()
       .notNull()
       .default("pending"),
+    /** When the in-flight mark was taken — lets a crashed run be reclaimed. */
+    analysisStartedAt: timestamp("analysis_started_at", { withTimezone: true }),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     reportAt: timestamp("report_at", { withTimezone: true }),
   },

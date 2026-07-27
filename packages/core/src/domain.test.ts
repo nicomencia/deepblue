@@ -10,6 +10,8 @@ import {
   gradeAtMost,
   isPlatformActive,
   llmEnrichmentPayloadSchema,
+  normalizeImageUrl,
+  splitModelAndGeneration,
   modelDossierSchema,
   normalizedListingSchema,
   pickDossierForYear,
@@ -244,6 +246,73 @@ describe("LLM trust-boundary schemas", () => {
     expect(
       discoveryReportSchema.safeParse({ ...report, recommendations: [] }).success,
     ).toBe(false);
+  });
+
+  it("splits the generation out of the model, because the model is the search keyword", () => {
+    // The real 2026-07-27 report: every model carried its generation, the
+    // sweep searched "Toyota Yaris (XP90, 2006-2011)" and found nothing.
+    expect(splitModelAndGeneration("Yaris (XP90, 2006-2011)")).toEqual({
+      model: "Yaris",
+      generation: "XP90",
+    });
+    expect(splitModelAndGeneration("Jazz (GE, 2ª generación, 2008-2015)")).toEqual({
+      model: "Jazz",
+      generation: "GE",
+    });
+    expect(splitModelAndGeneration("Mazda2 (DE, 2007-2014)")).toEqual({
+      model: "Mazda2",
+      generation: "DE",
+    });
+    // Only year ranges inside: nothing that identifies a generation.
+    expect(splitModelAndGeneration("Swift (2005-2010 / 2010-2017)")).toEqual({
+      model: "Swift",
+      generation: undefined,
+    });
+    // Already clean, and a model that is nothing but a parenthetical.
+    expect(splitModelAndGeneration("Golf")).toEqual({ model: "Golf", generation: undefined });
+    expect(splitModelAndGeneration("(XP130)").model).toBe("(XP130)");
+  });
+
+  it("turns a Wikimedia description page into a file URL and drops non-images", () => {
+    expect(normalizeImageUrl("https://commons.wikimedia.org/wiki/File:Yaris_(XP90).jpg")).toBe(
+      "https://commons.wikimedia.org/wiki/Special:FilePath/Yaris_(XP90).jpg?width=640",
+    );
+    // Spanish-language file namespace, non-commons wiki host.
+    expect(normalizeImageUrl("https://es.wikipedia.org/wiki/Archivo:Mazda2.JPG")).toBe(
+      "https://es.wikipedia.org/wiki/Special:FilePath/Mazda2.JPG?width=640",
+    );
+    // Already a direct file: left alone.
+    expect(normalizeImageUrl("https://upload.wikimedia.org/x/Yaris.jpg")).toBe(
+      "https://upload.wikimedia.org/x/Yaris.jpg",
+    );
+    // An article, a search page, nothing: no photo beats a broken photo.
+    expect(normalizeImageUrl("https://es.wikipedia.org/wiki/Toyota_Yaris")).toBeUndefined();
+    expect(normalizeImageUrl(undefined)).toBeUndefined();
+  });
+
+  it("repairs model and imageUrl at the trust boundary, both lanes", () => {
+    const rec = {
+      make: "Toyota",
+      model: "Yaris (XP90, 2006-2011)",
+      imageUrl: "https://commons.wikimedia.org/wiki/File:TOYOTA_YARIS_(XP90).jpg",
+      versions: ["1.33 Dual VVT-i"],
+      avoidVersions: [],
+      yearMin: 2006,
+      yearMax: 2011,
+      priceBandEur: { min: 4000, max: 6500 },
+      whyFits: ["Barato de mantener"],
+      watchouts: ["Consumo de aceite"],
+      sources: ["https://example.com"],
+    };
+    const parsed = discoveryReportSchema.parse({
+      headline: "Perfil de ciudad.",
+      recommendations: [rec],
+      discarded: [],
+      sources: [],
+    }).recommendations[0];
+    expect(parsed?.model).toBe("Yaris");
+    expect(parsed?.generation).toBe("XP90");
+    expect(parsed?.imageUrl).toContain("Special:FilePath");
   });
 
   it("accepts a minimal enrichment payload and rejects a delta-less adjustment", () => {

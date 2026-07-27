@@ -8,7 +8,11 @@ import { z } from "zod";
 import { actionError, actionOk, type ActionResult } from "../../lib/action-result";
 import { startBriefHunt } from "../../lib/brief-hunt";
 import { getDb } from "../../lib/db";
-import { buildDiscoveryReport, recommendationToBrief } from "../../lib/discovery";
+import {
+  buildDiscoveryReport,
+  claimDiscoveryAnalysis,
+  recommendationToBrief,
+} from "../../lib/discovery";
 import { isLlmConfigured } from "../../lib/llm";
 
 // Single-user phase: everything belongs to the dev user (Firebase Auth later).
@@ -90,14 +94,39 @@ export async function createDiscovery(
   );
 }
 
-/** API lane only: gated on the key, like dossier generation. */
-export async function analyzeDiscovery(formData: FormData): Promise<void> {
-  if (!isLlmConfigured()) throw new Error("ANTHROPIC_API_KEY no configurada");
+/**
+ * API lane only: gated on the key, like dossier generation.
+ *
+ * The claim comes first and is the whole point. Research is the most expensive
+ * action in the product, the pending spinner lives only in the browser, and a
+ * refresh used to hand back a live button — clicking it bought a second full
+ * run (it happened: discovery 61c226a6 carries two `discovery_report` events
+ * from the same model on 2026-07-27, and the second overwrote the first). The
+ * loser of the race is told so instead of quietly paying again.
+ */
+export async function analyzeDiscovery(
+  _prev: ActionResult,
+  formData: FormData,
+): Promise<ActionResult> {
+  if (!isLlmConfigured()) return actionError("ANTHROPIC_API_KEY no configurada");
   const db = await getDb();
   const id = String(formData.get("id") ?? "");
-  if (!id) throw new Error("id obligatorio");
-  await buildDiscoveryReport(db, id);
+  if (!id) return actionError("id obligatorio");
+
+  if (!(await claimDiscoveryAnalysis(db, id))) {
+    revalidatePath("/discovery");
+    return actionError("Ya se está analizando este perfil — tarda unos minutos.");
+  }
   revalidatePath("/discovery");
+
+  try {
+    await buildDiscoveryReport(db, id);
+  } catch (err) {
+    revalidatePath("/discovery");
+    return actionError(`El análisis falló: ${String(err).slice(0, 200)}`);
+  }
+  revalidatePath("/discovery");
+  return actionOk("Análisis listo: abajo tienes los modelos recomendados.");
 }
 
 /** One click: a recommendation becomes an active hunting brief. */
@@ -143,6 +172,7 @@ export async function createBriefFromRecommendation(formData: FormData): Promise
     await startBriefHunt(db, userId, {
       make: rec.make,
       model: rec.model,
+      generation: rec.generation,
       yearMin: rec.yearMin,
       yearMax: rec.yearMax,
     });

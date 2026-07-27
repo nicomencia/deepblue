@@ -1,3 +1,4 @@
+import { normalizeImageUrl } from "@deepblue/core";
 import { briefs, discoveries } from "@deepblue/db";
 import { desc, ne } from "drizzle-orm";
 import Link from "next/link";
@@ -123,17 +124,26 @@ export default async function DiscoveryPage() {
             </span>
           </div>
 
+          {/* In flight: the run survives a refresh, so the page must say so
+              instead of offering a button that would buy a second one. */}
+          {s.status === "analyzing" && (
+            <p style={{ margin: "0.6rem 0 0", fontSize: "0.9rem", color: "var(--grade-c)", fontWeight: 600 }}>
+              ⏳ Analizando… — tarda unos minutos. Puedes cerrar la página: el
+              análisis sigue en el servidor y aparecerá aquí al recargar.
+            </p>
+          )}
+
           {s.status === "pending" && (
             <div style={{ marginTop: "0.6rem", display: "flex", gap: "0.75rem", alignItems: "center", flexWrap: "wrap" }}>
               {llmReady ? (
-                <form action={analyzeDiscovery}>
+                <ActionForm action={analyzeDiscovery}>
                   <input type="hidden" name="id" value={s.id} />
                   <SubmitButton
                     label="Analizar con IA"
                     pendingLabel="⏳ Analizando… (tarda unos minutos)"
                     style={btn}
                   />
-                </form>
+                </ActionForm>
               ) : (
                 <span style={{ color: "var(--ink-muted)", fontSize: "0.85rem" }}>
                   Sin API key: pide el análisis en tu sesión de Claude Code («analiza mi
@@ -163,10 +173,14 @@ export default async function DiscoveryPage() {
                       {fmtEur(rec.priceBandEur.min)}–{fmtEur(rec.priceBandEur.max)}
                     </span>
                   </div>
-                  {rec.imageUrl && (
+                  {normalizeImageUrl(rec.imageUrl) && (
                     // eslint-disable-next-line @next/next/no-img-element -- external research URL, unknown domains
                     <img
-                      src={rec.imageUrl}
+                      // Repaired on read too, not only at the trust boundary:
+                      // reports stored before the fix hold Wikimedia *page*
+                      // URLs, and they should show a photo without re-running
+                      // minutes of paid research.
+                      src={normalizeImageUrl(rec.imageUrl)}
                       alt={`${rec.make} ${rec.model}`}
                       loading="lazy"
                       style={{
