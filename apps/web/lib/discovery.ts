@@ -27,6 +27,38 @@ import { fetchWikipediaPhoto } from "./wikipedia-photo";
 const MAX_SEARCHES = 12;
 const MAX_TURNS = 6;
 
+/**
+ * How much detail a recommendation has to carry to be worth reading.
+ *
+ * These counts used to be nowhere: the schema arrays have no bounds and the
+ * prompt described each field's SHAPE but never its SIZE — "whyFits" wasn't
+ * mentioned at all. So depth was model whim, and it drifted run to run on an
+ * unchanged model (5+4 bullets → 4+4 → 3+3 over 27/07). Same writing quality
+ * each time, ~78 chars a line; simply fewer lines.
+ *
+ * Deliberately NOT a schema `.min()`. Rejecting a thin report would throw away
+ * minutes of paid web research over a presentation preference — the veto would
+ * cost more than the defect. The prompt asks for these counts and
+ * `discovery_report` records how many came back short, so the drift is visible
+ * instead of silent.
+ */
+const DEPTH = {
+  versions: { min: 2, max: 3 },
+  avoidVersions: { min: 2, max: 3 },
+  whyFits: { min: 4, max: 5 },
+  watchouts: { min: 4, max: 5 },
+} as const;
+
+const span = (f: keyof typeof DEPTH): string => `${DEPTH[f].min}-${DEPTH[f].max}`;
+
+/** Recommendations that came back under the asked-for depth. Telemetry only. */
+export function thinRecommendations(report: DiscoveryReport): number {
+  const fields = Object.keys(DEPTH) as Array<keyof typeof DEPTH>;
+  return report.recommendations.filter((rec) =>
+    fields.some((f) => rec[f].length < DEPTH[f].min),
+  ).length;
+}
+
 function prompt(profile: DiscoveryProfile): string {
   return `Eres un asesor experto en el mercado español de coches de segunda mano.
 Un comprador te da su perfil de necesidades; tu trabajo es recomendarle de 3 a 5
@@ -40,25 +72,29 @@ Reglas estrictas:
   "Jazz", "Mazda2"). Es la palabra con la que se busca en el portal: si le
   añades la generación o los años no encuentra NADA. La generación va en
   "generation" ("XP90", "GE", "VII") y los años en "yearMin"/"yearMax".
-- Recomendaciones accionables: versiones/motores exactos a buscar y a evitar
-  ("versions" y "avoidVersions" con el motivo en la propia línea).
+- Profundidad de cada recomendación — el comprador decide leyendo esto, no el
+  titular: ${span("versions")} líneas en "versions", ${span("avoidVersions")} en "avoidVersions",
+  ${span("whyFits")} en "whyFits" y ${span("watchouts")} en "watchouts". Cada línea completa y con el
+  dato concreto que la sostiene (motor, año, consumo real, avería típica),
+  nunca adjetivos sueltos. Es un mínimo, no un techo que haya que rozar: si un
+  modelo da para más, dilo.
+- "versions"/"avoidVersions": motor, potencia y cambio exactos, con el motivo en
+  la propia línea ("1.4 D-4D diésel: el FAP sufre en ciudad y etiqueta peor").
+- "whyFits": por qué ESTE modelo encaja con ESTE comprador, atando cada línea a
+  algo que ha dicho en su perfil (uso, presupuesto, prioridades, etiqueta).
 - "priceBandEur": horquilla realista HOY en el mercado español de segunda mano
   para la configuración recomendada, coherente con el presupuesto del perfil.
-- "watchouts": los puntos débiles conocidos de cada modelo, una línea cada uno.
+- "watchouts": los puntos débiles conocidos del modelo, uno por línea,
+  concretos y verificables en una visita.
 - "discarded": los modelos que este comprador esperaría ver y por qué no entran
   (ej. "Mini Cooper S R56: mismo motor Prince con peor acceso a mecánica barata").
 - Cada recomendación lleva al menos una URL real encontrada en tus búsquedas; no
   inventes fuentes. Pocas recomendaciones bien fundadas valen más que muchas.
-- "imageUrl": una foto representativa de la generación recomendada, con URL REAL
-  hallada en tus búsquedas (preferible Wikimedia Commons: estable y enlazable).
-  Tiene que ser el ARCHIVO, no la página de descripción: sirve
-  "https://commons.wikimedia.org/wiki/Special:FilePath/NOMBRE.jpg", nunca
-  ".../wiki/File:NOMBRE.jpg", que devuelve HTML y se ve como imagen rota.
-  Calidad de prensa: tres cuartos frontal, coche limpio, buena luz — evita fotos
-  de aparcamiento cutres, interiores o traseras. Las notas de prensa oficiales
-  suelen estar detrás de logins o romper el hotlink: Commons tiene fotos de
-  salones y ruedas de prensa que dan el mismo resultado y no caducan.
-  Si no encuentras una fiable, omite el campo — nunca inventes la URL.
+- "imageUrl" (opcional, no gastes búsquedas en ello): foto de la generación
+  recomendada con URL REAL, en formato
+  "https://commons.wikimedia.org/wiki/Special:FilePath/NOMBRE.jpg" — nunca
+  ".../wiki/File:NOMBRE.jpg", que devuelve HTML. Si no te sale al paso, omítela:
+  el sistema la resuelve solo. Nunca inventes la URL.
 - Todos los textos visibles en español.
 ${constraintRules(profile)}`;
 }
@@ -208,6 +244,10 @@ export async function saveDiscoveryReport(
       discoveryId,
       recommendations: report.recommendations.length,
       discarded: report.discarded.length,
+      // Depth is asked for in the prompt, not enforced by the schema (see
+      // DEPTH) — this is how we find out when the model quietly stops
+      // honouring it, instead of noticing months later that reports read thin.
+      thin: thinRecommendations(report),
       source,
     },
   });

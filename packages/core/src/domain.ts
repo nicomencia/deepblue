@@ -569,7 +569,16 @@ export const modelRecommendationSchema = z.object({
     yearMax: z.number().optional(),
     /** Realistic Spanish second-hand band for the recommended config. */
     priceBandEur: z.object({ min: z.number(), max: z.number() }),
-    whyFits: z.array(z.string()),
+  /**
+   * Why this model suits THIS buyer, tied to what they actually asked for.
+   *
+   * Unbounded on purpose, like the other prose arrays here: the asked-for
+   * depth lives in the research prompt (`DEPTH` in apps/web/lib/discovery.ts),
+   * not in this schema. A `.min()` here would reject a thin report at the
+   * trust boundary and discard minutes of paid web research over how much
+   * prose came back — a veto that costs more than the defect it prevents.
+   */
+  whyFits: z.array(z.string()),
   /** Known weak points, one line each — the dossier deepens them later. */
   watchouts: z.array(z.string()),
   sources: z.array(z.string()),

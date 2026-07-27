@@ -1,6 +1,6 @@
-import type { DiscoveryProfile, ModelRecommendation } from "@deepblue/core";
+import type { DiscoveryProfile, DiscoveryReport, ModelRecommendation } from "@deepblue/core";
 import { describe, expect, it } from "vitest";
-import { briefNameForRecommendation, recommendationToBrief } from "./discovery";
+import { briefNameForRecommendation, recommendationToBrief, thinRecommendations } from "./discovery";
 
 const profile = (over: Partial<DiscoveryProfile> = {}): DiscoveryProfile => ({
   budgetEur: 9000,
@@ -107,5 +107,42 @@ describe("recommendationToBrief", () => {
     expect(briefNameForRecommendation(rec({ generation: undefined }))).toBe(
       "Descubrimiento: Toyota Yaris",
     );
+  });
+});
+
+describe("thinRecommendations", () => {
+  const full = () =>
+    rec({
+      versions: ["1.0 VVT-i", "1.33 Dual VVT-i"],
+      avoidVersions: ["MultiMode: tirones", "1.4 D-4D: FAP en ciudad"],
+      whyFits: ["fiabilidad", "consumo", "tamaño", "etiqueta C"],
+      watchouts: ["EPS", "airbag", "ruido", "km de flota"],
+    });
+
+  const report = (recs: ModelRecommendation[]): DiscoveryReport => ({
+    headline: "h",
+    recommendations: recs,
+    discarded: [],
+    sources: [],
+  });
+
+  it("counts a report that meets the asked-for depth as fine", () => {
+    expect(thinRecommendations(report([full(), full()]))).toBe(0);
+  });
+
+  it("flags the shortfall that made reports read worse over time", () => {
+    // The real regression on 27/07: same model, same per-line quality, but
+    // whyFits/watchouts came back at 3 instead of 4.
+    const shallow = rec({
+      ...full(),
+      whyFits: ["fiabilidad", "consumo", "tamaño"],
+      watchouts: ["EPS", "airbag", "ruido"],
+    });
+    expect(thinRecommendations(report([full(), shallow]))).toBe(1);
+  });
+
+  it("does not punish a recommendation that goes deeper than asked", () => {
+    const deep = rec({ ...full(), whyFits: [...full().whyFits, "extra", "otra más"] });
+    expect(thinRecommendations(report([deep]))).toBe(0);
   });
 });

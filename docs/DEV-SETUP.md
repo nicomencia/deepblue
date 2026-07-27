@@ -133,6 +133,33 @@ anuncios, digest con suelo de nota + alertas A/B sin duplicados, dossiers
 en la página del lead), tabs por búsqueda, página Actividad, descubrimiento de
 modelos y adopción manual de anuncios con dossier-first. 77 tests verdes.
 
+**Cambio 2026-07-27 — la profundidad de las recomendaciones deja de ser azar.**
+Nico notó que los informes nuevos se leían peor que los primeros. Medido sobre
+los informes guardados, tenía razón y el motivo no era el que parecía: la
+calidad por línea es idéntica (~78 caracteres de media en los tres informes) y
+el modelo era el mismo (`claude-opus-4-8`). Lo que cayó fue el NÚMERO de líneas
+— 5+4 viñetas por recomendación → 4+4 → 3+3 en el mismo día.
+
+Causa: nadie las había pedido nunca. Los arrays del schema no tienen cota y el
+prompt describía la FORMA de cada campo pero jamás su TAMAÑO; `whyFits` —el que
+más se nota, "Por qué encaja"— ni siquiera se mencionaba. Con eso, la
+profundidad era capricho del modelo, y encima el prompt había engordado con diez
+líneas sobre la URL de la foto: el único punto con detalle insistente era el que
+menos importa al comprador.
+
+Ahora las cifras viven en `DEPTH` (apps/web/lib/discovery.ts) y se interpolan en
+el prompt, que además explica qué es cada campo y que las cifras son un mínimo,
+no un techo. El bloque de la foto se queda en cinco líneas porque `withPhotos()`
+ya resuelve en código lo que el modelo no encuentre.
+
+A propósito **no** es un `.min()` en el schema, aunque la casa diga "límites
+duros en código": rechazar un informe flojo en el límite de confianza tiraría
+minutos de investigación web ya pagada por una cuestión de presentación — el
+veto costaría más que el defecto. En su lugar, el evento `discovery_report`
+guarda `thin`: cuántas recomendaciones han venido por debajo de lo pedido. Si el
+modelo vuelve a acortar, se ve en los datos en vez de notarse a ojo meses
+después. 210 tests verdes.
+
 **Cambio 2026-07-27 — las fotos de las recomendaciones se resuelven AL GUARDAR.**
 Cierra el límite que quedaba: las recomendaciones no tenían dónde persistir y
 dependían de consultas en tiempo de render, así que aparecían y desaparecían
