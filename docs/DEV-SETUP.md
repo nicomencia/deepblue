@@ -164,6 +164,22 @@ planos de bisagra y tapa de depósito para «Golf VII», y fotos de un Toyota Ya
 Cross para «Mazda2 DE». La cabecera de un artículo siempre es una foto decente
 del coche.
 
+En el título va solo `marca + modelo` (`splitModelAndGeneration` al pintar): la
+generación y su rango de años ya salen en el subtítulo, y los dossiers
+investigados antes de la separación siguen guardando `"Yaris (XP90, 2006-2011)"`
+en el campo. Queda `Toyota Yaris · II (2006–2011) · v1` en vez de repetir los
+años dos veces en la misma línea.
+
+Y una confirmación que conviene dejar escrita, porque es justo el fallo que
+acabamos de arreglar: **la generación no filtra anuncios en ningún sitio**.
+`matchesVehicle` sólo compara marca y modelo; `enqueueSweeps` construye la
+keyword como `${make} ${model}` y manda los años en `yearMin`/`yearMax`. La
+generación se usa únicamente para (a) elegir el dossier que cubre la unidad,
+(b) el nombre del brief y (c) afinar la búsqueda de la foto. Un anuncio no tiene
+por qué decir «XP90» — casi ninguno lo dice — y no necesita decirlo. El corte
+real es la banda de años, que además es límite ELÁSTICO: un 2012 en una búsqueda
+2006–2011 no muere, cae en near miss (`NEAR_MISS_YEAR_SLACK`).
+
 **Limitación conocida y aceptada**: cuando Wikipedia cubre todas las
 generaciones en un solo artículo, su foto es la generación ACTUAL. Verificado en
 vivo: el Golf VII y el 207 salen bien (hay artículo por generación), pero el

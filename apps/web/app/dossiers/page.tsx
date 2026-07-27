@@ -1,3 +1,4 @@
+import { splitModelAndGeneration } from "@deepblue/core";
 import { modelDossiers } from "@deepblue/db";
 import { desc } from "drizzle-orm";
 import { findUncoveredHunts } from "../../lib/brief-hunt";
@@ -107,7 +108,11 @@ export default async function DossiersPage() {
                 />
                 <div>
                 <strong>
-                  {d.make} {d.model}
+                  {/* Model only: the generation and its year range are right
+                      there in the subtitle, and dossiers researched before the
+                      model/generation split still carry "Yaris (XP90,
+                      2006-2011)" in the stored field. */}
+                  {d.make} {splitModelAndGeneration(d.model).model}
                 </strong>{" "}
                 <span style={{ color: "var(--ink-muted)" }}>
                   {c.generation ? `· ${c.generation} ` : ""}· v{d.version}

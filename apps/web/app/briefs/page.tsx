@@ -1,3 +1,4 @@
+import { splitModelAndGeneration } from "@deepblue/core";
 import { briefs, leads } from "@deepblue/db";
 import { desc, eq, sql } from "drizzle-orm";
 import Link from "next/link";
@@ -120,7 +121,8 @@ export default async function BriefsPage({
                 <strong>{brief.name}</strong>{" "}
                 <span style={{ color: "var(--ink-muted)" }}>· {brief.status}</span>
                 <p style={{ margin: "0.3rem 0 0", fontSize: "0.87rem", color: "var(--ink-muted)" }}>
-                  {v ? `${v.make} ${v.model}` : "—"}
+                  {/* Model only — the year band follows on this same line. */}
+                  {v ? `${v.make} ${splitModelAndGeneration(v.model).model}` : "—"}
                   {v?.generations?.[0] ? ` · gen ${v.generations[0]}` : ""}
                   {v && isDossierBuilding(v.make, v.model) ? " · ⏳ dossier en investigación" : ""}
                   {c.yearMin || c.yearMax
