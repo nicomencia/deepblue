@@ -133,6 +133,27 @@ anuncios, digest con suelo de nota + alertas A/B sin duplicados, dossiers
 en la página del lead), tabs por búsqueda, página Actividad, descubrimiento de
 modelos y adopción manual de anuncios con dossier-first. 77 tests verdes.
 
+**Cambio 2026-07-27 — las fotos de las recomendaciones se resuelven AL GUARDAR.**
+Cierra el límite que quedaba: las recomendaciones no tenían dónde persistir y
+dependían de consultas en tiempo de render, así que aparecían y desaparecían
+según el límite de peticiones de Wikimedia. Ahora se resuelven en
+`saveDiscoveryReport`, que es el cuello de botella de **las dos vías**
+(investigación por API e importación desde Claude Code), y la URL forma parte
+del informe guardado desde el momento en que existe.
+
+A propósito **secuencial y con pausa** de 400 ms: esto corre justo después de un
+análisis que ha tardado minutos, así que unos segundos en NO tocar el límite
+salen gratis — y la ráfaga era justo lo que hacía fallar las consultas. Nunca
+lanza: un informe sin fotos sigue siendo un buen informe.
+
+Para los informes ya guardados, `POST /api/dev/discovery-photos` (gratis, sin
+LLM, idempotente — se salta las que ya tienen foto, y opcionalmente `{id}` para
+una sola). En el informe de Nico llenó 2 de 4 en la primera pasada y la cuarta
+en la segunda: reintentar recupera lo que se perdió por límite de peticiones,
+que es exactamente para lo que sirve ser idempotente. Verificado reiniciando el
+servidor: las 4 recomendaciones, el 207 de la búsqueda y los 2 dossiers pintan
+al instante desde la base de datos, sin una sola llamada a Wikimedia.
+
 **Cambio 2026-07-27 — una foto por coche, y guardada.** Nico vio que la búsqueda
 del 207 RC y su dossier enseñaban fotos distintas del mismo coche. No era un
 desacuerdo de criterio, era **suerte**: cada render dispara varias consultas a

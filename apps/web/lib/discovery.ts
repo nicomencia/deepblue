@@ -22,6 +22,7 @@ import { zodOutputFormat } from "@anthropic-ai/sdk/helpers/zod";
 import type Anthropic from "@anthropic-ai/sdk";
 import { and, eq, lt, or } from "drizzle-orm";
 import { DISCOVERY_MODEL, getAnthropic, messageText } from "./llm";
+import { fetchWikipediaPhoto } from "./wikipedia-photo";
 
 const MAX_SEARCHES = 12;
 const MAX_TURNS = 6;
@@ -126,13 +127,68 @@ async function draftReport(profile: DiscoveryProfile): Promise<DiscoveryReport> 
   throw new Error(`el análisis de descubrimiento no convergió en ${MAX_TURNS} turnos`);
 }
 
+/**
+ * Give every recommendation a real, era-correct photo BEFORE it is stored.
+ *
+ * Research supplies one for some models and skips the rest (1 of 4 on
+ * 2026-07-27 — it has 12 searches and spends them on prices). Resolving the
+ * gaps at render time made the photos flicker: Wikimedia rate-limits bursts,
+ * so a card had a photo on one load and not the next. Doing it once here fixes
+ * both — the URL is part of the stored report from the moment it exists.
+ *
+ * Deliberately sequential with a pause: this runs after an analysis that took
+ * minutes, so a few seconds spent NOT tripping the rate limit is free, and a
+ * burst is exactly what makes the lookups fail. Never throws — a report
+ * without photos is still a good report.
+ */
+async function withPhotos(report: DiscoveryReport): Promise<DiscoveryReport> {
+  const recommendations = [...report.recommendations];
+  for (let i = 0; i < recommendations.length; i++) {
+    const rec = recommendations[i];
+    if (!rec || rec.imageUrl) continue;
+    try {
+      const url = await fetchWikipediaPhoto(rec.make, rec.model, rec.generation, {
+        yearMin: rec.yearMin,
+        yearMax: rec.yearMax,
+      });
+      if (url) recommendations[i] = { ...rec, imageUrl: url };
+    } catch {
+      // Offline, rate-limited, slow: leave this one without a photo.
+    }
+    await new Promise((r) => setTimeout(r, 400));
+  }
+  return { ...report, recommendations };
+}
+
+/**
+ * Fill in photos for a report that was stored before they were resolved at
+ * save time. Free and idempotent; returns how many it added.
+ */
+export async function backfillDiscoveryPhotos(db: Db, discoveryId: string): Promise<number> {
+  const [row] = await db
+    .select()
+    .from(discoveries)
+    .where(eq(discoveries.id, discoveryId))
+    .limit(1);
+  if (!row?.report) return 0;
+
+  const before = row.report.recommendations.filter((r) => r.imageUrl).length;
+  const report = await withPhotos(row.report);
+  const after = report.recommendations.filter((r) => r.imageUrl).length;
+  if (after === before) return 0;
+
+  await db.update(discoveries).set({ report }).where(eq(discoveries.id, discoveryId));
+  return after - before;
+}
+
 /** Store a validated report. Shared by the API lane and the manual import lane. */
 export async function saveDiscoveryReport(
   db: Db,
   discoveryId: string,
-  report: DiscoveryReport,
+  rawReport: DiscoveryReport,
   source: string,
 ): Promise<void> {
+  const report = await withPhotos(rawReport);
   const [row] = await db
     .select()
     .from(discoveries)
