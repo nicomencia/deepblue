@@ -67,6 +67,33 @@ describe("recommendationToBrief", () => {
     expect(brief.hardLimits.requireSpanishPlates).toBeUndefined();
   });
 
+  it("defaults to all of Spain — no location means no radius check at all", () => {
+    // Wallapop ignores distance params and returns country-wide results, so
+    // the radius only ever existed as an evaluation filter. The old hardcoded
+    // Madrid ±200 km silently narrowed every discovery hunt to a third of the
+    // country; absent is the honest way to say "anywhere".
+    expect(recommendationToBrief(profile(), rec()).criteria.location).toBeUndefined();
+
+    const local = recommendationToBrief(
+      profile({ location: { lat: 41.3874, lon: 2.1686, radiusKm: 75 } }),
+      rec(),
+    );
+    expect(local.criteria.location).toEqual({ lat: 41.3874, lon: 2.1686, radiusKm: 75 });
+  });
+
+  it("carries risk and seller preference, keeping the old defaults when unset", () => {
+    const stated = recommendationToBrief(
+      profile({ riskTolerance: "low", sellerPreference: "any" }),
+      rec(),
+    );
+    expect(stated.criteria.riskTolerance).toBe("low");
+    expect(stated.criteria.sellerPreference).toBe("any");
+
+    const unstated = recommendationToBrief(profile(), rec());
+    expect(unstated.criteria.riskTolerance).toBe("medium");
+    expect(unstated.criteria.sellerPreference).toBe("prefer_private");
+  });
+
   it("caps the price by the tighter of budget and price band", () => {
     expect(recommendationToBrief(profile({ budgetEur: 5000 }), rec()).hardLimits.maxPriceEur).toBe(5000);
     expect(recommendationToBrief(profile({ budgetEur: 9000 }), rec()).hardLimits.maxPriceEur).toBe(6500);

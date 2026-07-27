@@ -255,9 +255,12 @@ export function recommendationToBrief(
     fuel: profile.fuelPreference?.length ? profile.fuelPreference : undefined,
     gearbox:
       profile.gearbox && profile.gearbox !== "any" ? [profile.gearbox] : undefined,
-    location: { lat: 40.4168, lon: -3.7038, radiusKm: 200 },
-    riskTolerance: "medium",
-    sellerPreference: "prefer_private",
+    // No location = no radius check = all of Spain, which is the default now.
+    // The old hardcoded Madrid ±200 km silently narrowed every hunt created
+    // from a discovery to one third of the country.
+    location: profile.location,
+    riskTolerance: profile.riskTolerance ?? "medium",
+    sellerPreference: profile.sellerPreference ?? "prefer_private",
     notes: [
       ...rec.versions.map((v) => `Buscar versión: ${v}`),
       ...rec.watchouts,

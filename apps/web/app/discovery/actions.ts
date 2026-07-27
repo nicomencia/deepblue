@@ -34,6 +34,31 @@ const num = (v: FormDataEntryValue | null): number | undefined => {
   return Number.isFinite(n) && n > 0 ? n : undefined;
 };
 
+/** Madrid, only as the origin for a radius the user asked for. */
+const SPAIN_CENTER = { lat: 40.4168, lon: -3.7038 };
+
+/**
+ * No radius means all of Spain — the location is left off entirely, so the
+ * evaluator runs no distance check at all. Coordinates alone (without a
+ * radius) mean nothing and are ignored: a center with no radius cannot filter.
+ */
+function searchArea(
+  formData: FormData,
+): { lat: number; lon: number; radiusKm: number } | undefined {
+  const radiusKm = num(formData.get("radiusKm"));
+  if (!radiusKm) return undefined;
+  const coord = (name: string): number | undefined => {
+    const raw = String(formData.get(name) ?? "").trim().replace(",", ".");
+    const n = Number(raw);
+    return raw !== "" && Number.isFinite(n) ? n : undefined;
+  };
+  return {
+    lat: coord("lat") ?? SPAIN_CENTER.lat,
+    lon: coord("lon") ?? SPAIN_CENTER.lon,
+    radiusKm,
+  };
+}
+
 const lines = (v: FormDataEntryValue | null): string[] =>
   String(v ?? "")
     .split("\n")
@@ -89,6 +114,15 @@ export async function createDiscovery(
       .optional()
       .catch(undefined)
       .parse(String(formData.get("ecoLabelMin") ?? "") || undefined),
+    location: searchArea(formData),
+    riskTolerance: z
+      .enum(["low", "medium", "high"])
+      .catch("medium")
+      .parse(String(formData.get("riskTolerance") ?? "medium")),
+    sellerPreference: z
+      .enum(["any", "prefer_private"])
+      .catch("prefer_private")
+      .parse(String(formData.get("sellerPreference") ?? "prefer_private")),
   });
   if (profile.fuelPreference?.length === 0) delete profile.fuelPreference;
 

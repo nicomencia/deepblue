@@ -145,6 +145,45 @@ export default async function DiscoveryPage() {
             </label>
           </div>
         </fieldset>
+
+        {/* Search settings: they don't change WHICH models get recommended,
+            only how the resulting búsqueda hunts. Kept out of the prompt. */}
+        <fieldset style={{ border: "1px solid var(--border)", borderRadius: 6, padding: "0.6rem 0.8rem", display: "grid", gap: "0.6rem" }}>
+          <legend style={{ fontSize: "0.8rem", color: "var(--ink-muted)", padding: "0 0.3rem" }}>
+            Ajustes de la búsqueda (opcional) — no cambian la recomendación
+          </legend>
+          <div style={grid2}>
+            <label style={lbl}>
+              Tolerancia al riesgo
+              <select name="riskTolerance" style={input} defaultValue="medium">
+                <option value="low">Baja — prima la fiabilidad</option>
+                <option value="medium">Media</option>
+                <option value="high">Alta — prima el precio</option>
+              </select>
+            </label>
+            <label style={lbl}>
+              Tipo de vendedor
+              <select name="sellerPreference" style={input} defaultValue="prefer_private">
+                <option value="prefer_private">Prefiero particulares</option>
+                <option value="any">Indiferente</option>
+              </select>
+            </label>
+          </div>
+          <label style={lbl}>
+            Radio de búsqueda (km) — vacío = toda España
+            <input name="radiusKm" placeholder="toda España" style={input} />
+          </label>
+          <div style={grid2}>
+            <label style={lbl}>
+              Latitud (solo si pones radio)
+              <input name="lat" placeholder="40.4168" style={input} />
+            </label>
+            <label style={lbl}>
+              Longitud (solo si pones radio)
+              <input name="lon" placeholder="-3.7038" style={input} />
+            </label>
+          </div>
+        </fieldset>
         <label style={lbl}>
           Notas libres
           <textarea name="notes" rows={2} placeholder="tuve un Golf y me encantó, aparco en la calle…" style={input} />

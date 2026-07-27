@@ -155,10 +155,25 @@ filtro real pide campo nuevo + soporte en el evaluador; queda dicho, no hecho.
 Los checkbox sin marcar no llegan en el FormData y se guardan como `undefined`,
 nunca `false`: ausencia de dato no es una opinión del usuario.
 
-Ubicación, tolerancia al riesgo y tipo de vendedor **siguen cableados** en
-`recommendationToBrief` (Madrid ±200 km, `medium`, `prefer_private`) — se lo
-propuse a Nico y decidió dejarlos así de momento. Está aquí escrito para que no
-sorprenda: toda búsqueda creada desde un descubrimiento nace centrada en Madrid.
+Segunda tanda, misma sesión: ubicación, tolerancia al riesgo y tipo de vendedor
+dejan de estar cableados. Van en su propio bloque del formulario y —a diferencia
+de los límites de arriba— **no entran en el prompt**, porque no cambian QUÉ
+modelos convienen, solo cómo caza la búsqueda que salga: qué modelo te pega no
+depende de cuánto estés dispuesto a viajar ni de a quién prefieras comprarle.
+
+El cambio con más consecuencia es el radio: **por defecto, toda España**. Y
+«toda España» no es un radio muy grande, es **ningún filtro de distancia** —
+`criteria.location` ausente y el evaluador se salta el check entero. Es lo
+correcto porque Wallapop ignora los parámetros de distancia y devuelve
+resultados de todo el país igualmente (RECON.md, verificado 2026-07-22): el
+radio solo existió nunca como filtro de evaluación. El Madrid ±200 km que había
+cableado estrechaba en silencio toda búsqueda nacida de un descubrimiento a un
+tercio del país. Coordenadas sin radio se ignoran: un centro sin radio no filtra
+nada. Riesgo y vendedor conservan sus valores de antes (`medium`,
+`prefer_private`) como defaults del select, así que nada cambia salvo que el
+usuario lo toque. Verificado en vivo los tres casos: por defecto sin location,
+radio explícito desde Barcelona con decimales intactos, y coordenadas sueltas
+descartadas.
 
 **Cambio 2026-07-27 — foto de modelo en búsquedas y dossiers (y el schema roto
 que casi se lleva por delante el descubrimiento).** Nico pidió las fotos también

@@ -469,6 +469,23 @@ export const discoveryProfileSchema = z.object({
    * field, so nothing filters on it yet.
    */
   ecoLabelMin: z.enum(ECO_LABELS).optional(),
+  /**
+   * Search settings — these shape the HUNT, not the advice, so they are
+   * deliberately kept out of the research prompt: which models suit a buyer
+   * does not depend on how far they will travel or who they prefer to buy
+   * from. They exist here so the brief a recommendation becomes inherits them
+   * instead of falling back to a hardcoded default.
+   *
+   * `location` absent means all of Spain. That is not a very large radius, it
+   * is *no radius check at all* — Wallapop ignores distance params and returns
+   * country-wide results anyway (RECON.md), so the radius only ever existed as
+   * an evaluation filter, and omitting it is the honest way to say "anywhere".
+   */
+  location: z
+    .object({ lat: z.number(), lon: z.number(), radiusKm: z.number() })
+    .optional(),
+  riskTolerance: z.enum(["low", "medium", "high"]).optional(),
+  sellerPreference: z.enum(["any", "prefer_private"]).optional(),
 });
 export type DiscoveryProfile = z.infer<typeof discoveryProfileSchema>;
 
