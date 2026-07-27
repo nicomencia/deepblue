@@ -145,6 +145,116 @@ async function wikipediaLead(
   return undefined;
 }
 
+/**
+ * Commons keeps a curated CATEGORY per car generation — "Toyota Yaris (XP90)",
+ * "Mazda2 (DE)", "Lotus Elise (Series 2)", "Honda Fit (2nd generation)",
+ * "Volkswagen Golf VII", "Suzuki Swift (2004)". Naming is inconsistent, but the
+ * category itself is the identity guarantee that every filename heuristic
+ * lacked: a Honda motorcycle, a Mazda CX-3 or SWIFT the Belgian bank simply
+ * cannot be inside it. That leaves the era gate with only one job — pick the
+ * generation among that car's photos — which is what it is good at.
+ */
+const BAD_CATEGORY =
+  /competition|concept|racing|rally|motorcycle|taxi|police|interior|engine|wreck|crash|museum|replica/i;
+const NOT_A_CAR_FILE =
+  /logo|icon|\bmap\b|flag|emblem|badge|engine|interior|dashboard|wheel|seat|symbol|\.svg$/i;
+const NOT_A_FRONT_SHOT = /rear|back|trasera|posterior|boot|trunk/i;
+
+async function commonsCategoryPhoto(
+  make: string,
+  model: string,
+  genCode: string | undefined,
+  band?: YearBand,
+): Promise<string | undefined> {
+  const seen = new Set<string>();
+  for (const q of [genCode ? `${make} ${model} ${genCode}` : "", `${make} ${model}`].filter(Boolean)) {
+    const s = (await apiJson(
+      "https://commons.wikimedia.org/w/api.php?format=json&origin=*&action=query" +
+        `&list=search&srnamespace=14&srlimit=10&srsearch=${encodeURIComponent(q)}`,
+    )) as { query?: { search?: Array<{ title?: string }> } } | undefined;
+    for (const r of s?.query?.search ?? []) {
+      if (r.title) seen.add(r.title.replace(/^Category:/, ""));
+    }
+  }
+  if (!seen.size) return undefined;
+
+  const m = normalizeVehicleText(model);
+  const g = genCode ? normalizeVehicleText(genCode) : "";
+  const yearsOf = (s: string) => [...s.matchAll(/(?:19|20)\d{2}/g)].map((x) => Number(x[0]));
+  const inBand = (y: number) =>
+    y >= (band?.yearMin ?? -Infinity) - SLACK_BEFORE && y <= (band?.yearMax ?? Infinity) + SLACK_AFTER;
+
+  const ranked = [...seen]
+    .map((cat) => {
+      const n = normalizeVehicleText(cat);
+      // The MODEL must be named, not just the make: "Toyota Vios (XP90)" is a
+      // different car on the same platform code and outranked the Yaris.
+      if (!n.includes(m) || BAD_CATEGORY.test(cat)) return { cat, score: -1 };
+      let score = 0;
+      if (g && n.includes(g)) score += 100;
+      const ys = yearsOf(cat);
+      if (ys.length) {
+        // A year in a CATEGORY name is when the generation STARTED
+        // ("Suzuki Swift (2004)" ran to 2010), not one car's model year. Only
+        // a start after the hunt window ends can be ruled out.
+        if (ys.some(inBand)) score += 60;
+        else if (ys.every((y) => y > (band?.yearMax ?? Infinity) + SLACK_AFTER)) score -= 80;
+        else score += 20;
+      }
+      // The bare family category is usually an empty container — everything
+      // lives in its per-generation subcategories ("Category:Suzuki Swift"
+      // holds 0 files, "Suzuki Swift (2004)" holds 50). Worth trying last,
+      // never worth preferring.
+      if (n === normalizeVehicleText(`${make} ${model}`) || n === m) score += 5;
+      if (/generation|series/i.test(cat)) score += 10;
+      return { cat, score };
+    })
+    .filter((x) => x.score > -1)
+    .sort((a, b) => b.score - a.score);
+
+  for (const { cat } of ranked.slice(0, 3)) {
+    // The chosen category IS the generation, so its start year extends the
+    // window: a 2004 photo inside "Suzuki Swift (2004)" is the same car a
+    // 2006 hunt is looking for, even though 2004 sits outside that band.
+    const catStart = Math.min(...yearsOf(cat), Infinity);
+    const catBand: YearBand | undefined = band
+      ? { yearMin: Number.isFinite(catStart) ? Math.min(band.yearMin ?? catStart, catStart) : band.yearMin, yearMax: band.yearMax }
+      : band;
+    // Per candidate, not per function: one rate-limited call must not throw
+    // away the categories we have not tried yet — that is how the Swift ended
+    // up with no photo while its 50-file category sat one rung below.
+    let d:
+      | { query?: { pages?: Record<string, { title?: string; imageinfo?: Array<{ thumburl?: string; mime?: string }> }> } }
+      | undefined;
+    try {
+      d = (await apiJson(
+        "https://commons.wikimedia.org/w/api.php?format=json&origin=*&action=query" +
+          `&generator=categorymembers&gcmtitle=Category:${encodeURIComponent(cat)}` +
+          "&gcmtype=file&gcmlimit=50&prop=imageinfo&iiprop=url|mime&iiurlwidth=640",
+      )) as typeof d;
+    } catch {
+      continue;
+    }
+
+    const files = Object.values(d?.query?.pages ?? {})
+      .map((p) => ({
+        name: decodeURIComponent(p.title ?? "").replace(/^File:/, ""),
+        url: p.imageinfo?.[0]?.thumburl,
+        mime: p.imageinfo?.[0]?.mime ?? "",
+      }))
+      .filter((f) => f.url && /^image\/jpe?g$/.test(f.mime) && !NOT_A_CAR_FILE.test(f.name));
+
+    // A filename that names an in-band year is the surest pick; one with no
+    // year at all is still inside the right category, so it is acceptable.
+    const dated = files.filter((f) => photoMatchesEra(f.url!, catBand) && /(?:19|20)\d{2}/.test(f.name));
+    const undated = files.filter((f) => !/(?:19|20)\d{2}/.test(f.name));
+    const pool = dated.length ? dated : undated;
+    const best = pool.find((f) => !NOT_A_FRONT_SHOT.test(f.name)) ?? pool[0];
+    if (best?.url) return best.url;
+  }
+  return undefined;
+}
+
 /** One search + one claims call: the generation's own Wikidata item, if any. */
 async function wikidataGenerationImage(
   make: string,
@@ -204,7 +314,15 @@ export async function fetchWikipediaPhoto(
   if (genCode) {
     const q = `${make} ${cleanModel} ${genCode}`;
     attempts.push([`wp:${q}`, async () => (await wikipediaLead("es", q, make, cleanModel, band)) ?? wikipediaLead("en", q, make, cleanModel, band)]);
-    attempts.push([`wd:${q}`, () => wikidataGenerationImage(make, cleanModel, genCode, band)]);
+  }
+  // Before the loose fallbacks: a curated per-generation category is the only
+  // source that guarantees the CAR, leaving the era gate to pick the year.
+  attempts.push([
+    `cc:${make} ${cleanModel} ${genCode ?? ""}`,
+    () => commonsCategoryPhoto(make, cleanModel, genCode, band),
+  ]);
+  if (genCode) {
+    attempts.push([`wd:${make} ${cleanModel} ${genCode}`, () => wikidataGenerationImage(make, cleanModel, genCode, band)]);
   }
   const plain = `${make} ${cleanModel}`;
   attempts.push([`wp:${plain}`, async () => (await wikipediaLead("es", plain, make, cleanModel, band)) ?? wikipediaLead("en", plain, make, cleanModel, band)]);

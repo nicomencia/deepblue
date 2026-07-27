@@ -172,10 +172,42 @@ Tres fallos encontrados al verificarlo, ninguno visible en typecheck:
    tenían foto se quedaron sin ella hasta reiniciar. Ahora solo se cachea la
    respuesta definitiva; lo transitorio se reintenta en el siguiente render.
 
-Coste asumido: **menos fotos**. En /discovery quedan 2 de 4 — Yaris
-(investigada) y Jazz (artículo de la GE, foto 2008-2010 auténtica); Mazda2 y
-Swift se quedan en blanco porque su única candidata libre era la generación
-actual. Es exactamente lo pedido.
+Coste inicial: menos fotos (2 de 4 en /discovery). Nico no lo aceptó — «parece
+raro no encontrar foto de modelos de millones de ventas» — y tenía razón: el
+problema no era que no existieran, era que yo miraba en el sitio equivocado.
+
+**La fuente buena son las CATEGORÍAS de Commons**, una por generación:
+`Category:Toyota Yaris (XP90)`, `Category:Mazda2 (DE)`,
+`Category:Lotus Elise (Series 2)`, `Category:Honda Fit (2nd generation)`,
+`Category:Volkswagen Golf VII`, `Category:Suzuki Swift (2004)`. El nombre no es
+consistente, pero da lo que ninguna heurística de nombre de fichero daba: **la
+categoría garantiza el COCHE**. Dentro de `Category:Mazda2 (DE)` no puede
+aparecer una moto Honda, ni un Mazda CX-3, ni SWIFT el banco belga — que es
+exactamente lo que devolvían las alternativas que probé y descarté (imágenes del
+artículo, y búsqueda de ítems en Wikidata). Con el coche garantizado, a la
+puerta de época solo le queda elegir la generación, que es lo que sabe hacer.
+
+Detalles que costaron sangre, todos encontrados verificando:
+- **Exigir el modelo en el nombre de la categoría, no solo la marca**:
+  `Toyota Vios (XP90)` es otro coche de la misma plataforma y le ganaba al Yaris.
+- **Un año en el nombre de una CATEGORÍA es el inicio de la generación**, no el
+  año de un coche («Suzuki Swift (2004)» llegó hasta 2010). Solo se descarta si
+  empieza después de la ventana. Y la categoría elegida ES la generación, así
+  que su año de inicio ensancha la ventana al filtrar sus ficheros: un 2004
+  dentro de esa categoría es el coche que busca una caza de 2006.
+- **La categoría base suele estar VACÍA**: `Category:Suzuki Swift` tiene 0
+  ficheros, todo cuelga de subcategorías. Tenía bonus por ser la de la familia y
+  se comía uno de los intentos. Ahora puntúa lo mínimo.
+- **Un fallo transitorio por categoría, no por función**: una llamada limitada
+  por Wikimedia abortaba la función entera y tiraba las categorías aún sin
+  probar. Por eso el Swift se quedaba sin foto teniendo 50 ficheros válidos un
+  peldaño más abajo.
+
+Resultado: **4 de 4 en /discovery y todas de su generación** — Yaris II
+facelift, Jazz GE 2008-2010, Mazda2 DE de 2011, Swift MZ de 2004 (y no el de
+2024). En /briefs el 207 RC pasó de una foto de anuncio con marca de agua a
+`Peugeot_207_RC_Facelift_front_20100416.jpg`, que es literalmente el coche
+buscado. Verificado con `naturalWidth > 0`.
 
 **Cambio 2026-07-27 — las recomendaciones también caen a Wikipedia.** Nico creó
 un perfil nuevo y solo 1 de 4 recomendaciones traía foto. No era un fallo de
