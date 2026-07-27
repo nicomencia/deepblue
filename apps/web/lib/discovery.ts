@@ -10,6 +10,7 @@
 
 import {
   discoveryReportSchema,
+  parseDiscoveryReport,
   type BriefCriteria,
   type DiscoveryProfile,
   type DiscoveryReport,
@@ -81,8 +82,10 @@ async function draftReport(profile: DiscoveryProfile): Promise<DiscoveryReport> 
       messages = [...messages, { role: "assistant", content: msg.content }];
       continue;
     }
-    // Trust boundary: LLM output must pass the domain schema before storage.
-    return discoveryReportSchema.parse(JSON.parse(messageText(msg)));
+    // Trust boundary: validate, then repair the model/imageUrl the research
+    // reliably gets wrong. The repair is a function, not a schema transform —
+    // zodOutputFormat above cannot represent one.
+    return parseDiscoveryReport(JSON.parse(messageText(msg)));
   }
   throw new Error(`el análisis de descubrimiento no convergió en ${MAX_TURNS} turnos`);
 }

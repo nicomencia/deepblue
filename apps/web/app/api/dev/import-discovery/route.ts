@@ -1,4 +1,4 @@
-import { discoveryReportSchema } from "@deepblue/core";
+import { parseDiscoveryReport } from "@deepblue/core";
 import { getDb } from "../../../../lib/db";
 import { saveDiscoveryReport } from "../../../../lib/discovery";
 
@@ -23,16 +23,20 @@ export async function POST(req: Request): Promise<Response> {
     );
   }
 
-  const parsed = discoveryReportSchema.safeParse(body.report);
-  if (!parsed.success) {
-    return Response.json({ ok: false, error: parsed.error.message }, { status: 400 });
+  // Same repair as the API lane: a Claude Code session hands over the same
+  // "Yaris (XP90, 2006-2011)" and Wikimedia page URLs research always produces.
+  let report;
+  try {
+    report = parseDiscoveryReport(body.report);
+  } catch (err) {
+    return Response.json({ ok: false, error: String(err).slice(0, 500) }, { status: 400 });
   }
 
   const db = await getDb();
-  await saveDiscoveryReport(db, body.discoveryId, parsed.data, body.source ?? "claude-code-session");
+  await saveDiscoveryReport(db, body.discoveryId, report, body.source ?? "claude-code-session");
   return Response.json({
     ok: true,
-    recommendations: parsed.data.recommendations.length,
+    recommendations: report.recommendations.length,
     reviewUrl: "/discovery",
   });
 }

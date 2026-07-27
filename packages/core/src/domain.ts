@@ -492,19 +492,26 @@ export function normalizeImageUrl(raw?: string): string | undefined {
   return /\.(jpe?g|png|webp|gif|avif)(\?|#|$)/i.test(url) ? url : undefined;
 }
 
-/** One concrete hunt proposal: specific enough to become a brief in one click. */
-export const modelRecommendationSchema = z
-  .object({
-    make: z.string(),
-    model: z.string(),
-    /** Generation code ("XP90", "GE", "VII") — never folded into `model`. */
-    generation: z.string().optional(),
-    /**
-     * Representative photo of the recommended generation (real URL found during
-     * research — Wikimedia preferred for hotlink stability). Buyers who don't
-     * know the model by heart decide with their eyes first.
-     */
-    imageUrl: z.string().optional(),
+/**
+ * One concrete hunt proposal: specific enough to become a brief in one click.
+ *
+ * Deliberately a plain object with NO `.transform()`: this schema is handed to
+ * the Anthropic SDK as the structured-output format, and JSON Schema cannot
+ * represent a transform — adding one makes every analysis throw before it
+ * starts ("Transforms cannot be represented in JSON Schema", caught live
+ * 2026-07-27). The repairs live in `parseDiscoveryReport` instead.
+ */
+export const modelRecommendationSchema = z.object({
+  make: z.string(),
+  model: z.string(),
+  /** Generation code ("XP90", "GE", "VII") — never folded into `model`. */
+  generation: z.string().optional(),
+  /**
+   * Representative photo of the recommended generation (real URL found during
+   * research — Wikimedia preferred for hotlink stability). Buyers who don't
+   * know the model by heart decide with their eyes first.
+   */
+  imageUrl: z.string().optional(),
     /** Trims/engines worth hunting ("1.6 THP 175", "GTI Performance DSG"). */
     versions: z.array(z.string()),
     /** Trims/engines to avoid, each with the reason inline. */
@@ -514,23 +521,10 @@ export const modelRecommendationSchema = z
     /** Realistic Spanish second-hand band for the recommended config. */
     priceBandEur: z.object({ min: z.number(), max: z.number() }),
     whyFits: z.array(z.string()),
-    /** Known weak points, one line each — the dossier deepens them later. */
-    watchouts: z.array(z.string()),
-    sources: z.array(z.string()),
-  })
-  // Parse, don't trust: the prompt asks for a clean model and a direct image
-  // URL, and research answers with "Yaris (XP90, 2006-2011)" and a Wikimedia
-  // description page anyway. Repairing here covers both lanes (API and the
-  // Claude Code import) instead of hoping each one asks nicely.
-  .transform((rec) => {
-    const { model, generation } = splitModelAndGeneration(rec.model);
-    return {
-      ...rec,
-      model,
-      generation: rec.generation ?? generation,
-      imageUrl: normalizeImageUrl(rec.imageUrl),
-    };
-  });
+  /** Known weak points, one line each — the dossier deepens them later. */
+  watchouts: z.array(z.string()),
+  sources: z.array(z.string()),
+});
 export type ModelRecommendation = z.infer<typeof modelRecommendationSchema>;
 
 /** Validated at the LLM trust boundary, whichever lane produced it. */
@@ -543,6 +537,31 @@ export const discoveryReportSchema = z.object({
   sources: z.array(z.string()),
 });
 export type DiscoveryReport = z.infer<typeof discoveryReportSchema>;
+
+/**
+ * The trust boundary for a report, whichever lane produced it: validate, then
+ * repair the two things research gets wrong every time.
+ *
+ * Kept as a function rather than a schema `.transform()` on purpose — the
+ * schema itself must stay convertible to JSON Schema for structured output.
+ * Both lanes (API research and the Claude Code import) go through here, so the
+ * repair cannot be forgotten by one of them.
+ */
+export function parseDiscoveryReport(raw: unknown): DiscoveryReport {
+  const report = discoveryReportSchema.parse(raw);
+  return {
+    ...report,
+    recommendations: report.recommendations.map((rec) => {
+      const { model, generation } = splitModelAndGeneration(rec.model);
+      return {
+        ...rec,
+        model,
+        generation: rec.generation ?? generation,
+        imageUrl: normalizeImageUrl(rec.imageUrl),
+      };
+    }),
+  };
+}
 
 // ---------------------------------------------------------------------------
 // LLM verdict enrichment — refinement, never authority

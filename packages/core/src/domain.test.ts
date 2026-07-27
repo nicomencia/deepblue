@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { z } from "zod";
 import { conversationReadingPayloadSchema } from "./domain.js";
 import {
   ACTIVE_PLATFORMS,
@@ -11,6 +12,7 @@ import {
   isPlatformActive,
   llmEnrichmentPayloadSchema,
   normalizeImageUrl,
+  parseDiscoveryReport,
   splitModelAndGeneration,
   modelDossierSchema,
   normalizedListingSchema,
@@ -290,6 +292,15 @@ describe("LLM trust-boundary schemas", () => {
     expect(normalizeImageUrl(undefined)).toBeUndefined();
   });
 
+  it("keeps the LLM-facing schemas convertible to JSON Schema", () => {
+    // These are handed to the SDK as the structured-output format. A
+    // `.transform()` anywhere inside makes zodOutputFormat throw at request
+    // time — invisible to typecheck and to every other test, and it takes the
+    // whole feature down (shipped and caught live 2026-07-27).
+    expect(() => z.toJSONSchema(discoveryReportSchema)).not.toThrow();
+    expect(() => z.toJSONSchema(modelDossierSchema)).not.toThrow();
+  });
+
   it("repairs model and imageUrl at the trust boundary, both lanes", () => {
     const rec = {
       make: "Toyota",
@@ -304,7 +315,7 @@ describe("LLM trust-boundary schemas", () => {
       watchouts: ["Consumo de aceite"],
       sources: ["https://example.com"],
     };
-    const parsed = discoveryReportSchema.parse({
+    const parsed = parseDiscoveryReport({
       headline: "Perfil de ciudad.",
       recommendations: [rec],
       discarded: [],
