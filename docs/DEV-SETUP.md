@@ -144,6 +144,39 @@ anuncios, digest con suelo de nota + alertas A/B sin duplicados, dossiers
 en la página del lead), tabs por búsqueda, página Actividad, descubrimiento de
 modelos y adopción manual de anuncios con dossier-first. 77 tests verdes.
 
+**Cambio 2026-07-28 (14) — el GR Sport no es un GR Yaris, y lo que no sabemos
+identificar no puede encabezar la lista.** Nico, sobre los resultados del cambio
+13: "acepto el Yaris GR FWD, pero el GR Sport no debería estar, es un coche
+totalmente distinto, y nunca en los primeros resultados como están los dos".
+
+Lo primero es un patrón de toda la industria, no un caso Toyota: el fabricante
+vende un acabado que toma prestado el nombre del modelo caliente porque el halo
+vende. GR Sport (130 CV, delantera, pack estético) contra GR Yaris (261 CV, AWD,
+homologación de rally). Igual: N Line vs i30 N, M Sport vs M3, S line vs S3, AMG
+Line vs A45, R-Line vs Golf R, ST-Line vs Fiesta ST, GT Line vs GTI. De ahí
+`DECOY_BADGES`: el señuelo CONSUME la palabra que tomó prestada, así que ya no
+puede satisfacer al modelo del brief. Se amplía la lista, no se parchea la
+llamada.
+
+Y las palabras del modelo tienen que ir JUNTAS: la adyacencia es lo que separa
+"Toyota Yaris GR" (el coche) de "Toyota Yaris 1.5 Hybrid GR Sport" (un acabado
+tres palabras más allá). Pero la adyacencia sola no basta —los vendedores
+escriben "Yaris GR Sport"— por eso hacen falta las dos reglas.
+
+Lo segundo era más profundo y no era el precio. El GRMN encabezaba con 72 (B) y
+el GR Sport empataba con el mejor GR Yaris real. Motivo: los GR Yaris de verdad
+SÍ casan con su dossier y arrastran "6/6 riesgos del modelo sin verificar" →
+`modelReliability` E 7; el GRMN y el GR Sport no casan con nada y se llevan un
+55 neutro de regalo. O sea: **la ignorancia le ganaba al conocimiento**. Un
+coche del que no sabemos nada puntuaba mejor que uno que hemos investigado.
+
+Arreglo: si el campo `model` del propio anuncio nombra una insignia
+ESTRICTAMENTE más larga que la que pide el brief —"YARIS GR MN" contiene "GR
+Yaris" y algo más— es un `variant`: se muestra, pero con veto `model_variant` y
+techo 45 (D como mucho). "Yaris GR" son las mismas dos palabras en otro orden,
+que es ortografía, no otro coche: ese no se toca. El GRMN pasa de 1º con 72 a 9º
+con 45; los ocho primeros son ya todos GR Yaris de 261/262 CV.
+
 **Cambio 2026-07-28 (13) — "¿por qué 0 GR Yaris?": el orden de las palabras
 mataba el coche.** La búsqueda encontró 14 anuncios y dejó vivos 0. Seis eran GR
 Yaris de verdad. Tres murieron por distancia (Elche, Pontevedra, Cádiz) y eran

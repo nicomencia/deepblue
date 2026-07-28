@@ -223,6 +223,80 @@ describe("hard filters", () => {
     expect(r.outcome).not.toBe("dead");
   });
 
+  // A trim package that borrows the badge is a different car: 130 CV y tracción
+  // delantera vs 261 CV y AWD. Every maker sells one, so the rule is a list.
+  it("refuses a trim package that borrows the badge", () => {
+    const r = evaluateListing(
+      listing({
+        title: "TOYOTA YARIS 1.5 VVT-I HYBRID GR SPORT 130 5P",
+        make: "TOYOTA",
+        model: "YARIS",
+        version: "1.5 VVT-I HYBRID GR SPORT 130 5P",
+        year: 2025,
+        km: 14_832,
+        priceEur: 23_900,
+      }),
+      grCriteria,
+      grLimits,
+    );
+    expect(r.deadReason).toBe("different_vehicle");
+  });
+
+  // Adjacency alone is not enough — sellers do write "Yaris GR Sport".
+  it("refuses the borrowed badge even when the words are adjacent", () => {
+    const r = evaluateListing(
+      listing({ title: "Toyota Yaris GR Sport 2023", make: "Toyota", model: "Yaris", year: 2023 }),
+      grCriteria,
+      grLimits,
+    );
+    expect(r.deadReason).toBe("different_vehicle");
+  });
+
+  it("still finds the badge when the brief is hunting the trim itself", () => {
+    const sport = criteria({ vehicles: [{ make: "Toyota", model: "GR Sport" }], yearMin: 2018 });
+    const r = evaluateListing(
+      listing({ title: "Toyota Yaris GR Sport 2023", make: "Toyota", model: "Yaris", year: 2023 }),
+      sport,
+      grLimits,
+    );
+    expect(r.outcome).not.toBe("dead");
+  });
+
+  // The GRMN is a real car and stays visible, but "YARIS GR MN" names a longer
+  // badge than "GR Yaris", so it must not head the list: a unit we cannot pin
+  // down collects a neutral model score and would otherwise beat the real thing.
+  it("caps a variant that names a longer badge", () => {
+    const grmn = listing({
+      title: "TOYOTA  YARIS GR MN - 23.900€ -solo 400 unidades",
+      make: "TOYOTA",
+      model: "YARIS GR MN",
+      version: "GR MN",
+      year: 2018,
+      km: 22_454,
+      priceEur: 23_900,
+    });
+    const r = evaluateListing(grmn, grCriteria, grLimits);
+    expect(r.outcome).not.toBe("dead");
+    expect(r.verdict.vetoes).toContain("model_variant");
+    expect(r.verdict.score).toBeLessThanOrEqual(45);
+  });
+
+  it("does not cap the same two words merely reordered", () => {
+    const r = evaluateListing(
+      listing({
+        title: "Toyota Yaris GR 2021 Nacional",
+        make: "Toyota",
+        model: "Yaris GR",
+        year: 2021,
+        km: 98_119,
+        priceEur: 31_000,
+      }),
+      grCriteria,
+      grLimits,
+    );
+    expect(r.verdict.vetoes ?? []).not.toContain("model_variant");
+  });
+
   // The words must be WORDS: "gr" hides inside "gris", and a grey Yaris is not
   // a GR Yaris. Without this the widened match would swallow half the corpus.
   it("does not read a colour as a model name", () => {
