@@ -7,6 +7,7 @@ import {
   discoveryReportSchema,
   discoveryResearchSchema,
   normalizeBodyStyle,
+  normalizeDrivetrain,
   dossierCoversModel,
   dossierCoversYears,
   generationYearSpan,
@@ -447,5 +448,69 @@ describe("normalizeBodyStyle", () => {
       sources: [],
     });
     expect(parsed.recommendations[0]?.bodyStyle).toBe("hatchback");
+  });
+});
+
+describe("normalizeDrivetrain", () => {
+  // No marketplace states drivetrain as a field, so it is read out of the ad
+  // text — and sellers almost never write "4x4", they write the trade name.
+  it("reads the manufacturers' trade names, not just the digits", () => {
+    expect(normalizeDrivetrain("1.6 CRDi 136 HTRAC Style")).toBe("4x4");
+    expect(normalizeDrivetrain("2.5 AWD-i Advance")).toBe("4x4");
+    expect(normalizeDrivetrain("2.0 TDI 4Motion DSG")).toBe("4x4");
+    expect(normalizeDrivetrain("3.0 TDI quattro")).toBe("4x4");
+    expect(normalizeDrivetrain("1.4 AllGrip")).toBe("4x4");
+    expect(normalizeDrivetrain("xDrive20d")).toBe("4x4");
+  });
+
+  it("reads plain Spanish too", () => {
+    expect(normalizeDrivetrain("Tucson tracción total")).toBe("4x4");
+    expect(normalizeDrivetrain("SUV 4x4 impecable")).toBe("4x4");
+    expect(normalizeDrivetrain("tracción delantera")).toBe("4x2");
+    expect(normalizeDrivetrain("1.6 GDi 4x2 Klass")).toBe("4x2");
+  });
+
+  it("reads across the fields an ad spreads it over", () => {
+    // Version, title and description together — sellers put it anywhere.
+    expect(normalizeDrivetrain("1.6 GDi Klass", "Hyundai Tucson", "con HTRAC")).toBe("4x4");
+  });
+
+  it("stays silent when the ad never says", () => {
+    // Silence must not be read as 4x2: an unknown drivetrain is neutral in
+    // the benchmark, and guessing here would price cars against the wrong pool.
+    expect(normalizeDrivetrain("1.6 GDi Klass 4x4 no, mejor")).toBe("4x4"); // literal mention wins
+    expect(normalizeDrivetrain("2.0 TDI 150 Style")).toBeUndefined();
+    expect(normalizeDrivetrain(undefined)).toBeUndefined();
+    expect(normalizeDrivetrain("")).toBeUndefined();
+  });
+});
+
+describe("normalizeDrivetrain against real ad text", () => {
+  // Every string here is from the live corpus on 2026-07-28. Dealer
+  // boilerplate is the adversary: it is long, Spanish, and full of words that
+  // look like drivetrain tokens.
+  const BOILERPLATE =
+    "Bienvenido a AUTOPAI. Garantía total, revisión integral, cámara trasera, " +
+    "financiación a medida. Vehículo NACIONAL, GASOLINA HÍBRIDO con CAMBIO " +
+    "AUTOMÁTICO y tracción 4x2. Etiqueta ECO. ÚNICO PROPIETARIO.";
+
+  it("does not read 'garantía total' or 'revisión integral' as all-wheel drive", () => {
+    // The live failure: a RAV4 whose title said 4X2 came back 4x4, because
+    // bare "total"/"integral" matched the dealer's warranty blurb.
+    expect(normalizeDrivetrain("Toyota RAV4 2.5 STYLE 218cv. 4X2 HÍBRIDO AUT", BOILERPLATE)).toBe("4x2");
+  });
+
+  it("does not let 'tracción 4x2' match the 4x4 rule through its first digit", () => {
+    expect(normalizeDrivetrain("tracción 4x2")).toBe("4x2");
+    expect(normalizeDrivetrain("tracción total")).toBe("4x4");
+  });
+
+  it("does not read 'cámara trasera' as rear-wheel drive", () => {
+    expect(normalizeDrivetrain("Toyota RAV4 2.5l 220H Luxury 4WD", "cámara trasera y sensores")).toBe("4x4");
+  });
+
+  it("still says nothing when the ad says nothing", () => {
+    expect(normalizeDrivetrain("Toyota RAV4 2024", "Coche impecable, siempre en garaje.")).toBeUndefined();
+    expect(normalizeDrivetrain("Peugeot 207 RC 2007")).toBeUndefined();
   });
 });

@@ -11,6 +11,7 @@
 import {
   BODY_STYLES,
   discoveryResearchSchema,
+  isDrivetrain,
   parseDiscoveryReport,
   type BodyStyle,
   type BriefCriteria,
@@ -96,6 +97,14 @@ Reglas estrictas:
   para monovolúmenes de verdad (Zafira, Picasso). Un Yaris o un Corsa son
   "hatchback" aunque otros mercados tuvieran berlina; un MX-5, "convertible".
   Sirve para elegir la foto correcta: en la duda, la versión mayoritaria aquí.
+- "drivetrain": "4x2" o "4x4" cuando en ese modelo exista la elección — y
+  elígela tú, no la dejes abierta. En el mismo modelo y año son miles de euros
+  de diferencia, así que "un Tucson" no es una recomendación hasta que dice
+  qué Tucson. Decide con el perfil delante: el 4x4 tracciona mejor en nieve,
+  barro o rampas y suele traer mejor equipamiento, a cambio de más peso, algo
+  más de consumo, otra transmisión que mantener y bastante más precio. Si el
+  comprador no va a salir del asfalto, el 4x2 es la respuesta honesta y lo
+  dices en "whyFits"; si sí, justifica el sobreprecio ahí mismo.
 - Esta pantalla sirve para UNA cosa: que el comprador elija entre los modelos
   que le propones. Todo lo que no le ayude a comparar sobra aquí, porque el
   programa ya lo trabaja en el paso siguiente (la búsqueda hereda "versions" y
@@ -475,6 +484,11 @@ export function recommendationToBrief(
     fuel: profile.fuelPreference?.length ? profile.fuelPreference : undefined,
     gearbox:
       profile.gearbox && profile.gearbox !== "any" ? [profile.gearbox] : undefined,
+    // The recommendation picked a drivetrain, so the hunt inherits it — this
+    // is the whole point of asking for it. Without this the search mixes 4x2
+    // and 4x4 again and the recommendation's choice dies on the page it
+    // was made on.
+    drivetrain: isDrivetrain(rec.drivetrain) ? [rec.drivetrain] : undefined,
     // No location = no radius check = all of Spain, which is the default now.
     // The old hardcoded Madrid ±200 km silently narrowed every hunt created
     // from a discovery to one third of the country.

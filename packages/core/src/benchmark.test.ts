@@ -124,3 +124,36 @@ describe("computeBenchmark", () => {
     expect(b?.sampleSize).toBeGreaterThanOrEqual(MIN_BENCHMARK_SAMPLE);
   });
 });
+
+describe("drivetrain in the benchmark", () => {
+  // The unfairness Nico spotted: with 4x2 and 4x4 pooled, a 4x4 is priced
+  // against cheaper cars and reads as overpriced, while a 4x2 is priced
+  // against dearer ones and reads as a bargain. Same model, same year.
+  const pool: Comparable[] = [
+    ...Array.from({ length: 8 }, () => ({ priceEur: 20_000, year: 2022, drivetrain: "4x2" })),
+    ...Array.from({ length: 8 }, () => ({ priceEur: 26_000, year: 2022, drivetrain: "4x4" })),
+  ];
+  const median = (t: Parameters<typeof computeBenchmark>[0], c: Comparable[] = pool) =>
+    computeBenchmark(t, c)?.medianEur ?? 0;
+
+  it("prices a 4x4 against 4x4s, not against the mixed pool", () => {
+    expect(median({ year: 2022 })).toBeLessThan(median({ year: 2022, drivetrain: "4x4" }));
+    expect(median({ year: 2022, drivetrain: "4x4" })).toBeGreaterThan(24_000);
+  });
+
+  it("prices a 4x2 against 4x2s, so it stops looking like a bargain", () => {
+    expect(median({ year: 2022, drivetrain: "4x2" })).toBeLessThan(22_000);
+  });
+
+  it("reads the trade name on comparables that never say '4x4'", () => {
+    const named = pool.map((c) => (c.drivetrain === "4x4" ? { ...c, drivetrain: "HTRAC" } : c));
+    expect(median({ year: 2022, drivetrain: "4x4" }, named)).toBeGreaterThan(24_000);
+  });
+
+  it("stays neutral when the ads simply do not say", () => {
+    // Most ads don't state it. An unknown drivetrain must not quietly
+    // penalise every comparable whose seller didn't spell it out.
+    const silent: Comparable[] = pool.map(({ priceEur, year }) => ({ priceEur, year }));
+    expect(median({ year: 2022, drivetrain: "4x4" }, silent)).toBe(median({ year: 2022 }, silent));
+  });
+});

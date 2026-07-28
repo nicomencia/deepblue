@@ -11,6 +11,7 @@ import {
   extractImportSignals,
   fingerprintDedupKey,
   gradeAtMost,
+  normalizeDrivetrain,
   sanitizePowerCv,
   type ConfidenceGrade,
   type EvaluationResult,
@@ -178,6 +179,12 @@ async function ingestOne(
   const imp = extractImportSignals(item.title, item.description);
   const rhdFact = item.rhd ?? (imp.rhd && !imp.rhdAssumed ? true : undefined);
   const foreignPlatesFact = item.foreignPlates ?? (imp.foreignPlate ? true : undefined);
+  // No marketplace exposes drivetrain as a field, so it is read out of the ad
+  // text — and it has to be read, because the benchmark now prices a 4x4
+  // against 4x4s. Version first (where the trade name lives: "HTRAC",
+  // "4Motion", "AWD-i"), then title and description as the seller wrote them.
+  const drivetrainFact =
+    item.drivetrain ?? normalizeDrivetrain(item.version, item.title, item.description);
 
   // Snapshot the stored price BEFORE the upsert refreshes it: a re-sighted
   // listing with a different price is a price change, not background noise.
@@ -214,6 +221,7 @@ async function ingestOne(
       km: item.km,
       fuel: item.fuel,
       gearbox: item.gearbox,
+      drivetrain: drivetrainFact,
       powerCv: sanitizePowerCv(item.powerCv),
       ecoLabel: item.ecoLabel,
       rhd: rhdFact,
@@ -287,7 +295,14 @@ async function ingestOne(
     item.make,
     item.model,
     item.countryCode,
-    { version: item.version, year: item.year, powerCv: item.powerCv, fuel: item.fuel, gearbox: item.gearbox },
+    {
+      version: item.version,
+      year: item.year,
+      powerCv: item.powerCv,
+      fuel: item.fuel,
+      gearbox: item.gearbox,
+      drivetrain: drivetrainFact,
+    },
     caches.benchmark,
   );
   const dossier = await getDossier(db, item.make, item.model, caches.dossier, item.year);

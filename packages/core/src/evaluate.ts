@@ -484,6 +484,15 @@ function assessUnit(
     score += 5;
     known.push(`Cambio: ${listing.gearbox}`);
   } else openQuestions.push("¿Es cambio manual o automático?");
+  // Only asked when the hunt actually cares. On a hatchback there is nothing
+  // to choose, and a generic "4x2 or 4x4?" in the opener wastes the seller's
+  // patience on a question whose answer changes nothing.
+  if (criteria.drivetrain?.length) {
+    if (listing.drivetrain !== undefined) {
+      score += 5;
+      known.push(`Tracción: ${listing.drivetrain}`);
+    } else openQuestions.push("¿Es 4x2 o 4x4?");
+  }
   if (listing.powerCv !== undefined) {
     score += 3;
     known.push(`Potencia: ${listing.powerCv} CV`);

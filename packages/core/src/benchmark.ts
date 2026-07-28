@@ -30,6 +30,8 @@ export interface Comparable {
   fuel?: string;
   /** Manual vs automatic — separate buyers, separate prices. */
   gearbox?: string;
+  /** "4x2" | "4x4" — the widest price gap of any option on an SUV. */
+  drivetrain?: string;
 }
 
 export interface BenchmarkTarget {
@@ -38,6 +40,7 @@ export interface BenchmarkTarget {
   powerCv?: number;
   fuel?: string;
   gearbox?: string;
+  drivetrain?: string;
 }
 
 // --- Trim similarity ---------------------------------------------------------
@@ -81,6 +84,19 @@ const FUEL_MISMATCH_WEIGHT = 0.3;
 /** Gearbox (manual≠automatic): a real price gap, softer than the fuel one. */
 const GEARBOX_MATCH_WEIGHT = 1.4;
 const GEARBOX_MISMATCH_WEIGHT = 0.6;
+/**
+ * Drivetrain (4x2≠4x4). Weighted like fuel rather than like gearbox, because
+ * on an SUV it is the biggest single price step there is — same model, same
+ * year, same trim, thousands of euros apart.
+ *
+ * Leaving it out was not neutral, it was systematically unfair in both
+ * directions: a 4x4 priced against a pool of 4x2s reads as overpriced and
+ * gets marked down, while a 4x2 priced against 4x4s reads as a bargain and
+ * gets marked up. The evaluator was rewarding the cheaper car for being
+ * cheaper than a car it is not.
+ */
+const DRIVETRAIN_MATCH_WEIGHT = 2;
+const DRIVETRAIN_MISMATCH_WEIGHT = 0.3;
 /** Year decay: Δ0→1, Δ1→0.67, Δ2→0.5, Δ4→0.33. Gentler than the trim multiplier by design. */
 const yearWeight = (delta: number): number => 1 / (1 + 0.5 * delta);
 /** A comparable whose year we don't know is worth a bit less than a same-year one. */
@@ -104,6 +120,21 @@ function normalizeGearbox(gearbox: string | undefined): string | undefined {
   if (/autom|dsg|tiptronic|s-tronic|pdk|cvt|dct|auto\b/.test(g)) return "automatic";
   if (/manual|man\b/.test(g)) return "manual";
   return g;
+}
+
+/**
+ * Local like normalizeFuel/normalizeGearbox — this module stays dependency
+ * free. Listings arrive already normalized to "4x2"/"4x4" by ingest, but
+ * adopted and hand-seeded rows can carry the raw trade name, so accept both.
+ */
+function normalizeDrivetrain(drivetrain: string | undefined): string | undefined {
+  if (!drivetrain) return undefined;
+  const d = drivetrain.trim().toLowerCase();
+  if (/4\s?[x×]\s?4|4wd|awd|quattro|xdrive|4matic|4motion|allgrip|htrac|integral|total/.test(d)) {
+    return "4x4";
+  }
+  if (/4\s?[x×]\s?2|2wd|fwd|rwd|delantera|trasera/.test(d)) return "4x2";
+  return d;
 }
 
 function comparableWeight(target: BenchmarkTarget, targetTrim: string[], comp: Comparable): number {
@@ -130,6 +161,13 @@ function comparableWeight(target: BenchmarkTarget, targetTrim: string[], comp: C
   const tg = normalizeGearbox(target.gearbox);
   const cg = normalizeGearbox(comp.gearbox);
   if (tg && cg) weight *= tg === cg ? GEARBOX_MATCH_WEIGHT : GEARBOX_MISMATCH_WEIGHT;
+
+  // Same rule as fuel: judged only when BOTH sides state it. Most ads don't,
+  // and an unknown drivetrain must stay neutral rather than quietly penalise
+  // every comparable whose seller simply didn't spell it out.
+  const td = normalizeDrivetrain(target.drivetrain);
+  const cd = normalizeDrivetrain(comp.drivetrain);
+  if (td && cd) weight *= td === cd ? DRIVETRAIN_MATCH_WEIGHT : DRIVETRAIN_MISMATCH_WEIGHT;
 
   if (target.year !== undefined && comp.year !== undefined) {
     weight *= yearWeight(Math.abs(comp.year - target.year));

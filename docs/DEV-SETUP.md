@@ -144,6 +144,34 @@ anuncios, digest con suelo de nota + alertas A/B sin duplicados, dossiers
 en la página del lead), tabs por búsqueda, página Actividad, descubrimiento de
 modelos y adopción manual de anuncios con dossier-first. 77 tests verdes.
 
+**Cambio 2026-07-28 (10) — 4x2 y 4x4 dejan de ser el mismo coche.** Nico:
+"mezcla 4x2 y 4x4 y no promociona uno sobre otro, y no es justo". Tenía razón y
+el mecanismo era aritmético, no de opinión: `comparableWeight` pondera por
+acabado, combustible, cambio y año —y no por tracción—, así que un 4x4 se
+tasaba contra un charco lleno de 4x2 y salía CARO, mientras un 4x2 se tasaba
+contra 4x4 y salía CHOLLO. No era neutral: premiaba al barato por ser más
+barato que un coche que no es.
+
+Ahora `drivetrain` existe de punta a punta: columna en `listings` (migración
+0015, aditíva), campo en `NormalizedListing` y en `BriefCriteria`, y peso propio
+en el benchmark —como el combustible, no como el cambio, porque en un SUV es el
+mayor escalón de precio que hay—. Solo se juzga cuando AMBOS lados lo dicen; un
+anuncio que calla sigue siendo neutral.
+
+Ningún portal lo publica como campo (RECON.md), así que se lee del texto — y
+casi nunca dice "4x4", dice el nombre comercial: HTRAC, AWD-i, 4Motion,
+quattro, AllGrip, xDrive. La recomendación también lo elige y la búsqueda lo
+hereda, porque "un Tucson" no es una recomendación hasta que dice qué Tucson.
+
+Medido contra el corpus real antes de darlo por bueno, y menos mal: la primera
+versión metía "integral" y "total" sueltos y "garantía total"/"revisión
+integral" convertían en 4x4 un RAV4 cuyo título decía 4X2; y `tracción 4`
+casaba con "tracción 4x2" por el primer dígito. Del otro lado, "trasera" suelta
+es "cámara trasera" en media España. Cada token tiene que ser inequívoco por sí
+solo, porque se compara contra la plantilla del concesionario. Backfill de lo ya
+guardado: `POST /api/dev/drivetrain-backfill` (gratis, idempotente) clasificó
+39 de 201 — el resto son 207, Golf y Elise, donde no hay nada que elegir.
+
 **Cambio 2026-07-28 (9) — "Yaris Cross" contiene "Yaris".** Al endurecer los
 filtros, la categoría del XP90 dejó de dar nada y se cayó a la categoría de
 familia, que contiene el Yaris Cross: `Toyota_Yaris_Cross_Hybrid_(XP210).jpg`

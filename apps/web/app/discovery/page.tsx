@@ -274,6 +274,10 @@ export default async function DiscoveryPage() {
                   <div style={{ display: "flex", justifyContent: "space-between", gap: "0.5rem", flexWrap: "wrap" }}>
                     <strong>
                       {rec.make} {rec.model}
+                      {/* Drivetrain sits in the title because it is part of
+                          the identity of what is being recommended, not a
+                          detail: the 4x2 and the 4x4 are thousands apart. */}
+                      {rec.drivetrain ? ` ${rec.drivetrain}` : ""}
                       {rec.yearMin || rec.yearMax
                         ? ` (${rec.yearMin ?? "…"}–${rec.yearMax ?? "…"})`
                         : ""}

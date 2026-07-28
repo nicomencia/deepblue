@@ -78,6 +78,8 @@ export const listings = pgTable(
     km: integer("km"),
     fuel: text("fuel"),
     gearbox: text("gearbox"),
+    /** "4x2" | "4x4", read from the ad text — no marketplace states it. */
+    drivetrain: text("drivetrain"),
     powerCv: integer("power_cv"),
     ecoLabel: text("eco_label"),
     /** First ad photo (platform CDN URL) — email thumbnails, dashboard cards. */

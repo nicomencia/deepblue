@@ -105,6 +105,12 @@ export interface BriefCriteria {
   kmMax?: number;
   fuel?: Array<"gasoline" | "diesel" | "hybrid" | "electric">;
   gearbox?: Array<"manual" | "automatic">;
+  /**
+   * Which drivetrain this hunt is for. Left empty both are scouted — and each
+   * is still priced against its OWN kind, which is the point: 4x2 and 4x4 are
+   * different products at different prices, not two spellings of one car.
+   */
+  drivetrain?: Drivetrain[];
   /** Target price the user would be happy with (asking prices above maxPrice are still scouted for negotiation headroom). */
   targetPriceEur?: number;
   /** Search center + radius, e.g. { lat, lon, radiusKm } */
@@ -153,6 +159,12 @@ export const normalizedListingSchema = z.object({
   km: z.number().optional(),
   fuel: z.string().optional(),
   gearbox: z.string().optional(),
+  /**
+   * "4x2" | "4x4", derived from the ad text — no marketplace states it as a
+   * field. First-class because it is a first-class price driver: mixing the
+   * two prices a 4x4 against a pool of 4x2s and makes it look overpriced.
+   */
+  drivetrain: z.string().optional(),
   powerCv: z.number().optional(),
   /** DGT environmental badge (0, ECO, C, B...) — matters for Spanish city access. */
   ecoLabel: z.string().optional(),
@@ -504,6 +516,53 @@ export const BODY_STYLES = [
 ] as const;
 export type BodyStyle = (typeof BODY_STYLES)[number];
 
+/**
+ * Drivetrain, in the words Spanish ads use. Two values on purpose: a buyer
+ * choosing an SUV cares whether it drives all four wheels, not whether the
+ * system is Haldex or Torsen.
+ */
+export const DRIVETRAINS = ["4x2", "4x4"] as const;
+export type Drivetrain = (typeof DRIVETRAINS)[number];
+
+/**
+ * Read the drivetrain out of ad text.
+ *
+ * No marketplace exposes it as a field — Wallapop has make, model, version,
+ * year, km, fuel, gearbox, power and eco label, and nothing else (RECON.md).
+ * It is stated in the version string or the title, and almost always by the
+ * manufacturer's trade name rather than the words "4x4": a Tucson is "HTRAC",
+ * a RAV4 "AWD-i", a Sportage "AWD", a Golf "4Motion", an Audi "quattro".
+ *
+ * Order matters: the 4x4 patterns run first because "4x4" and "4x2" share a
+ * prefix and several trade names contain neither digit.
+ */
+// Every token here must be UNAMBIGUOUS on its own, because it is matched
+// against dealer boilerplate. The first version carried bare "integral" and
+// "total", and "garantía total"/"revisión integral" turned a RAV4 whose title
+// literally read "4X2" into a 4x4 (live, 2026-07-28). Those two words only
+// mean drivetrain in the phrase "tracción total/integral", which is matched
+// separately. Same trap on the other side: bare "trasera" is "cámara trasera"
+// in half the ads in Spain.
+//
+// `xdrive` and `4matic` run straight into the engine size ("xDrive20d",
+// "4Matic+"), so they must not demand a trailing word boundary.
+const AWD_PATTERN =
+  /\b(4\s?[x×]\s?4|4wd|awd|4motion|quattro|allgrip|all[\s-]?grip|htrac|h-trac|4orce|sh-awd|4trac|awd-i|e-four)\b|\b(xdrive|4matic)|tracci[oó]n\s+(total|integral)\b/i;
+const FWD_PATTERN =
+  /\b(4\s?[x×]\s?2|2wd|fwd)\b|tracci[oó]n\s+(delantera|trasera|simple)/i;
+
+export function normalizeDrivetrain(...texts: Array<string | undefined>): Drivetrain | undefined {
+  const text = texts.filter(Boolean).join(" ");
+  if (!text.trim()) return undefined;
+  if (AWD_PATTERN.test(text)) return "4x4";
+  if (FWD_PATTERN.test(text)) return "4x2";
+  return undefined;
+}
+
+/** Narrowing guard: free text from research is not a Drivetrain until checked. */
+export const isDrivetrain = (v: string | undefined): v is Drivetrain =>
+  v !== undefined && (DRIVETRAINS as readonly string[]).includes(v);
+
 export const ECO_LABELS = ["0", "ECO", "C", "B"] as const;
 export type EcoLabel = (typeof ECO_LABELS)[number];
 
@@ -636,6 +695,16 @@ export const modelRecommendationSchema = z.object({
    */
   bodyStyle: z.string().optional(),
   /**
+   * "4x2" | "4x4" when the choice is real for this model. Lenient like
+   * `bodyStyle` and normalised in `parseDiscoveryReport` — structured output
+   * does not enforce enums, and a rejected report costs minutes of research.
+   *
+   * It belongs in the recommendation because it is a decision, not a detail:
+   * on the same model, same year, the two are thousands of euros apart, so
+   * "a Tucson" is not a recommendation until it says which Tucson.
+   */
+  drivetrain: z.string().optional(),
+  /**
    * Representative photo of the recommended generation. STORAGE ONLY — code
    * resolves it after research (see `discoveryResearchSchema`). Buyers who
    * don't know the model by heart decide with their eyes first.
@@ -724,6 +793,7 @@ export function parseDiscoveryReport(raw: unknown): DiscoveryReport {
         model,
         generation: rec.generation ?? generation,
         bodyStyle: normalizeBodyStyle(rec.bodyStyle),
+        drivetrain: normalizeDrivetrain(rec.drivetrain),
         imageUrl: normalizeImageUrl(rec.imageUrl),
       };
     }),
