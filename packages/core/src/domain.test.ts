@@ -6,6 +6,7 @@ import {
   canTransition,
   discoveryReportSchema,
   discoveryResearchSchema,
+  normalizeBodyStyle,
   dossierCoversModel,
   dossierCoversYears,
   generationYearSpan,
@@ -395,5 +396,56 @@ describe("discoveryResearchSchema", () => {
     });
     expect(stored.recommendations[0]?.bodyStyle).toBe("hatchback");
     expect(stored.recommendations[0]?.imageUrl).toContain("Special:FilePath");
+  });
+});
+
+describe("normalizeBodyStyle", () => {
+  // Structured output does NOT constrain this field — the SDK turns a zod enum
+  // into a plain string — so whatever research writes has to be survivable.
+  it("passes through the vocabulary we asked for", () => {
+    expect(normalizeBodyStyle("hatchback")).toBe("hatchback");
+    expect(normalizeBodyStyle("MPV")).toBe("MPV");
+  });
+
+  it("translates what research actually writes in Spanish", () => {
+    expect(normalizeBodyStyle("berlina")).toBe("sedan");
+    expect(normalizeBodyStyle("familiar")).toBe("estate");
+    expect(normalizeBodyStyle("descapotable")).toBe("convertible");
+    expect(normalizeBodyStyle("monovolumen")).toBe("MPV");
+    expect(normalizeBodyStyle("utilitario")).toBe("hatchback");
+  });
+
+  it("copes with a qualified phrase instead of a bare word", () => {
+    expect(normalizeBodyStyle("hatchback 5 puertas")).toBe("hatchback");
+    expect(normalizeBodyStyle("Berlina 4p")).toBe("sedan");
+  });
+
+  it("drops what it cannot place instead of rejecting the report", () => {
+    // The whole point: a body we don't recognise must not cost minutes of
+    // paid research. No body just means the older photo heuristic applies.
+    expect(normalizeBodyStyle("nosequé")).toBeUndefined();
+    expect(normalizeBodyStyle(undefined)).toBeUndefined();
+  });
+
+  it("survives a report whose body is free text", () => {
+    const parsed = parseDiscoveryReport({
+      headline: "h",
+      recommendations: [
+        {
+          make: "Toyota",
+          model: "Yaris",
+          bodyStyle: "utilitario de 5 puertas",
+          versions: [],
+          avoidVersions: [],
+          priceBandEur: { min: 4000, max: 6500 },
+          whyFits: [],
+          watchouts: [],
+          sources: [],
+        },
+      ],
+      discarded: [],
+      sources: [],
+    });
+    expect(parsed.recommendations[0]?.bodyStyle).toBe("hatchback");
   });
 });

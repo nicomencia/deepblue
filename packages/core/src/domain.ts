@@ -439,6 +439,57 @@ export function pickDossierForYear(
  * Body styles, spelled the way Wikimedia Commons spells them, because their
  * only job is to match a Commons subcategory name.
  */
+/**
+ * Free text from research → a body we can match against a Commons category.
+ *
+ * `bodyStyle` is deliberately `z.string()` and NOT `z.enum` at the trust
+ * boundary. The Anthropic SDK downgrades a zod enum to a plain `string` whose
+ * allowed values survive only in the JSON Schema `description`, so structured
+ * output does not constrain it — the model answers "berlina" or "utilitario"
+ * and a strict enum then rejects the whole report. That is a veto costing
+ * minutes of paid web research over one cosmetic field, which is exactly the
+ * trade this codebase refuses (live, 2026-07-28: a 65 s analysis lost this
+ * way). So: accept anything, translate what we recognise, drop the rest —
+ * a missing body only means the photo falls back to the older heuristic.
+ */
+const BODY_SYNONYMS: Record<string, BodyStyle> = {
+  berlina: "sedan",
+  salon: "sedan",
+  saloon: "sedan",
+  familiar: "estate",
+  ranchera: "estate",
+  wagon: "estate",
+  touring: "estate",
+  descapotable: "convertible",
+  cabrio: "convertible",
+  cabriolet: "convertible",
+  coupé: "coupe",
+  monovolumen: "MPV",
+  minivan: "MPV",
+  todoterreno: "SUV",
+  crossover: "SUV",
+  furgoneta: "van",
+  pickup: "pickup",
+  "pick-up": "pickup",
+  utilitario: "hatchback",
+  compacto: "hatchback",
+  hatch: "hatchback",
+  "5 puertas": "hatchback",
+  "3 puertas": "hatchback",
+};
+
+export function normalizeBodyStyle(raw?: string): BodyStyle | undefined {
+  if (!raw) return undefined;
+  const text = raw.trim().toLowerCase();
+  const exact = BODY_STYLES.find((b) => b.toLowerCase() === text);
+  if (exact) return exact;
+  // Substring, because research writes "hatchback 5 puertas" and "berlina 4p".
+  const known = BODY_STYLES.find((b) => text.includes(b.toLowerCase()));
+  if (known) return known;
+  const synonym = Object.keys(BODY_SYNONYMS).find((k) => text.includes(k));
+  return synonym ? BODY_SYNONYMS[synonym] : undefined;
+}
+
 export const BODY_STYLES = [
   "hatchback",
   "sedan",
@@ -583,7 +634,7 @@ export const modelRecommendationSchema = z.object({
    * no filename heuristic can catch that, but naming the body picks the right
    * subcategory outright. The model knows which body Spain got; code doesn't.
    */
-  bodyStyle: z.enum(BODY_STYLES).optional(),
+  bodyStyle: z.string().optional(),
   /**
    * Representative photo of the recommended generation. STORAGE ONLY — code
    * resolves it after research (see `discoveryResearchSchema`). Buyers who
@@ -672,6 +723,7 @@ export function parseDiscoveryReport(raw: unknown): DiscoveryReport {
         ...rec,
         model,
         generation: rec.generation ?? generation,
+        bodyStyle: normalizeBodyStyle(rec.bodyStyle),
         imageUrl: normalizeImageUrl(rec.imageUrl),
       };
     }),

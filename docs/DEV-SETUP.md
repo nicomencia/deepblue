@@ -144,6 +144,30 @@ anuncios, digest con suelo de nota + alertas A/B sin duplicados, dossiers
 en la página del lead), tabs por búsqueda, página Actividad, descubrimiento de
 modelos y adopción manual de anuncios con dossier-first. 77 tests verdes.
 
+**Cambio 2026-07-28 (6) — un enum en la salida estructurada NO es un enum.**
+Un análisis de 65 s se perdió entero y el botón volvió a estar disponible sin
+que nadie supiera por qué. Causa: `bodyStyle` se añadió como `z.enum`, pero el
+SDK de Anthropic lo degrada a `{"type":"string"}` y mete los valores permitidos
+solo en la `description` — así que la decodificación NO lo restringe. El modelo
+contestó algo razonable en castellano, zod lo rechazó en el límite de confianza
+y se tiró la investigación ya pagada.
+
+Mismo criterio que con la profundidad: un veto que cuesta más que el defecto no
+va. Ahora el campo es `z.string()` y `normalizeBodyStyle()` traduce lo que
+reconoce (berlina→sedan, familiar→estate, descapotable→convertible,
+monovolumen→MPV, utilitario→hatchback, y frases tipo "hatchback 5 puertas") y
+descarta lo que no: quedarse sin carrocería solo significa que la foto usa la
+heurística anterior.
+
+Regla general que queda anotada: en salida estructurada, un enum de zod es una
+SUGERENCIA, no una restricción. Todo lo que venga del modelo se normaliza, no se
+valida a muerte.
+
+Y los fallos dejan rastro: `console.error` más un evento
+`discovery_analysis_failed` con el error. Antes el único rastro era una línea
+roja en el navegador que desaparecía al siguiente render, y un análisis caro
+fallaba sin dejar nada que mirar.
+
 **Cambio 2026-07-28 (5) — titular más largo, "Por qué encaja" primero, y el
 límite de las heurísticas de nombre.** El titular pasa a pedirse en 3-4 frases:
 es lo primero que se lee y enmarca las tarjetas, y una sola frase enumerando los

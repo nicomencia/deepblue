@@ -419,6 +419,17 @@ export async function buildDiscoveryReport(db: Db, discoveryId: string): Promise
     await saveDiscoveryReport(db, discoveryId, report, DISCOVERY_MODEL);
   } catch (err) {
     await releaseDiscoveryAnalysis(db, discoveryId);
+    // A failure here has already cost minutes of paid web research, and the
+    // only trace used to be a red line in the browser that vanished on the
+    // next render — the button went clickable again and nobody could say why
+    // (live, 2026-07-28: a 65 s run lost to a schema mismatch, undiagnosable
+    // after the fact). Now it survives in the log and in the event stream.
+    console.error(`[discovery] análisis ${discoveryId} falló:`, err);
+    await db.insert(events).values({
+      userId: row.userId,
+      type: "discovery_analysis_failed",
+      payload: { discoveryId, model: DISCOVERY_MODEL, error: String(err).slice(0, 500) },
+    });
     throw err;
   }
 }
