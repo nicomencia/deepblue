@@ -5,7 +5,7 @@ import Link from "next/link";
 import { getDb } from "../../lib/db";
 import { fmtEur } from "../../lib/ui";
 import { adoptAd } from "../actions";
-import { isDossierBuilding } from "../../lib/dossier-builder";
+import { isDossierBuildInFlight } from "../../lib/dossier-builder";
 import { modelPhotoKey, resolveModelPhotos } from "../../lib/model-photo";
 import { ModelPhoto } from "../model-photo";
 import { SubmitButton } from "../submit-button";
@@ -51,6 +51,18 @@ export default async function BriefsPage({
     ),
   );
 
+
+  // One DB read per distinct model, not one per row: the in-flight flag now
+  // lives in the database so it survives restarts, and a page must not turn
+  // that into a query storm.
+  const buildingModels = new Set<string>();
+  for (const key of new Set(
+    rows.map(({ brief }) => brief.criteria.vehicles[0]).filter((v) => !!v),
+  )) {
+    if (await isDossierBuildInFlight(db, key.make, key.model)) {
+      buildingModels.add(modelPhotoKey(key.make, key.model));
+    }
+  }
   return (
     <main style={{ maxWidth: 860, margin: "0 auto", padding: "2rem 1.5rem" }}>
       <h1 style={{ fontSize: "1.2rem" }}>Búsquedas</h1>
@@ -128,7 +140,7 @@ export default async function BriefsPage({
                   {/* Model only — the year band follows on this same line. */}
                   {v ? `${v.make} ${splitModelAndGeneration(v.model).model}` : "—"}
                   {v?.generations?.[0] ? ` · gen ${v.generations[0]}` : ""}
-                  {v && isDossierBuilding(v.make, v.model) ? " · ⏳ dossier en investigación" : ""}
+                  {v && buildingModels.has(modelPhotoKey(v.make, v.model)) ? " · ⏳ dossier en investigación" : ""}
                   {c.yearMin || c.yearMax
                     ? ` · ${c.yearMin ?? "…"}–${c.yearMax ?? "hoy"}`
                     : ""}

@@ -3,7 +3,7 @@ import { briefs, modelDossiers } from "@deepblue/db";
 import { desc, inArray } from "drizzle-orm";
 import { findUncoveredHunts } from "../../lib/brief-hunt";
 import { getDb } from "../../lib/db";
-import { isDossierBuilding } from "../../lib/dossier-builder";
+import { isDossierBuildInFlight } from "../../lib/dossier-builder";
 import { isLlmConfigured } from "../../lib/llm";
 import { modelPhotoKey, resolveModelPhotos } from "../../lib/model-photo";
 import { fmtDate } from "../../lib/ui";
@@ -51,7 +51,16 @@ export default async function DossiersPage() {
   // Hunts (active + paused "Seguimiento") whose generation no live dossier
   // covers — shared with the retry lane, which re-fires these automatically;
   // this card is the visibility + manual fallback.
-  const missing = await findUncoveredHunts(db);
+  const uncovered = await findUncoveredHunts(db);
+  // Asked of the DATABASE, not of an in-process Set: the button must not be
+  // offered for research that is already running somewhere else, or that was
+  // running when this process started. Offering it charged the user twice.
+  const missing = await Promise.all(
+    uncovered.map(async (v) => ({
+      ...v,
+      building: await isDossierBuildInFlight(db, v.make, v.model),
+    })),
+  );
 
   // Which models are still being hunted: deleting the dossier of a live hunt
   // makes the retry lane research it again on its own, which costs money. The
@@ -91,7 +100,7 @@ export default async function DossiersPage() {
                 {v.make} {v.model}
                 {v.generation ? ` (${v.generation})` : ""}
               </strong>
-              {isDossierBuilding(v.make, v.model) ? (
+              {v.building ? (
                 <span style={{ color: "var(--ink-muted)", fontSize: "0.85rem" }}>
                   ⏳ Investigando… (unos minutos; recarga para ver el resultado)
                 </span>

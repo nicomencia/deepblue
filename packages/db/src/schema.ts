@@ -282,3 +282,27 @@ export const modelDossiers = pgTable(
     uniqueIndex("dossiers_identity_idx").on(t.make, t.model, t.generation, t.engineCode, t.version),
   ],
 );
+
+/**
+ * One row = one dossier research in flight. Exists purely to stop the same
+ * model being researched twice, because research is the most expensive thing
+ * this product does.
+ *
+ * It used to be an in-memory Set, which covers one process and dies with it —
+ * so a restart mid-build reopened the window, and /dossiers went back to
+ * offering an "Investigar" button for work already under way (live,
+ * 2026-07-28: two Yaris dossiers, two RAV4). A row survives both.
+ *
+ * The unique index IS the lock: claiming is an insert that either succeeds or
+ * conflicts, with no read-then-write gap to lose a race in.
+ */
+export const dossierBuilds = pgTable(
+  "dossier_builds",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    make: text("make").notNull(),
+    model: text("model").notNull(),
+    startedAt: timestamp("started_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [uniqueIndex("dossier_builds_identity_idx").on(t.make, t.model)],
+);

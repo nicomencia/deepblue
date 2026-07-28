@@ -144,6 +144,27 @@ anuncios, digest con suelo de nota + alertas A/B sin duplicados, dossiers
 en la página del lead), tabs por búsqueda, página Actividad, descubrimiento de
 modelos y adopción manual de anuncios con dossier-first. 77 tests verdes.
 
+**Cambio 2026-07-28 (12) — el botón que te cobra por lo que ya se está
+haciendo.** Nico, exacto: "si el dossier se crea solo, ¿por qué el botón está
+listo para investigar? Cliqué en los dos pensando que no se autocreaba". Eso no
+es una carrera rara: es la interfaz vendiendo una acción que ya está en marcha,
+y cobrándola.
+
+Faltaba la guarda que de verdad ahorra dinero: `buildDossier` comprobaba si
+había un build EN CURSO, pero nunca si el dossier YA EXISTÍA. Así que en cuanto
+el autobuild terminaba, una página abierta de antes seguía ofreciendo
+"Investigar y redactar borrador" y el clic pagaba una investigación entera para
+algo que ya estaba hecho. Ahora se comprueba la cobertura ANTES de gastar y se
+responde que lo borres o desactives si de verdad quieres rehacerlo.
+
+Y la reserva pasa a la base de datos (tabla `dossier_builds`, migración 0016).
+El índice único ES el cerrojo: reclamar es un insert que o entra o choca, sin
+hueco entre leer y escribir. Sobrevive a los reinicios —que es justo lo que
+rompió la guarda vieja, un `Set` en memoria— y la ven todos los procesos.
+Reclamos más viejos de 20 min se consideran muertos y se pueden tomar. Las
+páginas /dossiers y /briefs preguntan ahora a la BD, así que el botón
+desaparece mientras haya investigación en curso venga de donde venga.
+
 **Cambio 2026-07-28 (11) — dossiers duplicados: la guarda en memoria no basta.**
 Dos dossiers de Toyota RAV4 (V 2019–presente) y dos de Toyota Yaris (II
 2005–2011), estos últimos creados a las 16:21 y 16:22. Cada duplicado es una

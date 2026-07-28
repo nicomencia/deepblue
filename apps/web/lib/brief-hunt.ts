@@ -12,7 +12,7 @@
 import { dossierCoversModel, dossierCoversYears, generationYearSpan } from "@deepblue/core";
 import { briefs, events, modelDossiers, type Db } from "@deepblue/db";
 import { and, eq, gte, inArray, isNull, sql } from "drizzle-orm";
-import { buildDossier, isDossierBuilding } from "./dossier-builder";
+import { buildDossier, isDossierBuildInFlight } from "./dossier-builder";
 import { isLlmConfigured } from "./llm";
 import { enqueueSweeps } from "./sweep";
 
@@ -143,7 +143,7 @@ export async function retryPendingDossiers(db: Db): Promise<DossierRetryStats> {
   const pending = await findUncoveredHunts(db);
 
   for (const hunt of pending) {
-    if (isDossierBuilding(hunt.make, hunt.model)) continue;
+    if (await isDossierBuildInFlight(db, hunt.make, hunt.model)) continue;
 
     const dayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
     const failures = await db

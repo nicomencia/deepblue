@@ -13,10 +13,10 @@ import {
   normalizeImageUrl,
   type ModelDossier,
 } from "@deepblue/core";
-import { events, modelDossiers, type Db } from "@deepblue/db";
+import { dossierBuilds, events, modelDossiers, type Db } from "@deepblue/db";
 import { zodOutputFormat } from "@anthropic-ai/sdk/helpers/zod";
 import type Anthropic from "@anthropic-ai/sdk";
-import { and, isNull, sql } from "drizzle-orm";
+import { and, isNull, lt, sql } from "drizzle-orm";
 import { DOSSIER_MODEL, getAnthropic, messageText } from "./llm";
 import { reevaluateModelLeads } from "./reevaluate";
 import { enqueueSweeps } from "./sweep";
@@ -184,7 +184,10 @@ export async function insertDossier(
  * — asked again after research, from the database, so the answer accounts for
  * builds this process never knew about.
  */
-async function isGenerationCovered(db: Db, dossier: ModelDossier): Promise<boolean> {
+async function isGenerationCovered(
+  db: Db,
+  dossier: { make: string; model: string; generation?: string },
+): Promise<boolean> {
   const span = generationYearSpan(dossier.generation);
   const rows = await db
     .select({ model: modelDossiers.model, content: modelDossiers.content })
@@ -202,26 +205,100 @@ async function isGenerationCovered(db: Db, dossier: ModelDossier): Promise<boole
   );
 }
 
-// Research runs for minutes; auto-build (brief creation, adoption) and the
-// manual /dossiers click can overlap on the same model — one build is enough.
-const building = new Set<string>();
+/**
+ * A build left claimed longer than this is treated as dead (process killed
+ * mid-research) and may be taken over. Generous: MAX_TURNS × 12 web searches
+ * is minutes of work, and reclaiming a merely-slow build buys the double
+ * spend this whole mechanism exists to prevent.
+ */
+const BUILD_STALE_MS = 20 * 60 * 1000;
 
-/** Pages render in this same process: show "investigando…" instead of a
- * button that would only throw the duplicate-build error. */
-export function isDossierBuilding(make: string, model: string): boolean {
-  return building.has(`${make}|${model}`.toLowerCase());
+/**
+ * Claim the right to research this model. Atomic: the unique index decides,
+ * so two simultaneous clicks cannot both win. Returns false if someone else
+ * holds a live claim.
+ */
+export async function claimDossierBuild(db: Db, make: string, model: string): Promise<boolean> {
+  const stale = new Date(Date.now() - BUILD_STALE_MS);
+  // Clear a dead claim first; if the holder is alive this deletes nothing.
+  await db
+    .delete(dossierBuilds)
+    .where(
+      and(
+        sql`lower(${dossierBuilds.make}) = ${make.toLowerCase()}`,
+        sql`lower(${dossierBuilds.model}) = ${model.toLowerCase()}`,
+        lt(dossierBuilds.startedAt, stale),
+      ),
+    );
+  const inserted = await db
+    .insert(dossierBuilds)
+    .values({ make, model })
+    .onConflictDoNothing()
+    .returning({ id: dossierBuilds.id });
+  return inserted.length > 0;
 }
+
+async function releaseDossierBuild(db: Db, make: string, model: string): Promise<void> {
+  await db
+    .delete(dossierBuilds)
+    .where(
+      and(
+        sql`lower(${dossierBuilds.make}) = ${make.toLowerCase()}`,
+        sql`lower(${dossierBuilds.model}) = ${model.toLowerCase()}`,
+      ),
+    );
+}
+
+/** Is a research run in flight? Asked of the DB, so it survives restarts. */
+export async function isDossierBuildInFlight(
+  db: Db,
+  make: string,
+  model: string,
+): Promise<boolean> {
+  const [row] = await db
+    .select({ startedAt: dossierBuilds.startedAt })
+    .from(dossierBuilds)
+    .where(
+      and(
+        sql`lower(${dossierBuilds.make}) = ${make.toLowerCase()}`,
+        sql`lower(${dossierBuilds.model}) = ${model.toLowerCase()}`,
+      ),
+    )
+    .limit(1);
+  return !!row && Date.now() - row.startedAt.getTime() < BUILD_STALE_MS;
+}
+
 
 export async function buildDossier(
   db: Db,
   req: DossierRequest,
   userId: string,
 ): Promise<BuiltDossier> {
-  const key = `${req.make}|${req.model}`.toLowerCase();
-  if (building.has(key)) {
+  // BEFORE spending: does a live dossier already cover this generation?
+  //
+  // This is the guard that actually saves money, and it was missing. The
+  // dossier is auto-created when a brief is born (startBriefHunt), but
+  // /dossiers rendered before that finished still shows "Investigar y
+  // redactar borrador" — and the button only consulted the in-memory
+  // `building` Set. Once the auto-build had finished, a stale page happily
+  // sold a second full research run for a dossier that already existed. That
+  // is how the Yaris got two (live, 2026-07-28), and the user pays for the
+  // page being out of date.
+  if (
+    await isGenerationCovered(db, {
+      make: req.make,
+      model: req.model,
+      generation: req.generation,
+    })
+  ) {
+    throw new Error(
+      `${req.make} ${req.model} ya tiene un dossier vivo de esa generación — ` +
+        "bórralo o desactívalo en /dossiers si quieres rehacerlo",
+    );
+  }
+  if (!(await claimDossierBuild(db, req.make, req.model))) {
     throw new Error(`ya se está investigando ${req.make} ${req.model} — espera a que termine`);
   }
-  building.add(key);
   try {
     const drafted = await draftWithResearch(req);
     // Canonical identity comes from the request, whatever the model echoed.
@@ -244,6 +321,6 @@ export async function buildDossier(
     }
     return await insertDossier(db, dossier, userId, DOSSIER_MODEL);
   } finally {
-    building.delete(key);
+    await releaseDossierBuild(db, req.make, req.model);
   }
 }
