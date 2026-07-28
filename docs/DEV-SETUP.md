@@ -144,6 +144,33 @@ anuncios, digest con suelo de nota + alertas A/B sin duplicados, dossiers
 en la página del lead), tabs por búsqueda, página Actividad, descubrimiento de
 modelos y adopción manual de anuncios con dossier-first. 77 tests verdes.
 
+**Cambio 2026-07-28 (7) — una penalización blanda no protege de nada.** El
+Tucson salió con una foto de la caravana del Tour de l'Ain: un Tucson forrado de
+publicidad amarilla con un ciclista gigante de plástico en el techo, entre
+vallas. El Yaris, un tres cuartos trasero. Y la lección es la misma que ya
+habíamos aprendido con la era y habíamos olvidado aplicar aquí.
+
+Todas las señales de nombre de archivo eran penalizaciones (-90 si no nombra el
+coche, -100 si dice "rear"...), y `sort()[0]` devuelve igualmente al menos malo
+aunque TODOS sean malos. Estar dentro de la categoría correcta demuestra que el
+coche sale en la foto; no demuestra de qué es la foto. Ahora "el nombre nombra
+el modelo" es un filtro DURO y hay un suelo de puntuación: por debajo se
+devuelve nada y que lo intente la siguiente categoría o el siguiente peldaño.
+Sin foto es mejor que con la foto equivocada.
+
+Comprobado: Tucson → `2021_Hyundai_Tucson_Ultimate_T-GDi_MHEV_1.6_Front.jpg`,
+Corolla Cross → `2020_Toyota_Corolla_Cross_-_Front.jpg`.
+
+Y queda dibujada la frontera, ya no por intuición sino por medición: el nombre
+del archivo dice fiablemente QUÉ coche es (marca, modelo, generación,
+carrocería, puertas) y no dice NADA de cómo es la foto (ángulo, encuadre,
+obstrucciones). El Yaris XP90 lo demuestra: no hay artículo de esa generación,
+Wikidata no tiene entidad para "Toyota Yaris XP90", y "Toyota Yaris (XP90)"
+redirige al artículo de familia cuya portada es un Yaris de 2020 que la puerta
+de época rechaza —con razón—. O sea que para ese coche la categoría de Commons
+es la única fuente, y sus fotos de cinco puertas son casi todas traseras sin
+decirlo. Es un hueco de cobertura, no un fallo de ranking.
+
 **Cambio 2026-07-28 (6) — un enum en la salida estructurada NO es un enum.**
 Un análisis de 65 s se perdió entero y el botón volvió a estar disponible sin
 que nadie supiera por qué. Causa: `bodyStyle` se añadió como `z.enum`, pero el

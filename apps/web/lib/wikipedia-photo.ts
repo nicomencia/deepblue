@@ -372,7 +372,16 @@ async function commonsCategoryPhoto(
         url: p.imageinfo?.[0]?.thumburl,
         mime: p.imageinfo?.[0]?.mime ?? "",
       }))
-      .filter((f) => f.url && /^image\/jpe?g$/.test(f.mime) && !NOT_A_CAR_FILE.test(f.name));
+      .filter((f) => f.url && /^image\/jpe?g$/.test(f.mime) && !NOT_A_CAR_FILE.test(f.name))
+      // HARD filter, not a penalty. Being inside the right category proves the
+      // car is in the frame; it proves nothing about what the photo is OF.
+      // Category:Hyundai Tucson (NX4) contains a Tour de l'Ain race caravan —
+      // a liveried Tucson with a giant cyclist statue on the roof — and
+      // Category:Toyota Yaris (XP90) contains a motor-show hall. Neither names
+      // the car, because neither is about the car. Every filename signal
+      // before this was a soft penalty, and a soft penalty cannot protect you
+      // when the whole pool is bad: the least-bad candidate still won.
+      .filter((f) => normalizeVehicleText(f.name).includes(m));
 
     // A filename that names an in-band year is the surest pick; one with no
     // year at all is still inside the right category, so it is acceptable.
@@ -407,7 +416,6 @@ async function commonsCategoryPhoto(
       // in the Yaris category, names no body — so it scored top as "canonical"
       // — and is a photo of a motor show (live, 2026-07-28). Whoever uploads a
       // clean portrait of a car titles it after the car.
-      if (!normalizeVehicleText(name).includes(m)) s -= 90;
       if (MANY_DOORS.test(name)) s += 20;
       else if (FEW_DOORS.test(name)) s -= 20;
       // Uploaders who bother to say "front" shot the car deliberately; the
@@ -417,8 +425,13 @@ async function commonsCategoryPhoto(
       if (IS_FRONT_SHOT.test(name)) s += 60;
       return s;
     };
+    // A floor, because `sort()[0]` returns the least-bad candidate even when
+    // every candidate is bad — which is how a negative score kept winning.
+    // Below it we return nothing and let the next category, then the next
+    // rung, try: no photo beats the wrong photo, the same rule the era gate
+    // has always followed.
     const best = [...pool].sort((a, b) => score(b.name) - score(a.name))[0];
-    if (best?.url) return best.url;
+    if (best?.url && score(best.name) > 0) return best.url;
   }
   return undefined;
 }
