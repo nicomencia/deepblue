@@ -35,22 +35,29 @@ export default async function DiscoveryPage() {
     .where(ne(briefs.status, "archived"));
   const liveBriefNames = new Set(liveBriefs.map((b) => b.name));
 
-  // Research emits a photo for some recommendations and not others — it has 12
-  // searches to spend and prices matter more than pictures, so it drops the
-  // field rather than inventing a URL (asked for it, got 1 of 4 on 2026-07-27).
-  // Same free fallback the other lists use, so a card is never faceless.
+  // ONLY the recommendations still missing a photo.
+  //
+  // Photos are resolved once, at save time, and stored in the report — and the
+  // card below prefers that stored URL. Asking again here for a report that
+  // already has them bought nothing and cost everything: every navigation to
+  // this page ran the full Wikimedia ladder for each recommendation and threw
+  // the answers away, so a first load took 20-39 s and only felt fast once the
+  // in-memory cache was warm (measured 2026-07-28). Legacy reports stored
+  // before save-time resolution still get their free fallback.
   const recPhotos = await resolveModelPhotos(
     db,
     sessions.flatMap((s) =>
-      (s.report?.recommendations ?? []).map((rec) => ({
-        make: rec.make,
-        model: rec.model,
-        generation: rec.generation,
-        // Era gate: the recommendation names the generation being proposed;
-        // a current-generation stock photo would misrepresent it.
-        yearMin: rec.yearMin,
-        yearMax: rec.yearMax,
-      })),
+      (s.report?.recommendations ?? [])
+        .filter((rec) => !normalizeImageUrl(rec.imageUrl))
+        .map((rec) => ({
+          make: rec.make,
+          model: rec.model,
+          generation: rec.generation,
+          // Era gate: the recommendation names the generation being proposed;
+          // a current-generation stock photo would misrepresent it.
+          yearMin: rec.yearMin,
+          yearMax: rec.yearMax,
+        })),
     ),
   );
 

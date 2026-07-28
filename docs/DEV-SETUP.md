@@ -144,6 +144,19 @@ anuncios, digest con suelo de nota + alertas A/B sin duplicados, dossiers
 en la página del lead), tabs por búsqueda, página Actividad, descubrimiento de
 modelos y adopción manual de anuncios con dossier-first. 77 tests verdes.
 
+**Cambio 2026-07-28 (4) — /descubrir deja de resolver fotos que ya tiene.**
+Navegar a la página tardaba 20-39 s en frío y luego parecía instantánea, que es
+la firma de un trabajo caro escondido tras una caché en memoria. Nico lo acotó
+solo: borró las recomendaciones y la página voló — el tiempo escalaba con el
+número de recomendaciones.
+
+`resolveModelPhotos` se llamaba con TODAS las recomendaciones en cada render,
+aunque la tarjeta prefiere la URL ya guardada en el informe. O sea: se corría la
+escalera entera de Wikimedia por recomendación y se tiraba la respuesta. Ahora
+solo se piden las que no tienen foto, que tras la resolución al guardar son
+ninguna: 2,6 s en frío (compilación de dev) y 0,05 s después. Los informes
+antiguos siguen teniendo su respaldo gratis.
+
 **Cambio 2026-07-28 (3) — la carrocería la dice el modelo, la foto la busca el
 código.** El Yaris seguía saliendo SEDÁN, y ninguna heurística de nombre podía
 arreglarlo: Commons archiva cada carrocería de una generación en subcategorías
