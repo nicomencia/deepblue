@@ -253,7 +253,13 @@ const BAD_CATEGORY =
   /competition|concept|racing|rally|motorcycle|taxi|police|interior|engine|wreck|crash|museum|replica/i;
 const NOT_A_CAR_FILE =
   /logo|icon|\bmap\b|flag|emblem|badge|engine|interior|dashboard|wheel|seat|symbol|\.svg$/i;
-const NOT_A_FRONT_SHOT = /rear|back|trasera|posterior|boot|trunk/i;
+/**
+ * Commons is multilingual and so are its filenames: the Yaris rear shot that
+ * beat everything was "Toyota Yaris TS Heck.JPG" — German for rear, which an
+ * English-only pattern reads as a clean portrait (live, 2026-07-28).
+ */
+const NOT_A_FRONT_SHOT =
+  /rear|back\b|trasera|posterior|boot|trunk|heck\b|hinten|arri[eè]re|retro\b|posteriore/i;
 const IS_FRONT_SHOT = /front|delantera|frontal|vorne/i;
 /** Body words Commons filenames actually use, in the languages they use them. */
 const BODY_STYLE =
@@ -342,6 +348,8 @@ async function commonsCategoryPhoto(
     .filter((x) => x.score > -1)
     .sort((a, b) => b.score - a.score);
 
+  let bestOverall: { url: string; score: number } | undefined;
+
   for (const { cat } of ranked.slice(0, 3)) {
     // The chosen category IS the generation, so its start year extends the
     // window: a 2004 photo inside "Suzuki Swift (2004)" is the same car a
@@ -354,13 +362,31 @@ async function commonsCategoryPhoto(
     // away the categories we have not tried yet — that is how the Swift ended
     // up with no photo while its 50-file category sat one rung below.
     let d:
-      | { query?: { pages?: Record<string, { title?: string; imageinfo?: Array<{ thumburl?: string; mime?: string }> }> } }
+      | {
+          query?: {
+            pages?: Record<
+              string,
+              {
+                title?: string;
+                imageinfo?: Array<{ thumburl?: string; mime?: string }>;
+                globalusage?: Array<{ wiki?: string; title?: string }>;
+              }
+            >;
+          };
+        }
       | undefined;
     try {
+      // `globalusage` rides along on the same request: which wikis actually
+      // USE this file. It is the only signal here that encodes a human
+      // judgement about the photo rather than a fact about the car — an
+      // editor put it in an article because it shows the thing well. Every
+      // filename rule can be fooled by a race caravan, a dashboard or a
+      // close-up of a grille; "an editor chose it" cannot.
       d = (await apiJson(
         "https://commons.wikimedia.org/w/api.php?format=json&origin=*&action=query" +
           `&generator=categorymembers&gcmtitle=Category:${encodeURIComponent(cat)}` +
-          "&gcmtype=file&gcmlimit=50&prop=imageinfo&iiprop=url|mime&iiurlwidth=640",
+          "&gcmtype=file&gcmlimit=50&prop=imageinfo|globalusage&iiprop=url|mime&iiurlwidth=640" +
+          "&gulimit=10&gunamespace=0",
       )) as typeof d;
     } catch {
       continue;
@@ -371,6 +397,7 @@ async function commonsCategoryPhoto(
         name: decodeURIComponent(p.title ?? "").replace(/^File:/, ""),
         url: p.imageinfo?.[0]?.thumburl,
         mime: p.imageinfo?.[0]?.mime ?? "",
+        usedInArticles: (p.globalusage ?? []).length,
       }))
       .filter((f) => f.url && /^image\/jpe?g$/.test(f.mime) && !NOT_A_CAR_FILE.test(f.name))
       // HARD filter, not a penalty. Being inside the right category proves the
@@ -404,18 +431,18 @@ async function commonsCategoryPhoto(
       if (fileBody) bodyCount.set(fileBody, (bodyCount.get(fileBody) ?? 0) + 1);
     }
     const wanted = body?.toLowerCase();
-    const score = (name: string): number => {
+    const score = (f: { name: string; usedInArticles: number }): number => {
+      const { name } = f;
       const fileBody = name.match(BODY_STYLE)?.[0].toLowerCase();
       let s: number;
       if (wanted && fileBody) s = fileBody === wanted ? 120 : -200;
       else if (fileBody) s = Math.min(4 * (bodyCount.get(fileBody) ?? 0), 40);
       else s = 50;
-      if (NOT_A_FRONT_SHOT.test(name)) s -= 100;
-      // The filename has to name the CAR. Being in the right category is not
-      // enough: "2008 New York International Auto Show (3050259448).jpg" sits
-      // in the Yaris category, names no body — so it scored top as "canonical"
-      // — and is a photo of a motor show (live, 2026-07-28). Whoever uploads a
-      // clean portrait of a car titles it after the car.
+      // Bigger than any bonus can repay, so a rear shot can never win on
+      // article usage or body match — the score floor then drops it entirely.
+      // A penalty that another signal can outbid is not a rule, it is a
+      // suggestion, and this file has now learned that lesson three times.
+      if (NOT_A_FRONT_SHOT.test(name)) s -= 400;
       if (MANY_DOORS.test(name)) s += 20;
       else if (FEW_DOORS.test(name)) s -= 20;
       // Uploaders who bother to say "front" shot the car deliberately; the
@@ -423,17 +450,33 @@ async function commonsCategoryPhoto(
       // labelled as one. Reward the stated front instead of trying to detect
       // the rear — that test can only ever catch the honest filenames.
       if (IS_FRONT_SHOT.test(name)) s += 60;
+      // Used in an article, by an editor who judged it worth showing. The
+      // strongest signal available and the only one about the PHOTO rather
+      // than the car: a Tour de l'Ain caravan, a dashboard at a motor show and
+      // a close-up of a grille all pass every filename test and none of them
+      // is what an encyclopedia puts next to "Hyundai Tucson".
+      s += Math.min(80 * f.usedInArticles, 160);
       return s;
     };
     // A floor, because `sort()[0]` returns the least-bad candidate even when
     // every candidate is bad — which is how a negative score kept winning.
-    // Below it we return nothing and let the next category, then the next
-    // rung, try: no photo beats the wrong photo, the same rule the era gate
-    // has always followed.
-    const best = [...pool].sort((a, b) => score(b.name) - score(a.name))[0];
-    if (best?.url && score(best.name) > 0) return best.url;
+    // Below it we keep nothing and let the next category, then the next rung,
+    // try: no photo beats the wrong photo, the same rule the era gate has
+    // always followed.
+    const best = [...pool].sort((a, b) => score(b) - score(a))[0];
+    if (best?.url && score(best) > 0) {
+      const s = score(best);
+      if (!bestOverall || s > bestOverall.score) bestOverall = { url: best.url, score: s };
+      // Compare ACROSS categories instead of taking the first that clears the
+      // floor. A generation usually has several: one holds
+      // "...Tucson...1.6_Front.jpg", another a dashboard shot from a motor
+      // show whose filename admits nothing. Returning from whichever ranked
+      // first showed the user an interior (live, 2026-07-28). Only a photo
+      // that states its angle ends the search early.
+      if (IS_FRONT_SHOT.test(best.name)) return best.url;
+    }
   }
-  return undefined;
+  return bestOverall?.url;
 }
 
 /** One search + one claims call: the generation's own Wikidata item, if any. */

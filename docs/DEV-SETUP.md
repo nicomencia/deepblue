@@ -144,6 +144,33 @@ anuncios, digest con suelo de nota + alertas A/B sin duplicados, dossiers
 en la página del lead), tabs por búsqueda, página Actividad, descubrimiento de
 modelos y adopción manual de anuncios con dossier-first. 77 tests verdes.
 
+**Cambio 2026-07-28 (8) — la señal que sí sabe de fotos: que un editor la haya
+usado.** Pregunta de Nico —"¿podemos aprender algo de estas?"— y la respuesta
+resultó ser que sí, tres cosas.
+
+Primera: todas nuestras señales hablaban del COCHE (marca, modelo, generación,
+carrocería, puertas) y ninguna de la FOTO. Por eso pasaron una caravana del Tour
+de l'Ain, un salpicadero en un salón y un primer plano de la parrilla: los tres
+nombran el coche correctamente. La señal que faltaba viaja gratis en la misma
+petición, `prop=globalusage`: qué wikis USAN el archivo. Que un editor lo
+pusiera en un artículo es un juicio humano sobre la foto, y es lo único aquí
+que no se puede engañar con un nombre de archivo.
+
+Segunda: se compara entre categorías, no se devuelve la primera que valga. Una
+generación tiene varias y el Tucson tenía un `..._1.6_Front.jpg` en una mientras
+devolvíamos un salpicadero de otra.
+
+Tercera, y van tres veces: **una penalización que otra señal puede superar no es
+una regla, es una sugerencia**. El bonus por uso en artículos (+160) se comía el
+-100 de "es una trasera" y ganaba "Toyota Yaris TS Heck.JPG" — *Heck* es
+"trasera" en alemán, que nuestro patrón en inglés leía como foto limpia. Ahora
+la trasera resta -400, más de lo que cualquier bonus puede devolver, y el suelo
+la descarta. Commons es multilingüe: el patrón cubre heck, hinten, arrière,
+posteriore, trasera.
+
+Resultado verificado mirando las imágenes, no los nombres: Yaris XP90 → un tres
+cuartos frontal limpio por fin, Tucson → frontal, Mazda2 → frontal.
+
 **Cambio 2026-07-28 (7) — una penalización blanda no protege de nada.** El
 Tucson salió con una foto de la caravana del Tour de l'Ain: un Tucson forrado de
 publicidad amarilla con un ciclista gigante de plástico en el techo, entre
