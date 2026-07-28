@@ -144,6 +144,18 @@ anuncios, digest con suelo de nota + alertas A/B sin duplicados, dossiers
 en la página del lead), tabs por búsqueda, página Actividad, descubrimiento de
 modelos y adopción manual de anuncios con dossier-first. 77 tests verdes.
 
+**Cambio 2026-07-28 (9) — "Yaris Cross" contiene "Yaris".** Al endurecer los
+filtros, la categoría del XP90 dejó de dar nada y se cayó a la categoría de
+familia, que contiene el Yaris Cross: `Toyota_Yaris_Cross_Hybrid_(XP210).jpg`
+nombra "Yaris", no lleva año para que la puerta de época lo pare, y no es ni un
+XP90 ni un Yaris. Peor que lo que venía a arreglar.
+
+El código de generación estaba en el propio nombre. `namesAnotherGeneration()`
+compara solo dentro de la MISMA familia de código: XP210 contra XP90 es otra
+generación y se descarta; NCP91 o SCP90 no comparten prefijo con XP90, así que
+no se juzgan —son los códigos de chasis del propio XP90 y descartarlos habría
+tirado los mejores archivos que hay—.
+
 **Cambio 2026-07-28 (8) — la señal que sí sabe de fotos: que un editor la haya
 usado.** Pregunta de Nico —"¿podemos aprender algo de estas?"— y la respuesta
 resultó ser que sí, tres cosas.

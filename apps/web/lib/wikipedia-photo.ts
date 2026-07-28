@@ -272,6 +272,20 @@ const BODY_STYLE =
  * a clean 5-door portrait (live, 2026-07-28). With both matching, doors decide,
  * and here the five-door is what Spain actually bought.
  */
+/**
+ * Same code family, different number → a different generation. "XP210" against
+ * an "XP90" hunt is the current Yaris Cross; "NCP91" shares no prefix with
+ * XP90, so it is not compared at all and survives as the chassis code it is.
+ */
+export function namesAnotherGeneration(name: string, genCode?: string): boolean {
+  if (!genCode) return false;
+  const mine = genCode.match(/^([A-Za-z]{1,4})(\d{1,4})$/);
+  if (!mine) return false;
+  const [, prefix, digits] = mine;
+  const others = name.matchAll(new RegExp(`\\b${prefix}(\\d{1,4})\\b`, "gi"));
+  return [...others].some((m) => m[1] !== digits);
+}
+
 const MANY_DOORS = /\b[45][\s-]?door|\b[45]p\b/i;
 const FEW_DOORS = /\b[23][\s-]?door|\b[23]p\b/i;
 
@@ -408,7 +422,14 @@ async function commonsCategoryPhoto(
       // the car, because neither is about the car. Every filename signal
       // before this was a soft penalty, and a soft penalty cannot protect you
       // when the whole pool is bad: the least-bad candidate still won.
-      .filter((f) => normalizeVehicleText(f.name).includes(m));
+      .filter((f) => normalizeVehicleText(f.name).includes(m))
+      // A filename naming a DIFFERENT generation of the same code family is a
+      // different car: "Toyota Yaris Cross Hybrid (XP210)" contains "Yaris",
+      // carries no year for the era gate to catch, and is neither an XP90 nor
+      // even a Yaris (live, 2026-07-28). Compared only within the same letter
+      // prefix, so the XP90's own chassis codes — NCP91, SCP90 — are left
+      // alone rather than judged against a code they never shared.
+      .filter((f) => !namesAnotherGeneration(f.name, genCode));
 
     // A filename that names an in-band year is the surest pick; one with no
     // year at all is still inside the right category, so it is acceptable.

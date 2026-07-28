@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { photoMatchesEra, pickGenerationCode } from "./wikipedia-photo";
+import { namesAnotherGeneration, photoMatchesEra, pickGenerationCode } from "./wikipedia-photo";
 
 /**
  * Every URL here is one the system actually served or fetched on 2026-07-27 —
@@ -91,5 +91,30 @@ describe("pickGenerationCode", () => {
   it("returns undefined when there is nothing usable", () => {
     expect(pickGenerationCode(undefined, "Yaris")).toBeUndefined();
     expect(pickGenerationCode("2006-2011", "Yaris")).toBeUndefined();
+  });
+});
+
+describe("namesAnotherGeneration", () => {
+  it("rejects the same code family with a different number", () => {
+    // The live failure: a Yaris Cross (XP210) served for an XP90 hunt. It
+    // names "Yaris", carries no year, and is not even the same model.
+    expect(namesAnotherGeneration("Toyota Yaris Cross Hybrid (XP210) 1X7A1846.jpg", "XP90")).toBe(true);
+    expect(namesAnotherGeneration("2020 Toyota Yaris (XP130) front.jpg", "XP90")).toBe(true);
+  });
+
+  it("leaves the hunted generation alone", () => {
+    expect(namesAnotherGeneration("2007 Toyota Yaris (XP90) hatchback.jpg", "XP90")).toBe(false);
+  });
+
+  it("does not judge codes from another family", () => {
+    // NCP91 and SCP90 are XP90 chassis codes — a different prefix entirely,
+    // so comparing them against XP90 would throw away the best files we have.
+    expect(namesAnotherGeneration("2007 Toyota Yaris 1.5 S NCP91R.jpg", "XP90")).toBe(false);
+    expect(namesAnotherGeneration("Toyota Yaris TS.JPG", "XP90")).toBe(false);
+  });
+
+  it("is inert without a generation to compare against", () => {
+    expect(namesAnotherGeneration("anything (XP210).jpg", undefined)).toBe(false);
+    expect(namesAnotherGeneration("anything.jpg", "GE")).toBe(false);
   });
 });
