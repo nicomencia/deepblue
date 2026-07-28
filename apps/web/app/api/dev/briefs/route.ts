@@ -22,10 +22,12 @@ export async function GET(): Promise<Response> {
 
 const patchSchema = z.object({
   id: z.string(),
-  location: z.object({ lat: z.number(), lon: z.number(), radiusKm: z.number() }),
+  // `null` clears the area — the brief then covers all of Spain. Distinct from
+  // omitting the key, which leaves the existing area untouched.
+  location: z.object({ lat: z.number(), lon: z.number(), radiusKm: z.number() }).nullable(),
 });
 
-/** Dev-only: fix a brief's search center — there is no brief-edit UI yet. */
+/** Dev-only: retarget a brief's search area without retyping the whole form. */
 export async function PATCH(req: Request): Promise<Response> {
   if (process.env.NODE_ENV === "production") return new Response(null, { status: 404 });
   const parsed = patchSchema.safeParse(await req.json());
@@ -35,7 +37,9 @@ export async function PATCH(req: Request): Promise<Response> {
   const [brief] = await db.select().from(briefs).where(eq(briefs.id, parsed.data.id)).limit(1);
   if (!brief) return Response.json({ error: "brief not found" }, { status: 404 });
 
-  const criteria = { ...brief.criteria, location: parsed.data.location };
+  const criteria = { ...brief.criteria };
+  if (parsed.data.location) criteria.location = parsed.data.location;
+  else delete criteria.location;
   await db.update(briefs).set({ criteria }).where(eq(briefs.id, brief.id));
   return Response.json({ ok: true, id: brief.id, location: parsed.data.location });
 }

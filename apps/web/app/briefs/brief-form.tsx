@@ -95,7 +95,14 @@ export function BriefForm({
       </fieldset>
       <label style={lbl}>
         Radio de búsqueda (km)
-        <input name="radiusKm" type="number" placeholder="100" defaultValue={c?.location?.radiusKm} style={inp} />
+        <input
+          name="radiusKm"
+          type="number"
+          placeholder="toda España"
+          defaultValue={c?.location?.radiusKm}
+          style={inp}
+        />
+        <small style={hint}>Vacío = toda España. Ponle un radio solo si no quieres viajar.</small>
       </label>
       <label style={lbl}>
         Latitud / Longitud
@@ -103,6 +110,7 @@ export function BriefForm({
           <input name="lat" placeholder="40.4168" defaultValue={c?.location?.lat} style={inp} />
           <input name="lon" placeholder="-3.7038" defaultValue={c?.location?.lon} style={inp} />
         </span>
+        <small style={hint}>Solo cuentan si hay radio.</small>
       </label>
       <label style={{ ...lbl, gridColumn: "1 / -1" }}>
         Innegociables (una por línea)
@@ -157,6 +165,7 @@ const lbl: React.CSSProperties = {
   fontSize: "0.85rem",
   color: "var(--ink-muted)",
 };
+const hint: React.CSSProperties = { fontSize: "0.75rem", opacity: 0.75 };
 const inp: React.CSSProperties = {
   padding: "0.4rem 0.6rem",
   borderRadius: 6,

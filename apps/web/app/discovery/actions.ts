@@ -14,6 +14,7 @@ import {
   recommendationToBrief,
 } from "../../lib/discovery";
 import { isLlmConfigured } from "../../lib/llm";
+import { searchArea } from "../../lib/search-area";
 
 // Single-user phase: everything belongs to the dev user (Firebase Auth later).
 async function resolveUserId(): Promise<string> {
@@ -33,31 +34,6 @@ const num = (v: FormDataEntryValue | null): number | undefined => {
   const n = Number(String(v ?? "").replace(/[.\s]/g, ""));
   return Number.isFinite(n) && n > 0 ? n : undefined;
 };
-
-/** Madrid, only as the origin for a radius the user asked for. */
-const SPAIN_CENTER = { lat: 40.4168, lon: -3.7038 };
-
-/**
- * No radius means all of Spain — the location is left off entirely, so the
- * evaluator runs no distance check at all. Coordinates alone (without a
- * radius) mean nothing and are ignored: a center with no radius cannot filter.
- */
-function searchArea(
-  formData: FormData,
-): { lat: number; lon: number; radiusKm: number } | undefined {
-  const radiusKm = num(formData.get("radiusKm"));
-  if (!radiusKm) return undefined;
-  const coord = (name: string): number | undefined => {
-    const raw = String(formData.get(name) ?? "").trim().replace(",", ".");
-    const n = Number(raw);
-    return raw !== "" && Number.isFinite(n) ? n : undefined;
-  };
-  return {
-    lat: coord("lat") ?? SPAIN_CENTER.lat,
-    lon: coord("lon") ?? SPAIN_CENTER.lon,
-    radiusKm,
-  };
-}
 
 const lines = (v: FormDataEntryValue | null): string[] =>
   String(v ?? "")

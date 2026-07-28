@@ -10,6 +10,7 @@ import { deleteBriefCascade } from "../../lib/brief-admin";
 import { startBriefHunt } from "../../lib/brief-hunt";
 import { getDb } from "../../lib/db";
 import { reevaluateBriefLeads } from "../../lib/reevaluate";
+import { searchArea } from "../../lib/search-area";
 
 const num = (v: FormDataEntryValue | null): number | undefined => {
   const n = Number(String(v ?? "").replace(/[.\s]/g, ""));
@@ -56,6 +57,7 @@ function parseBriefForm(formData: FormData): {
   // Generation is advisory (dossier-first machinery + card display); the year
   // bounds do the actual filtering — sweep query and evaluation both enforce.
   const generation = String(formData.get("generation") ?? "").trim() || undefined;
+  const area = searchArea(formData);
   const criteria: BriefCriteria = {
     vehicles: [{ make, model, ...(generation ? { generations: [generation] } : {}) }],
     yearMin: num(formData.get("yearMin")),
@@ -64,11 +66,10 @@ function parseBriefForm(formData: FormData): {
     targetPriceEur: num(formData.get("targetPriceEur")),
     fuel: fuelSchema.catch([]).parse(formData.getAll("fuel").map(String)) || undefined,
     gearbox: gearboxSchema.catch([]).parse(formData.getAll("gearbox").map(String)) || undefined,
-    location: {
-      lat: coord(formData.get("lat")) ?? 40.4168,
-      lon: coord(formData.get("lon")) ?? -3.7038,
-      radiusKm: num(formData.get("radiusKm")) ?? 100,
-    },
+    // Empty radius → no location at all → all of Spain (see searchArea). It
+    // used to default to Madrid/100 km, which silently shrank every brief the
+    // user left blank down to one city.
+    ...(area ? { location: area } : {}),
     riskTolerance: riskSchema.parse(String(formData.get("riskTolerance") ?? "medium")),
     sellerPreference: sellerPrefSchema.parse(String(formData.get("sellerPreference") ?? "any")),
     notes: lines(formData.get("notes")),

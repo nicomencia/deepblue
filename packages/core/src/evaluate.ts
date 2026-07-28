@@ -118,15 +118,45 @@ export function normalizeVehicleText(s: string): string {
     .replace(/[^a-z0-9]/g, "");
 }
 
+/**
+ * The same text as whole words, each normalized on its own — "GT-Line" gives
+ * ["gt","line"]. Needed because the fused form above cannot tell a word from a
+ * fragment: "gr" lives inside "gris", so a grey Yaris would read as a GR Yaris.
+ */
+export function vehicleTokens(s: string): string[] {
+  // Split the RAW text, then normalize each piece: splitting after the NFD pass
+  // would let the accent in "león" act as a separator and yield ["leo","n"].
+  return s.split(/[\s\-_/.,()]+/).map(normalizeVehicleText).filter(Boolean);
+}
+
+/**
+ * A multi-word model name matches in ANY order, and `version` counts as much as
+ * the title.
+ *
+ * Regression: a 31.000 € GR Yaris, 52 km from the search centre and inside every
+ * limit, was killed as `different_vehicle` because Wallapop titled it "Toyota
+ * Yaris GR" — the fused form gives "yarisgr", which does not contain "gryaris".
+ * Its `version` field read "1.6 261 GR Yaris RZ 5p S/S" and was not even
+ * consulted (2026-07-28).
+ *
+ * Word order is not information: nobody selling a GR Yaris means a different car
+ * by writing "Yaris GR". Matching every word therefore admits trim names built
+ * from the same words — a "Yaris 1.5 Hybrid GR Sport" now reaches the shortlist.
+ * That is the trade this module already declares above: visible and one click to
+ * dismiss, versus invisible and permanent.
+ */
 function matchesVehicle(listing: NormalizedListing, criteria: BriefCriteria): boolean {
-  const haystack = normalizeVehicleText(
-    `${listing.make ?? ""} ${listing.model ?? ""} ${listing.title}`,
-  );
-  return criteria.vehicles.some(
-    (v) =>
-      haystack.includes(normalizeVehicleText(v.make)) &&
-      haystack.includes(normalizeVehicleText(v.model)),
-  );
+  const text = `${listing.make ?? ""} ${listing.model ?? ""} ${listing.version ?? ""} ${listing.title}`;
+  const haystack = normalizeVehicleText(text);
+  const words = new Set(vehicleTokens(text));
+  return criteria.vehicles.some((v) => {
+    if (!haystack.includes(normalizeVehicleText(v.make))) return false;
+    if (haystack.includes(normalizeVehicleText(v.model))) return true;
+    // Single-word models are already covered by the fused check; only a
+    // multi-word name can have been scrambled.
+    const tokens = vehicleTokens(v.model);
+    return tokens.length > 1 && tokens.every((t) => words.has(t));
+  });
 }
 
 export function evaluateListing(

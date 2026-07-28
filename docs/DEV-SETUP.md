@@ -144,6 +144,46 @@ anuncios, digest con suelo de nota + alertas A/B sin duplicados, dossiers
 en la página del lead), tabs por búsqueda, página Actividad, descubrimiento de
 modelos y adopción manual de anuncios con dossier-first. 77 tests verdes.
 
+**Cambio 2026-07-28 (13) — "¿por qué 0 GR Yaris?": el orden de las palabras
+mataba el coche.** La búsqueda encontró 14 anuncios y dejó vivos 0. Seis eran GR
+Yaris de verdad. Tres murieron por distancia (Elche, Pontevedra, Cádiz) y eran
+muertes correctas con el brief de entonces. Los otros murieron por
+`different_vehicle`, y uno de ellos —31.000 €, 98.119 km, a 52 km del centro de
+búsqueda, dentro de TODOS los límites— tenía que haber sido un lead.
+
+Causa 1, `matchesVehicle`: colapsaba el texto a alfanuméricos y pedía subcadena
+CONTIGUA. "GR Yaris" da `gryaris`; Wallapop lo titula "Toyota Yaris GR", que da
+`yarisgr`. No contiene. Muerto. Y `version` —que ponía literalmente "1.6 261 GR
+Yaris RZ 5p S/S"— ni se miraba. Lo irónico: el comentario que hay justo encima
+de esa función ya prometía que un coche perdido es "invisible y, como los leads
+muertos no resucitan, permanente". Eso es exactamente lo que pasó.
+
+Ahora un modelo de varias palabras casa en CUALQUIER orden y `version` cuenta
+igual que el título. El orden no es información: nadie que venda un GR Yaris
+quiere decir otro coche escribiendo "Yaris GR". Pero las palabras tienen que ser
+PALABRAS, no fragmentos: "gr" vive dentro de "gris", y un Yaris gris no es un GR
+Yaris — de ahí `vehicleTokens`, que parte el texto crudo y normaliza cada trozo
+por separado (partir después del NFD haría que la tilde de "león" separase, y
+saldría `["leo","n"]`). El precio: un "Yaris 1.5 Hybrid GR Sport" ahora llega a
+la shortlist. Es el trade que este módulo ya declaraba — visible y a un clic,
+frente a invisible y permanente.
+
+Causa 2, el radio por defecto: el formulario de búsquedas rellenaba Madrid y 100
+km cuando lo dejabas vacío, encogiendo a una ciudad cualquier brief sin tocar. Y
+Wallapop IGNORA `distance` (RECON.md): devuelve resultados de toda España de
+todos modos, así que el radio solo tira coches que el sweep ya pagó por traer.
+Para un mercado nacional y fino —seis GR Yaris en todo el país— un círculo
+alrededor de una ciudad donde no vives es cómo un brief no encuentra nada.
+Ahora vacío = toda España, la misma semántica que ya tenía descubrimiento
+(`lib/search-area.ts`, compartido por los dos formularios).
+
+NO era el precio, aunque 30.000 € parezca el sospechoso: con el margen de
+negociación de 1,15 el techo real son 34.500 €, y los seis pasaban.
+
+Los 14 leads muertos del brief se borraron por `/api/dev/lead-delete` (con
+motivo, como exige la ruta) para que el sweep los volviera a juzgar: no es
+resucitar —eso sigue sin existir— es quitar filas que produjo un bug.
+
 **Cambio 2026-07-28 (12) — el botón que te cobra por lo que ya se está
 haciendo.** Nico, exacto: "si el dossier se crea solo, ¿por qué el botón está
 listo para investigar? Cliqué en los dos pensando que no se autocreaba". Eso no

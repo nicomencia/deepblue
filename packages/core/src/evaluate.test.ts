@@ -188,6 +188,53 @@ describe("hard filters", () => {
     }
   });
 
+  // Regression: a 31.000 € GR Yaris inside every limit, 52 km from the search
+  // centre, died as `different_vehicle` because Wallapop titled it "Yaris GR"
+  // — and dead leads stay dead, so it was gone for good (2026-07-28).
+  const grCriteria = criteria({ vehicles: [{ make: "Toyota", model: "GR Yaris" }], yearMin: 2018 });
+  const grLimits: HardLimits = { maxPriceEur: 35_000, nonNegotiables: [] };
+
+  it("matches a multi-word model whatever order the seller wrote it in", () => {
+    const spellings = ["Toyota Yaris GR 2021 Nacional", "Toyota GR Yaris 2021", "Toyota gr yaris"];
+    for (const title of spellings) {
+      const r = evaluateListing(
+        listing({ title, make: "Toyota", model: "Yaris GR", year: 2021, km: 98_119, priceEur: 31_000 }),
+        grCriteria,
+        grLimits,
+      );
+      expect(r.outcome, title).not.toBe("dead");
+    }
+  });
+
+  it("reads the model out of the version field too", () => {
+    const r = evaluateListing(
+      listing({
+        title: "Toyota Yaris 2021",
+        make: "Toyota",
+        model: "Yaris",
+        version: "1.6 261 GR Yaris RZ 5p S/S",
+        year: 2021,
+        km: 70_000,
+        priceEur: 31_000,
+      }),
+      grCriteria,
+      grLimits,
+    );
+    expect(r.outcome).not.toBe("dead");
+  });
+
+  // The words must be WORDS: "gr" hides inside "gris", and a grey Yaris is not
+  // a GR Yaris. Without this the widened match would swallow half the corpus.
+  it("does not read a colour as a model name", () => {
+    const gr = criteria({ vehicles: [{ make: "Toyota", model: "GR Yaris" }], yearMin: 2005 });
+    const r = evaluateListing(
+      listing({ title: "Toyota Yaris gris 2015", make: "Toyota", model: "Yaris", year: 2015 }),
+      gr,
+      hardLimits,
+    );
+    expect(r.deadReason).toBe("different_vehicle");
+  });
+
   it("ignores accents, so a León brief matches a Leon ad", () => {
     const leon = criteria({ vehicles: [{ make: "Seat", model: "León" }] });
     const r = evaluateListing(

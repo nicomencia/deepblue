@@ -10,6 +10,8 @@ import { getDb } from "../../../../lib/db";
  * ?state=<leadState> lists another state instead — `dead` with its reason is
  * how you answer "why did that one drop out?" without opening a DB shell
  * (PGlite is single-writer, so there is no second connection to open).
+ * ?briefId=<id> narrows to one brief; without it the list is global, which
+ * once had me reading another brief's leads as if they were this one's.
  */
 export async function GET(req: Request): Promise<Response> {
   if (process.env.NODE_ENV === "production") return new Response(null, { status: 404 });
@@ -21,6 +23,8 @@ export async function GET(req: Request): Promise<Response> {
   const id = url.searchParams.get("id");
   const state = (url.searchParams.get("state") ?? "shortlisted") as LeadState;
 
+  const briefId = url.searchParams.get("briefId");
+
   const rows = await db
     .select({ lead: leads, listing: listings })
     .from(leads)
@@ -31,9 +35,11 @@ export async function GET(req: Request): Promise<Response> {
 
   const result = rows
     .filter((r) => !platform || r.listing.platform === platform)
+    .filter((r) => !briefId || r.lead.briefId === briefId)
     .slice(0, limit)
     .map(({ lead, listing }) => ({
       id: lead.id,
+      briefId: lead.briefId,
       platform: listing.platform,
       title: listing.title,
       make: listing.make,
