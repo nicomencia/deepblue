@@ -307,9 +307,13 @@ export default async function DiscoveryPage() {
                       />
                     ) : null;
                   })()}
+                  {/* Why it fits leads: it is the only section that answers
+                      the question this page exists for — which of these do I
+                      pick. The other three are handoffs to the búsqueda and
+                      the dossier, and reading them first buries the choice. */}
+                  <List label="Por qué encaja" items={rec.whyFits} />
                   <List label="Buscar" items={rec.versions} />
                   <List label="Evitar" items={rec.avoidVersions} />
-                  <List label="Por qué encaja" items={rec.whyFits} />
                   <List label="Vigilar" items={rec.watchouts} />
                   {liveBriefNames.has(briefNameForRecommendation(rec)) ? (
                     <p style={{ margin: "0.5rem 0 0", fontSize: "0.85rem", color: "var(--grade-a)", fontWeight: 600 }}>

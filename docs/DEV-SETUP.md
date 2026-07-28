@@ -144,6 +144,28 @@ anuncios, digest con suelo de nota + alertas A/B sin duplicados, dossiers
 en la página del lead), tabs por búsqueda, página Actividad, descubrimiento de
 modelos y adopción manual de anuncios con dossier-first. 77 tests verdes.
 
+**Cambio 2026-07-28 (5) — titular más largo, "Por qué encaja" primero, y el
+límite de las heurísticas de nombre.** El titular pasa a pedirse en 3-4 frases:
+es lo primero que se lee y enmarca las tarjetas, y una sola frase enumerando los
+coches no aporta nada que no esté ya debajo. En la tarjeta, "Por qué encaja"
+sube al primer puesto: es la única sección que responde a para qué existe la
+página —cuál elijo— y leer antes "Buscar"/"Evitar" entierra la comparación.
+
+De fotos, dos arreglos reales: el nombre del archivo tiene que nombrar el COCHE
+(una foto titulada "2008 New York International Auto Show" estaba en la
+categoría del Yaris, no nombraba carrocería, y por eso puntuaba como "canónica"),
+y el veto por carrocería solo se aplica si existe una hermana que SÍ coincide
+—el modelo llamó "MPV" a un Jazz que Commons archiva como hatchback, y vetar
+sobre ese desacuerdo habría tirado la única categoría correcta—.
+
+Y una conclusión honesta: rankear por nombre de archivo ha tocado techo. Cuatro
+rondas, cada una arregla una clase de error y destapa la siguiente —sedán,
+feria, expositor promocional de 3 puertas, y ahora un tres cuartos trasero que
+el nombre no delata—. El coche y la carrocería ya salen bien; el ÁNGULO no es
+deducible del nombre. El siguiente paso, si molesta, no es otra regex: es
+preferir imágenes curadas de una en una (portada del artículo de Wikipedia,
+P18 de Wikidata) antes que elegir entre 50 archivos de una categoría.
+
 **Cambio 2026-07-28 (4) — /descubrir deja de resolver fotos que ya tiene.**
 Navegar a la página tardaba 20-39 s en frío y luego parecía instantánea, que es
 la firma de un trabajo caro escondido tras una caché en memoria. Nico lo acotó

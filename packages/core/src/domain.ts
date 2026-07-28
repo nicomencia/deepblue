@@ -616,7 +616,11 @@ export type ModelRecommendation = z.infer<typeof modelRecommendationSchema>;
 
 /** Validated at the LLM trust boundary, whichever lane produced it. */
 export const discoveryReportSchema = z.object({
-  /** 2–3 frases: la lectura del perfil y el criterio del corte. */
+  /**
+   * The report's opening read, and the one place prose is welcome: it frames
+   * every card under it. A single long sentence is not enough — it names the
+   * shortlist without explaining the reasoning that produced it.
+   */
   headline: z.string(),
   recommendations: z.array(modelRecommendationSchema).min(1).max(5),
   /** Models a user like this would expect to see, and why they lost. */

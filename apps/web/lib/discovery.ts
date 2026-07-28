@@ -91,14 +91,21 @@ Reglas estrictas:
   Nada de "GD (2006-2008) y GE (2009-2015)" — eso no es una recomendación.
 - "bodyStyle": la carrocería con la que ESE coche se vendió en España, en el
   vocabulario de la lista (hatchback, sedan, estate, coupe, convertible,
-  roadster, MPV, SUV, pickup, van). Un Yaris o un Corsa aquí son "hatchback"
-  aunque en otros mercados hubiera berlina; un MX-5, "convertible". Sirve para
-  elegir la foto correcta, así que en la duda elige la versión mayoritaria en
-  el mercado español.
+  roadster, MPV, SUV, pickup, van). "hatchback" = 3 o 5 puertas con portón
+  trasero, e incluye los utilitarios altos tipo Jazz o Meriva: reserva "MPV"
+  para monovolúmenes de verdad (Zafira, Picasso). Un Yaris o un Corsa son
+  "hatchback" aunque otros mercados tuvieran berlina; un MX-5, "convertible".
+  Sirve para elegir la foto correcta: en la duda, la versión mayoritaria aquí.
 - Esta pantalla sirve para UNA cosa: que el comprador elija entre los modelos
   que le propones. Todo lo que no le ayude a comparar sobra aquí, porque el
   programa ya lo trabaja en el paso siguiente (la búsqueda hereda "versions" y
   el dossier profundiza en "watchouts" unidad por unidad).
+- "headline": 3-4 frases, y aquí SÍ te extiendes — es lo primero que lee y
+  enmarca todo lo demás. Cuenta cómo has leído su perfil, qué criterio has
+  usado para cortar (por qué gasolina y no diésel, por qué ese rango de años,
+  qué le compra de verdad su presupuesto hoy) y qué tienen en común los modelos
+  que le propones. Una sola frase enumerando los coches NO vale: eso ya lo ve
+  en las tarjetas.
 - Por eso el peso va en "whyFits": ${span("whyFits")} líneas, y son las únicas que pueden
   extenderse. Cada una ata el modelo a algo que el comprador ha dicho en su
   perfil (uso, presupuesto, prioridades, etiqueta) y explica por qué gana a las

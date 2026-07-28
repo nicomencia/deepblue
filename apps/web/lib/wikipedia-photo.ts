@@ -254,9 +254,20 @@ const BAD_CATEGORY =
 const NOT_A_CAR_FILE =
   /logo|icon|\bmap\b|flag|emblem|badge|engine|interior|dashboard|wheel|seat|symbol|\.svg$/i;
 const NOT_A_FRONT_SHOT = /rear|back|trasera|posterior|boot|trunk/i;
+const IS_FRONT_SHOT = /front|delantera|frontal|vorne/i;
 /** Body words Commons filenames actually use, in the languages they use them. */
 const BODY_STYLE =
-  /hatchback|liftback|sedan|saloon|berlina|limousine|estate|wagon|touring|kombi|coupe|coupé|cabriolet|convertible|roadster|targa|pickup|van|minivan|mpv|suv/i;
+  /hatchback|\bhatch\b|liftback|sedan|saloon|berlina|limousine|estate|wagon|touring|kombi|coupe|coupé|cabriolet|convertible|roadster|targa|pickup|van|minivan|mpv|suv/i;
+/**
+ * Door count as a tie-breaker between photos of the right car.
+ *
+ * "hatchback" and "4-Door Hatch" are the same body, but only the first matched
+ * BODY_STYLE — so a promotional 3-door on a stand, sign board across it, beat
+ * a clean 5-door portrait (live, 2026-07-28). With both matching, doors decide,
+ * and here the five-door is what Spain actually bought.
+ */
+const MANY_DOORS = /\b[45][\s-]?door|\b[45]p\b/i;
+const FEW_DOORS = /\b[23][\s-]?door|\b[23]p\b/i;
 
 async function commonsCategoryPhoto(
   make: string,
@@ -287,6 +298,14 @@ async function commonsCategoryPhoto(
   const inBand = (y: number) =>
     y >= (band?.yearMin ?? -Infinity) - SLACK_BEFORE && y <= (band?.yearMax ?? Infinity) + SLACK_AFTER;
 
+  // Does a sibling actually match the body we want? Only then is dropping the
+  // others safe. The model's body vocabulary and Commons' do not always agree
+  // — it called a Jazz GE an "MPV" while Commons files it as a hatchback — and
+  // vetoing on a disagreement would throw away the only correct category.
+  const wantedBody = body?.toLowerCase();
+  const hasMatchingBody =
+    !!wantedBody && [...seen].some((c) => c.match(BODY_STYLE)?.[0].toLowerCase() === wantedBody);
+
   const ranked = [...seen]
     .map((cat) => {
       const n = normalizeVehicleText(cat);
@@ -299,12 +318,9 @@ async function commonsCategoryPhoto(
       // naming a DIFFERENT body is disqualified outright, not merely
       // outranked: that is the Yaris sedan, and it is the wrong car.
       const catBody = cat.match(BODY_STYLE)?.[0].toLowerCase();
-      if (body) {
-        const wanted = body.toLowerCase();
-        if (catBody && catBody !== wanted) return { cat, score: -1 };
-      }
+      if (hasMatchingBody && catBody && catBody !== wantedBody) return { cat, score: -1 };
       let score = 0;
-      if (body && catBody === body.toLowerCase()) score += 150;
+      if (wantedBody && catBody === wantedBody) score += 150;
       if (g && n.includes(g)) score += 100;
       const ys = yearsOf(cat);
       if (ys.length) {
@@ -386,6 +402,19 @@ async function commonsCategoryPhoto(
       else if (fileBody) s = Math.min(4 * (bodyCount.get(fileBody) ?? 0), 40);
       else s = 50;
       if (NOT_A_FRONT_SHOT.test(name)) s -= 100;
+      // The filename has to name the CAR. Being in the right category is not
+      // enough: "2008 New York International Auto Show (3050259448).jpg" sits
+      // in the Yaris category, names no body — so it scored top as "canonical"
+      // — and is a photo of a motor show (live, 2026-07-28). Whoever uploads a
+      // clean portrait of a car titles it after the car.
+      if (!normalizeVehicleText(name).includes(m)) s -= 90;
+      if (MANY_DOORS.test(name)) s += 20;
+      else if (FEW_DOORS.test(name)) s -= 20;
+      // Uploaders who bother to say "front" shot the car deliberately; the
+      // rest is a lottery on angle, because a rear three-quarter is rarely
+      // labelled as one. Reward the stated front instead of trying to detect
+      // the rear — that test can only ever catch the honest filenames.
+      if (IS_FRONT_SHOT.test(name)) s += 60;
       return s;
     };
     const best = [...pool].sort((a, b) => score(b.name) - score(a.name))[0];
