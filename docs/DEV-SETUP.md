@@ -144,6 +144,39 @@ anuncios, digest con suelo de nota + alertas A/B sin duplicados, dossiers
 en la página del lead), tabs por búsqueda, página Actividad, descubrimiento de
 modelos y adopción manual de anuncios con dossier-first. 77 tests verdes.
 
+**Cambio 2026-07-28 — la foto que da el modelo se comprueba, no se cree.**
+Las cinco recomendaciones de la primera tirada con Opus 5 salieron con foto rota.
+No faltaban: estaban guardadas, bien formadas, con nombre de archivo de Commons
+plausible —marca real, generación real, convención de nombres real— y las cinco
+daban 404. El modelo las había deducido.
+
+El agujero estaba en `withPhotos()`: solo rellenaba las recomendaciones SIN
+`imageUrl`. Una URL con forma correcta pasaba `normalizeImageUrl` y se guardaba
+sin preguntar nunca si existía, así que nuestro resolutor no llegaba a correr
+justo en las que más falta hacía. Ahora se comprueba con un HEAD: si no
+responde una imagen, se tira y se resuelve por la escalera de siempre.
+
+Solo condena un "no" definitivo. Un 429 o un 5xx significan que Wikimedia está
+saturada, no que el archivo no exista — tratarlos como invento borraría fotos
+buenas precisamente durante un límite de peticiones, que es cuando la escalera
+tampoco puede sustituirlas. Y `backfillDiscoveryPhotos` cuenta URLs que
+CAMBIAN, no cuántas hay: cinco inventadas sustituidas por cinco reales dejan el
+recuento igual, y comparar recuentos habría dicho "nada que hacer".
+
+Aprendido a base de provocarlo: verificar cinco URLs a mano, más cinco HEAD,
+más dos reintentos, más una prueba de seis casos, todo contra el mismo host en
+minutos, se gana un 429 para todo lo demás. La escalera ya trataba eso como
+transitorio y no lo cachea como ausencia, así que se recupera sola — pero la
+lección es que comprobar tiene coste y hay que espaciarlo.
+
+**Cambio 2026-07-28 — menos texto por recomendación, y en el sitio que decide.**
+La pantalla de descubrimiento sirve para UNA cosa: elegir entre los modelos
+propuestos. `whyFits` es el único campo que responde a eso, así que mantiene sus
+4-5 líneas. Los otros tres son traspasos —la búsqueda hereda `versions`, el
+dossier profundiza en `watchouts` unidad por unidad— y ahora van cortos: 2, 1-2
+y 3 líneas, de apunte y no de explicación. Un 25% menos de bulto, quitado de
+donde no ayudaba a comparar.
+
 **Cambio 2026-07-27 — todas las vías de juicio pasan a Opus 5.** Sustituye a
 Opus 4.8 al MISMO precio ($5/$25 por millón), así que no cuesta nada y ninguna
 de las guardas de gasto cambia. Antes de tocar nada se probó la forma exacta que

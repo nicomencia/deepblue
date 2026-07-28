@@ -42,14 +42,23 @@ const MAX_TURNS = 6;
  * `discovery_report` records how many came back short, so the drift is visible
  * instead of silent.
  */
+/**
+ * Not uniform, because the four fields do different jobs. "whyFits" is the
+ * ONLY one that answers the question this page exists to answer — cuál de
+ * estos modelos elijo — so it keeps its depth. The other three are handoffs:
+ * "versions"/"avoidVersions" become the brief's search terms and the
+ * dossier deepens "watchouts" per unit later. Spending prose on them here
+ * buries the comparison under detail the user can't act on yet.
+ */
 const DEPTH = {
-  versions: { min: 2, max: 3 },
-  avoidVersions: { min: 2, max: 3 },
+  versions: { min: 2, max: 2 },
+  avoidVersions: { min: 1, max: 2 },
   whyFits: { min: 4, max: 5 },
-  watchouts: { min: 4, max: 5 },
+  watchouts: { min: 3, max: 3 },
 } as const;
 
-const span = (f: keyof typeof DEPTH): string => `${DEPTH[f].min}-${DEPTH[f].max}`;
+const span = (f: keyof typeof DEPTH): string =>
+  DEPTH[f].min === DEPTH[f].max ? `${DEPTH[f].min}` : `${DEPTH[f].min}-${DEPTH[f].max}`;
 
 /** Recommendations that came back under the asked-for depth. Telemetry only. */
 export function thinRecommendations(report: DiscoveryReport): number {
@@ -72,29 +81,29 @@ Reglas estrictas:
   "Jazz", "Mazda2"). Es la palabra con la que se busca en el portal: si le
   añades la generación o los años no encuentra NADA. La generación va en
   "generation" ("XP90", "GE", "VII") y los años en "yearMin"/"yearMax".
-- Profundidad de cada recomendación — el comprador decide leyendo esto, no el
-  titular: ${span("versions")} líneas en "versions", ${span("avoidVersions")} en "avoidVersions",
-  ${span("whyFits")} en "whyFits" y ${span("watchouts")} en "watchouts". Cada línea completa y con el
-  dato concreto que la sostiene (motor, año, consumo real, avería típica),
-  nunca adjetivos sueltos. Es un mínimo, no un techo que haya que rozar: si un
-  modelo da para más, dilo.
-- "versions"/"avoidVersions": motor, potencia y cambio exactos, con el motivo en
-  la propia línea ("1.4 D-4D diésel: el FAP sufre en ciudad y etiqueta peor").
-- "whyFits": por qué ESTE modelo encaja con ESTE comprador, atando cada línea a
-  algo que ha dicho en su perfil (uso, presupuesto, prioridades, etiqueta).
+- Esta pantalla sirve para UNA cosa: que el comprador elija entre los modelos
+  que le propones. Todo lo que no le ayude a comparar sobra aquí, porque el
+  programa ya lo trabaja en el paso siguiente (la búsqueda hereda "versions" y
+  el dossier profundiza en "watchouts" unidad por unidad).
+- Por eso el peso va en "whyFits": ${span("whyFits")} líneas, y son las únicas que pueden
+  extenderse. Cada una ata el modelo a algo que el comprador ha dicho en su
+  perfil (uso, presupuesto, prioridades, etiqueta) y explica por qué gana a las
+  otras opciones, no solo por qué está bien.
+- Las otras tres van CORTAS, de apunte, no de explicación: ${span("versions")} líneas en
+  "versions", ${span("avoidVersions")} en "avoidVersions" y ${span("watchouts")} en "watchouts". Media
+  línea cada una, dato concreto y punto — motor, potencia, cambio y el motivo
+  en tres palabras ("1.4 D-4D: FAP en ciudad"). Nada de párrafos.
 - "priceBandEur": horquilla realista HOY en el mercado español de segunda mano
   para la configuración recomendada, coherente con el presupuesto del perfil.
-- "watchouts": los puntos débiles conocidos del modelo, uno por línea,
-  concretos y verificables en una visita.
+- "watchouts": puntos débiles del modelo que se puedan comprobar en una visita.
 - "discarded": los modelos que este comprador esperaría ver y por qué no entran
   (ej. "Mini Cooper S R56: mismo motor Prince con peor acceso a mecánica barata").
 - Cada recomendación lleva al menos una URL real encontrada en tus búsquedas; no
   inventes fuentes. Pocas recomendaciones bien fundadas valen más que muchas.
-- "imageUrl" (opcional, no gastes búsquedas en ello): foto de la generación
-  recomendada con URL REAL, en formato
-  "https://commons.wikimedia.org/wiki/Special:FilePath/NOMBRE.jpg" — nunca
-  ".../wiki/File:NOMBRE.jpg", que devuelve HTML. Si no te sale al paso, omítela:
-  el sistema la resuelve solo. Nunca inventes la URL.
+- "imageUrl": OMÍTELO salvo que hayas visto ese archivo exacto en un resultado
+  de búsqueda de esta misma sesión. El sistema resuelve la foto solo y lo hace
+  bien; un nombre de archivo de Commons deducido "como se suelen llamar" es una
+  imagen rota, y se comprueba una por una. Ante la duda, no lo pongas.
 - Todos los textos visibles en español.
 ${constraintRules(profile)}`;
 }
@@ -164,6 +173,40 @@ async function draftReport(profile: DiscoveryProfile): Promise<DiscoveryReport> 
 }
 
 /**
+ * Does this URL actually serve an image, or does it just look like one?
+ *
+ * Research invents Commons filenames that are perfectly plausible — real make,
+ * real generation code, real naming convention — and simply do not exist. On
+ * 2026-07-28 Opus 5 supplied all five and all five were 404s that rendered as
+ * broken images. A URL shape check can't catch that; only asking can.
+ *
+ * A definitive "no" (404, or a page instead of a file — Commons answers a
+ * missing file with 42 KB of HTML) means drop it. Anything else — timeout,
+ * network down, rate limit — returns true and keeps the URL: discarding a good
+ * photo because the check itself failed would be the worse error.
+ */
+async function photoResolves(url: string): Promise<boolean> {
+  try {
+    const res = await fetch(url, {
+      method: "HEAD",
+      redirect: "follow",
+      signal: AbortSignal.timeout(8000),
+      headers: { "user-agent": "deepblue/1.0 (personal car-hunting agent)" },
+    });
+    // Only a definitive "this file does not exist" condemns a URL. 429 and 5xx
+    // mean Wikimedia is busy or throttling us — treating those as "invented"
+    // would delete good photos precisely during a rate limit, which is when
+    // the ladder can't find replacements either. Verified live 2026-07-28:
+    // hammering the API to check five URLs earned a 429 on everything after.
+    if (res.status === 429 || res.status >= 500) return true;
+    if (!res.ok) return false;
+    return (res.headers.get("content-type") ?? "").toLowerCase().startsWith("image/");
+  } catch {
+    return true; // couldn't ask — don't punish the URL for it
+  }
+}
+
+/**
  * Give every recommendation a real, era-correct photo BEFORE it is stored.
  *
  * Research supplies one for some models and skips the rest (1 of 4 on
@@ -171,6 +214,11 @@ async function draftReport(profile: DiscoveryProfile): Promise<DiscoveryReport> 
  * gaps at render time made the photos flicker: Wikimedia rate-limits bursts,
  * so a card had a photo on one load and not the next. Doing it once here fixes
  * both — the URL is part of the stored report from the moment it exists.
+ *
+ * A supplied URL is VERIFIED, not trusted: the model's own photos are the ones
+ * most likely to be invented, and trusting them meant our resolver never ran
+ * on exactly the recommendations that needed it most. Parse, don't trust —
+ * same rule as every other LLM boundary here.
  *
  * Deliberately sequential with a pause: this runs after an analysis that took
  * minutes, so a few seconds spent NOT tripping the rate limit is free, and a
@@ -181,7 +229,12 @@ async function withPhotos(report: DiscoveryReport): Promise<DiscoveryReport> {
   const recommendations = [...report.recommendations];
   for (let i = 0; i < recommendations.length; i++) {
     const rec = recommendations[i];
-    if (!rec || rec.imageUrl) continue;
+    if (!rec) continue;
+    if (rec.imageUrl) {
+      if (await photoResolves(rec.imageUrl)) continue;
+      // Invented. Fall through and resolve it properly.
+      recommendations[i] = { ...rec, imageUrl: undefined };
+    }
     try {
       const url = await fetchWikipediaPhoto(rec.make, rec.model, rec.generation, {
         yearMin: rec.yearMin,
@@ -197,8 +250,13 @@ async function withPhotos(report: DiscoveryReport): Promise<DiscoveryReport> {
 }
 
 /**
- * Fill in photos for a report that was stored before they were resolved at
- * save time. Free and idempotent; returns how many it added.
+ * Repair the photos of an already-stored report: fills the missing ones and
+ * replaces any that no longer resolve. Free and idempotent; returns how many
+ * recommendations changed photo.
+ *
+ * Counts how many URLs CHANGED, not how many exist. Five invented URLs
+ * replaced by five real ones leaves the count identical, and comparing counts
+ * would call that "nothing to do" and never save the repair.
  */
 export async function backfillDiscoveryPhotos(db: Db, discoveryId: string): Promise<number> {
   const [row] = await db
@@ -208,13 +266,13 @@ export async function backfillDiscoveryPhotos(db: Db, discoveryId: string): Prom
     .limit(1);
   if (!row?.report) return 0;
 
-  const before = row.report.recommendations.filter((r) => r.imageUrl).length;
+  const before = row.report.recommendations.map((r) => r.imageUrl);
   const report = await withPhotos(row.report);
-  const after = report.recommendations.filter((r) => r.imageUrl).length;
-  if (after === before) return 0;
+  const changed = report.recommendations.filter((r, i) => r.imageUrl !== before[i]).length;
+  if (changed === 0) return 0;
 
   await db.update(discoveries).set({ report }).where(eq(discoveries.id, discoveryId));
-  return after - before;
+  return changed;
 }
 
 /** Store a validated report. Shared by the API lane and the manual import lane. */

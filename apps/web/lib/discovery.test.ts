@@ -146,3 +146,39 @@ describe("thinRecommendations", () => {
     expect(thinRecommendations(report([deep]))).toBe(0);
   });
 });
+
+describe("DEPTH rebalance", () => {
+  // The screen exists to help choose BETWEEN models. whyFits is the only
+  // field that answers that; the rest are handoffs to the brief and dossier.
+  it("keeps whyFits the deepest field", () => {
+    const thin = rec({
+      versions: ["1.0 VVT-i", "1.33"],
+      avoidVersions: ["MultiMode"],
+      whyFits: ["a", "b", "c"], // one short of the floor
+      watchouts: ["EPS", "airbag", "ruido"],
+    });
+    const report: DiscoveryReport = {
+      headline: "h",
+      recommendations: [thin],
+      discarded: [],
+      sources: [],
+    };
+    expect(thinRecommendations(report)).toBe(1);
+  });
+
+  it("accepts the trimmed handoff sections", () => {
+    const trimmed = rec({
+      versions: ["1.0 VVT-i 69 CV manual", "1.33 Dual VVT-i 99 CV manual"],
+      avoidVersions: ["MultiMode: tirones"],
+      whyFits: ["a", "b", "c", "d"],
+      watchouts: ["EPS", "airbag", "km de flota"],
+    });
+    const report: DiscoveryReport = {
+      headline: "h",
+      recommendations: [trimmed],
+      discarded: [],
+      sources: [],
+    };
+    expect(thinRecommendations(report)).toBe(0);
+  });
+});
