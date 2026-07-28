@@ -144,6 +144,35 @@ anuncios, digest con suelo de nota + alertas A/B sin duplicados, dossiers
 en la página del lead), tabs por búsqueda, página Actividad, descubrimiento de
 modelos y adopción manual de anuncios con dossier-first. 77 tests verdes.
 
+**Cambio 2026-07-28 (3) — la carrocería la dice el modelo, la foto la busca el
+código.** El Yaris seguía saliendo SEDÁN, y ninguna heurística de nombre podía
+arreglarlo: Commons archiva cada carrocería de una generación en subcategorías
+hermanas —"Toyota Yaris (XP90) hatchback" Y "... sedan"— y nosotros leíamos la
+categoría padre, que las mezcla. El archivo del sedán ni siquiera dice "sedan"
+en el nombre. Verificado mirando la imagen, no el nombre: era un Yaris sedán de
+EE.UU. con matrícula de concesionario.
+
+Ahora la recomendación lleva `bodyStyle` en el vocabulario de Commons y el
+resolutor elige la subcategoría correcta; una hermana que nombre OTRA carrocería
+queda descalificada, no solo peor puntuada. Comprobado: Yaris → hatchback,
+MX-5 → descapotable, sin codificar ninguno a mano.
+
+Y el reparto de trabajo queda explícito. El modelo YA no da `imageUrl`: nueve
+URLs suyas en dos días, nueve imágenes rotas —páginas de descripción que
+devuelven HTML el 27, cinco 404 el 28—. No es cuestión de insistir más en el
+prompt: no sabe buscar fotos, y falla de forma invisible porque el nombre de
+archivo que inventa es plausible. Así que `discoveryResearchSchema` (lo que se
+le pide) es el informe MENOS `imageUrl`, y el modelo aporta solo lo que él sabe
+y el código no puede saber: qué generación y qué carrocería se vendió aquí.
+Quitar el campo ahorra además un HEAD por recomendación, y el presupuesto de
+peticiones es lo escaso en esa vía.
+
+Los fallos ahora caducan en 30 min en vez de 24 h. Un acierto ("la foto está
+en X") sigue siendo cierto todo el día; un "no hay nada" suele ser
+circunstancial —un peldaño estrangulado que contesta vacío en vez de fallar— y
+cachearlo un día dejó al Mazda2 sin foto cuando un proceso nuevo la encontraba
+al instante.
+
 **Cambio 2026-07-28 (2) — la foto correcta a la primera.** Dos fallos
 distintos, no uno. El Yaris salía SEDÁN —carrocería que aquí casi no se vendió—
 porque de la categoría de Commons se cogía el primer archivo que no fuera una

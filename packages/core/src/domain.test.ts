@@ -5,6 +5,7 @@ import {
   ACTIVE_PLATFORMS,
   canTransition,
   discoveryReportSchema,
+  discoveryResearchSchema,
   dossierCoversModel,
   dossierCoversYears,
   generationYearSpan,
@@ -351,5 +352,48 @@ describe("LLM trust-boundary schemas", () => {
         raw: {},
       }).success,
     ).toBe(false);
+  });
+});
+
+describe("discoveryResearchSchema", () => {
+  it("does not ask research for a photo", () => {
+    // Nine model-supplied URLs over two days, nine broken images. The model
+    // cannot find photos; code resolves them afterwards.
+    const shape = z.toJSONSchema(discoveryResearchSchema) as unknown as {
+      properties: { recommendations: { items: { properties: Record<string, unknown> } } };
+    };
+    const fields = shape.properties.recommendations.items.properties;
+    expect(fields).not.toHaveProperty("imageUrl");
+    expect(fields).toHaveProperty("bodyStyle");
+  });
+
+  it("still converts to JSON Schema for structured output", () => {
+    // A .transform() here throws at request time only — invisible to tests.
+    expect(() => z.toJSONSchema(discoveryResearchSchema)).not.toThrow();
+  });
+
+  it("accepts a report that stores a photo we resolved ourselves", () => {
+    const stored = parseDiscoveryReport({
+      headline: "h",
+      recommendations: [
+        {
+          make: "Toyota",
+          model: "Yaris",
+          generation: "XP90",
+          bodyStyle: "hatchback",
+          imageUrl: "https://commons.wikimedia.org/wiki/Special:FilePath/A.jpg?width=640",
+          versions: [],
+          avoidVersions: [],
+          priceBandEur: { min: 4000, max: 6500 },
+          whyFits: [],
+          watchouts: [],
+          sources: [],
+        },
+      ],
+      discarded: [],
+      sources: [],
+    });
+    expect(stored.recommendations[0]?.bodyStyle).toBe("hatchback");
+    expect(stored.recommendations[0]?.imageUrl).toContain("Special:FilePath");
   });
 });

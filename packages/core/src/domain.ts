@@ -435,6 +435,24 @@ export function pickDossierForYear(
  * access: no badge at all (pre-2000 petrol, pre-2006 diesel) means locked out
  * of the low-emission zones in Madrid and Barcelona.
  */
+/**
+ * Body styles, spelled the way Wikimedia Commons spells them, because their
+ * only job is to match a Commons subcategory name.
+ */
+export const BODY_STYLES = [
+  "hatchback",
+  "sedan",
+  "estate",
+  "coupe",
+  "convertible",
+  "roadster",
+  "MPV",
+  "SUV",
+  "pickup",
+  "van",
+] as const;
+export type BodyStyle = (typeof BODY_STYLES)[number];
+
 export const ECO_LABELS = ["0", "ECO", "C", "B"] as const;
 export type EcoLabel = (typeof ECO_LABELS)[number];
 
@@ -556,9 +574,20 @@ export const modelRecommendationSchema = z.object({
   /** Generation code ("XP90", "GE", "VII") — never folded into `model`. */
   generation: z.string().optional(),
   /**
-   * Representative photo of the recommended generation (real URL found during
-   * research — Wikimedia preferred for hotlink stability). Buyers who don't
-   * know the model by heart decide with their eyes first.
+   * Body sold in Spain, in Commons' own vocabulary.
+   *
+   * Not decoration: Commons files a generation's bodies in separate
+   * subcategories ("Toyota Yaris (XP90) hatchback" AND "... sedan"), and the
+   * parent mixes them. Picking from the parent gave a Spanish city-car hunt a
+   * US-market Yaris SEDAN whose filename never said so (live, 2026-07-28) —
+   * no filename heuristic can catch that, but naming the body picks the right
+   * subcategory outright. The model knows which body Spain got; code doesn't.
+   */
+  bodyStyle: z.enum(BODY_STYLES).optional(),
+  /**
+   * Representative photo of the recommended generation. STORAGE ONLY — code
+   * resolves it after research (see `discoveryResearchSchema`). Buyers who
+   * don't know the model by heart decide with their eyes first.
    */
   imageUrl: z.string().optional(),
     /** Trims/engines worth hunting ("1.6 THP 175", "GTI Performance DSG"). */
@@ -595,6 +624,30 @@ export const discoveryReportSchema = z.object({
   sources: z.array(z.string()),
 });
 export type DiscoveryReport = z.infer<typeof discoveryReportSchema>;
+
+/**
+ * What research is ASKED to produce — the report minus `imageUrl`.
+ *
+ * The model cannot find photos, and the failure is invisible: it emits
+ * plausible Wikimedia filenames (right make, right generation code, right
+ * naming convention) for files that do not exist. Nine supplied URLs over two
+ * days, nine broken images — description pages that serve HTML on 27/07, then
+ * five straight 404s on 28/07. Asking again with firmer wording only buys a
+ * better-looking lie.
+ *
+ * So the division of labour is by capability, not preference: the model
+ * supplies what only it knows (which generation, which body Spain actually
+ * got), and code does the retrieval — Commons categories, era gate, body
+ * subcategory — where an answer can be checked instead of trusted. Dropping
+ * the field also drops a HEAD request per recommendation, and request budget
+ * is the scarce resource in that lane.
+ */
+export const discoveryResearchSchema = discoveryReportSchema.extend({
+  recommendations: z
+    .array(modelRecommendationSchema.omit({ imageUrl: true }))
+    .min(1)
+    .max(5),
+});
 
 /**
  * The trust boundary for a report, whichever lane produced it: validate, then

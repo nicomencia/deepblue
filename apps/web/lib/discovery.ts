@@ -9,8 +9,10 @@
  */
 
 import {
-  discoveryReportSchema,
+  BODY_STYLES,
+  discoveryResearchSchema,
   parseDiscoveryReport,
+  type BodyStyle,
   type BriefCriteria,
   type DiscoveryProfile,
   type DiscoveryReport,
@@ -87,6 +89,12 @@ Reglas estrictas:
   generaciones son dos coches distintos, con fiabilidad y precio distintos: si
   ambas te valen, elige la que de verdad recomiendas y ajusta los años a ESA.
   Nada de "GD (2006-2008) y GE (2009-2015)" — eso no es una recomendación.
+- "bodyStyle": la carrocería con la que ESE coche se vendió en España, en el
+  vocabulario de la lista (hatchback, sedan, estate, coupe, convertible,
+  roadster, MPV, SUV, pickup, van). Un Yaris o un Corsa aquí son "hatchback"
+  aunque en otros mercados hubiera berlina; un MX-5, "convertible". Sirve para
+  elegir la foto correcta, así que en la duda elige la versión mayoritaria en
+  el mercado español.
 - Esta pantalla sirve para UNA cosa: que el comprador elija entre los modelos
   que le propones. Todo lo que no le ayude a comparar sobra aquí, porque el
   programa ya lo trabaja en el paso siguiente (la búsqueda hereda "versions" y
@@ -106,10 +114,6 @@ Reglas estrictas:
   (ej. "Mini Cooper S R56: mismo motor Prince con peor acceso a mecánica barata").
 - Cada recomendación lleva al menos una URL real encontrada en tus búsquedas; no
   inventes fuentes. Pocas recomendaciones bien fundadas valen más que muchas.
-- "imageUrl": OMÍTELO salvo que hayas visto ese archivo exacto en un resultado
-  de búsqueda de esta misma sesión. El sistema resuelve la foto solo y lo hace
-  bien; un nombre de archivo de Commons deducido "como se suelen llamar" es una
-  imagen rota, y se comprueba una por una. Ante la duda, no lo pongas.
 - Todos los textos visibles en español.
 ${constraintRules(profile)}`;
 }
@@ -161,7 +165,7 @@ async function draftReport(profile: DiscoveryProfile): Promise<DiscoveryReport> 
         max_tokens: 16_000,
         thinking: { type: "adaptive" },
         tools: [{ type: "web_search_20260318", name: "web_search", max_uses: MAX_SEARCHES }],
-        output_config: { format: zodOutputFormat(discoveryReportSchema) },
+        output_config: { format: zodOutputFormat(discoveryResearchSchema) },
         messages,
       })
       .finalMessage();
@@ -242,10 +246,13 @@ async function withPhotos(report: DiscoveryReport): Promise<DiscoveryReport> {
       recommendations[i] = { ...rec, imageUrl: undefined };
     }
     try {
-      const url = await fetchWikipediaPhoto(rec.make, rec.model, rec.generation, {
-        yearMin: rec.yearMin,
-        yearMax: rec.yearMax,
-      });
+      const url = await fetchWikipediaPhoto(
+        rec.make,
+        rec.model,
+        rec.generation,
+        { yearMin: rec.yearMin, yearMax: rec.yearMax },
+        rec.bodyStyle,
+      );
       if (url) recommendations[i] = { ...rec, imageUrl: url };
     } catch {
       // Offline, rate-limited, slow: leave this one without a photo.
@@ -280,6 +287,14 @@ export async function backfillDiscoveryPhotos(
    * without paying for a new analysis.
    */
   force = false,
+  /**
+   * Retrofit a body onto recommendations stored before `bodyStyle` existed.
+   * Reports written earlier have no way to say "hatchback", and without it the
+   * resolver reads a generation's mixed parent category — which is how the
+   * Yaris kept coming back a sedan. Only fills the gap; never overwrites a
+   * body the report already states.
+   */
+  assumeBody?: BodyStyle,
 ): Promise<number> {
   const [row] = await db
     .select()
@@ -289,12 +304,17 @@ export async function backfillDiscoveryPhotos(
   if (!row?.report) return 0;
 
   const before = row.report.recommendations.map((r) => r.imageUrl);
-  const source = force
-    ? {
-        ...row.report,
-        recommendations: row.report.recommendations.map((r) => ({ ...r, imageUrl: undefined })),
-      }
-    : row.report;
+  const source =
+    force || assumeBody
+      ? {
+          ...row.report,
+          recommendations: row.report.recommendations.map((r) => ({
+            ...r,
+            bodyStyle: r.bodyStyle ?? assumeBody,
+            imageUrl: force ? undefined : r.imageUrl,
+          })),
+        }
+      : row.report;
   const report = await withPhotos(source);
   const changed = report.recommendations.filter((r, i) => r.imageUrl !== before[i]).length;
   if (changed === 0) return 0;

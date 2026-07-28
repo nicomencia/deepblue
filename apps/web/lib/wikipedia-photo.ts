@@ -30,6 +30,15 @@
 import { normalizeVehicleText, splitModelAndGeneration } from "@deepblue/core";
 
 const TTL_MS = 24 * 60 * 60 * 1000;
+/**
+ * A miss expires far sooner than a hit, because the two are not the same kind
+ * of fact. "This car's photo is at X" stays true all day; "nothing matched" is
+ * often circumstantial — a throttled rung answering empty rather than
+ * throwing, a category read mid-rate-limit. Caching both for 24 h left the
+ * Mazda2 photoless for a whole day when a fresh process found it instantly
+ * (live, 2026-07-28).
+ */
+const MISS_TTL_MS = 30 * 60 * 1000;
 /** A page render must never hang on someone else's API. */
 const TIMEOUT_MS = 2500;
 /** Wikimedia asks for a descriptive agent; anonymous bulk traffic gets blocked. */
@@ -254,9 +263,14 @@ async function commonsCategoryPhoto(
   model: string,
   genCode: string | undefined,
   band?: YearBand,
+  body?: string,
 ): Promise<string | undefined> {
   const seen = new Set<string>();
-  for (const q of [genCode ? `${make} ${model} ${genCode}` : "", `${make} ${model}`].filter(Boolean)) {
+  for (const q of [
+    genCode && body ? `${make} ${model} ${genCode} ${body}` : "",
+    genCode ? `${make} ${model} ${genCode}` : "",
+    `${make} ${model}`,
+  ].filter(Boolean)) {
     const s = (await apiJson(
       "https://commons.wikimedia.org/w/api.php?format=json&origin=*&action=query" +
         `&list=search&srnamespace=14&srlimit=10&srsearch=${encodeURIComponent(q)}`,
@@ -279,7 +293,18 @@ async function commonsCategoryPhoto(
       // The MODEL must be named, not just the make: "Toyota Vios (XP90)" is a
       // different car on the same platform code and outranked the Yaris.
       if (!n.includes(m) || BAD_CATEGORY.test(cat)) return { cat, score: -1 };
+      // Commons splits a generation's bodies into sibling subcategories, and
+      // the parent mixes them. When we know which body Spain got, the matching
+      // subcategory is the single best thing we can pick — and a sibling
+      // naming a DIFFERENT body is disqualified outright, not merely
+      // outranked: that is the Yaris sedan, and it is the wrong car.
+      const catBody = cat.match(BODY_STYLE)?.[0].toLowerCase();
+      if (body) {
+        const wanted = body.toLowerCase();
+        if (catBody && catBody !== wanted) return { cat, score: -1 };
+      }
       let score = 0;
+      if (body && catBody === body.toLowerCase()) score += 150;
       if (g && n.includes(g)) score += 100;
       const ys = yearsOf(cat);
       if (ys.length) {
@@ -350,12 +375,16 @@ async function commonsCategoryPhoto(
     // its convertible and a Jazz its hatchback, without hard-coding either.
     const bodyCount = new Map<string, number>();
     for (const f of pool) {
-      const body = f.name.match(BODY_STYLE)?.[0].toLowerCase();
-      if (body) bodyCount.set(body, (bodyCount.get(body) ?? 0) + 1);
+      const fileBody = f.name.match(BODY_STYLE)?.[0].toLowerCase();
+      if (fileBody) bodyCount.set(fileBody, (bodyCount.get(fileBody) ?? 0) + 1);
     }
+    const wanted = body?.toLowerCase();
     const score = (name: string): number => {
-      const body = name.match(BODY_STYLE)?.[0].toLowerCase();
-      let s = body ? Math.min(4 * (bodyCount.get(body) ?? 0), 40) : 50;
+      const fileBody = name.match(BODY_STYLE)?.[0].toLowerCase();
+      let s: number;
+      if (wanted && fileBody) s = fileBody === wanted ? 120 : -200;
+      else if (fileBody) s = Math.min(4 * (bodyCount.get(fileBody) ?? 0), 40);
+      else s = 50;
       if (NOT_A_FRONT_SHOT.test(name)) s -= 100;
       return s;
     };
@@ -407,6 +436,12 @@ export async function fetchWikipediaPhoto(
   model: string,
   generation?: string,
   band?: YearBand,
+  /**
+   * Body sold here, in Commons' vocabulary ("hatchback", "convertible"). When
+   * known it decides which of a generation's sibling categories we read, which
+   * is the only reliable way to avoid showing a body this market never got.
+   */
+  body?: string,
 ): Promise<string | undefined> {
   const cleanModel = splitModelAndGeneration(model).model;
   if (!make.trim() || !cleanModel) return undefined;
@@ -427,8 +462,8 @@ export async function fetchWikipediaPhoto(
   // Before the loose fallbacks: a curated per-generation category is the only
   // source that guarantees the CAR, leaving the era gate to pick the year.
   attempts.push([
-    `cc:${make} ${cleanModel} ${genCode ?? ""}`,
-    () => commonsCategoryPhoto(make, cleanModel, genCode, band),
+    `cc:${make} ${cleanModel} ${genCode ?? ""} ${body ?? ""}`,
+    () => commonsCategoryPhoto(make, cleanModel, genCode, band, body),
   ]);
   if (genCode) {
     attempts.push([`wd:${make} ${cleanModel} ${genCode}`, () => wikidataGenerationImage(make, cleanModel, genCode, band)]);
@@ -439,7 +474,7 @@ export async function fetchWikipediaPhoto(
   for (const [key, run] of attempts) {
     const cacheKey = `${key}|${bandKey}`;
     const hit = cache.get(cacheKey);
-    if (hit && Date.now() - hit.at < TTL_MS) {
+    if (hit && Date.now() - hit.at < (hit.url ? TTL_MS : MISS_TTL_MS)) {
       if (hit.url) return hit.url;
       continue;
     }
