@@ -144,6 +144,27 @@ anuncios, digest con suelo de nota + alertas A/B sin duplicados, dossiers
 en la página del lead), tabs por búsqueda, página Actividad, descubrimiento de
 modelos y adopción manual de anuncios con dossier-first. 77 tests verdes.
 
+**Cambio 2026-07-28 (2) — la foto correcta a la primera.** Dos fallos
+distintos, no uno. El Yaris salía SEDÁN —carrocería que aquí casi no se vendió—
+porque de la categoría de Commons se cogía el primer archivo que no fuera una
+trasera, y ese orden es arbitrario. Ahora gana el nombre SIN carrocería
+("Toyota Yaris II Facelift front.JPG" no la nombra porque ES el Yaris), y un
+nombre que sí la explicita solo gana si esa carrocería domina la categoría —
+así un MX-5 sigue saliendo descapotable sin codificar nada a mano.
+
+El Jazz salía de la generación anterior porque Opus 5 escribió dos en un solo
+campo, "GD (2006-2008) y GE (2009-2015)", y el código se quedaba con el primero
+—GD, el viejo— para una búsqueda de 2006-2013. Ahora gana el que más solapa con
+la ventana buscada, y el prompt pide UNA generación: dos son dos coches
+distintos, con fiabilidad y precio distintos.
+
+Y el límite de peticiones deja de degradar en silencio: un 429 se espera una vez
+(honrando `Retry-After`) en vez de abandonar el peldaño y dejar que conteste uno
+peor, cuya foto se guardaba como si fuera lo mejor que había. La pausa entre
+recomendaciones sube a 2 s. Y `POST /api/dev/discovery-photos` acepta
+`{"force":true}`: la verificación solo caza los 404, y una foto puede ser real y
+aun así del coche equivocado — esas no se curan solas.
+
 **Cambio 2026-07-28 — la foto que da el modelo se comprueba, no se cree.**
 Las cinco recomendaciones de la primera tirada con Opus 5 salieron con foto rota.
 No faltaban: estaban guardadas, bien formadas, con nombre de archivo de Commons

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { photoMatchesEra } from "./wikipedia-photo";
+import { photoMatchesEra, pickGenerationCode } from "./wikipedia-photo";
 
 /**
  * Every URL here is one the system actually served or fetched on 2026-07-27 —
@@ -54,5 +54,42 @@ describe("photoMatchesEra", () => {
     expect(photoMatchesEra("https://x.test/2014_Car_Model.jpg", { yearMin: 2005, yearMax: 2011 })).toBe(false);
     // a photo titled years before the generation existed cannot be it
     expect(photoMatchesEra("https://x.test/2002_Car_Model.jpg", { yearMin: 2005, yearMax: 2011 })).toBe(false);
+  });
+});
+
+
+/**
+ * Generation strings as research actually writes them — the compound ones are
+ * verbatim from the Opus 5 report of 2026-07-28 that produced wrong photos.
+ */
+describe("pickGenerationCode", () => {
+  it("picks the generation that overlaps the hunt, not the first named", () => {
+    // The Jazz bug: first-wins chose GD, the older car, for a 2006-2013 hunt.
+    expect(
+      pickGenerationCode("GD (2006-2008) y GE (2009-2015)", "Jazz", { yearMin: 2006, yearMax: 2013 }),
+    ).toBe("GE");
+  });
+
+  it("leaves a single generation exactly as it was", () => {
+    expect(pickGenerationCode("XP90", "Yaris", { yearMin: 2006, yearMax: 2011 })).toBe("XP90");
+    expect(pickGenerationCode("XP90 (2ª gen.)", "Yaris", { yearMin: 2006, yearMax: 2011 })).toBe("XP90");
+  });
+
+  it("still refuses a token that only repeats the model", () => {
+    // "Peugeot 207 207" lands on the generic article instead of the RC photos.
+    expect(pickGenerationCode("207 RC / THP (2007-2012)", "207", { yearMin: 2007, yearMax: 2012 })).toBe("RC");
+  });
+
+  it("handles a compound where both halves overlap", () => {
+    const code = pickGenerationCode("MZ/EZ (2005-2010) y FZ (2010-2017)", "Swift", {
+      yearMin: 2006,
+      yearMax: 2014,
+    });
+    expect(["MZ", "FZ"]).toContain(code);
+  });
+
+  it("returns undefined when there is nothing usable", () => {
+    expect(pickGenerationCode(undefined, "Yaris")).toBeUndefined();
+    expect(pickGenerationCode("2006-2011", "Yaris")).toBeUndefined();
   });
 });

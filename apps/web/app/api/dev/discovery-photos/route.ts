@@ -14,7 +14,7 @@ import { backfillDiscoveryPhotos } from "../../../../lib/discovery";
 export async function POST(req: Request): Promise<Response> {
   if (process.env.NODE_ENV === "production") return new Response(null, { status: 404 });
 
-  const body = (await req.json().catch(() => null)) as { id?: string } | null;
+  const body = (await req.json().catch(() => null)) as { id?: string; force?: boolean } | null;
   const db = await getDb();
 
   const rows = await db
@@ -25,7 +25,7 @@ export async function POST(req: Request): Promise<Response> {
   const results: Array<{ id: string; filled: number; of: number }> = [];
   for (const row of rows) {
     if (!row.report) continue;
-    const filled = await backfillDiscoveryPhotos(db, row.id);
+    const filled = await backfillDiscoveryPhotos(db, row.id, body?.force === true);
     results.push({ id: row.id, filled, of: row.report.recommendations.length });
   }
 

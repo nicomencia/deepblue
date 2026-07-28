@@ -26,6 +26,8 @@ import { fetchWikipediaPhoto } from "./wikipedia-photo";
 
 const MAX_SEARCHES = 12;
 const MAX_TURNS = 6;
+/** Gap between photo lookups. Generous on purpose — see withPhotos(). */
+const PHOTO_PACE_MS = 2_000;
 
 /**
  * How much detail a recommendation has to carry to be worth reading.
@@ -80,7 +82,11 @@ Reglas estrictas:
 - "model": SOLO el nombre comercial con el que se anuncia el coche ("Yaris",
   "Jazz", "Mazda2"). Es la palabra con la que se busca en el portal: si le
   añades la generación o los años no encuentra NADA. La generación va en
-  "generation" ("XP90", "GE", "VII") y los años en "yearMin"/"yearMax".
+  "generation" y los años en "yearMin"/"yearMax".
+- "generation": UNA sola, el código a secas ("XP90", "GE", "VII"). Dos
+  generaciones son dos coches distintos, con fiabilidad y precio distintos: si
+  ambas te valen, elige la que de verdad recomiendas y ajusta los años a ESA.
+  Nada de "GD (2006-2008) y GE (2009-2015)" — eso no es una recomendación.
 - Esta pantalla sirve para UNA cosa: que el comprador elija entre los modelos
   que le propones. Todo lo que no le ayude a comparar sobra aquí, porque el
   programa ya lo trabaja en el paso siguiente (la búsqueda hereda "versions" y
@@ -244,7 +250,12 @@ async function withPhotos(report: DiscoveryReport): Promise<DiscoveryReport> {
     } catch {
       // Offline, rate-limited, slow: leave this one without a photo.
     }
-    await new Promise((r) => setTimeout(r, 400));
+    // 400 ms was still a burst: five recommendations, each firing several
+    // lookups, earned a 429 partway through and the tail came back empty
+    // (live, 2026-07-28). This runs after an analysis that took MINUTES —
+    // spending ten more seconds to get every photo right the first time is
+    // the cheapest trade in the whole flow.
+    await new Promise((r) => setTimeout(r, PHOTO_PACE_MS));
   }
   return { ...report, recommendations };
 }
@@ -258,7 +269,18 @@ async function withPhotos(report: DiscoveryReport): Promise<DiscoveryReport> {
  * replaced by five real ones leaves the count identical, and comparing counts
  * would call that "nothing to do" and never save the repair.
  */
-export async function backfillDiscoveryPhotos(db: Db, discoveryId: string): Promise<number> {
+export async function backfillDiscoveryPhotos(
+  db: Db,
+  discoveryId: string,
+  /**
+   * Re-resolve photos that already work. Verification only catches URLs that
+   * 404 — a photo can be perfectly real and still be the wrong car (a Yaris
+   * SEDAN, a previous-generation Jazz), and those never heal on their own.
+   * After a fix to the ranking, this is how stored reports get the benefit
+   * without paying for a new analysis.
+   */
+  force = false,
+): Promise<number> {
   const [row] = await db
     .select()
     .from(discoveries)
@@ -267,7 +289,13 @@ export async function backfillDiscoveryPhotos(db: Db, discoveryId: string): Prom
   if (!row?.report) return 0;
 
   const before = row.report.recommendations.map((r) => r.imageUrl);
-  const report = await withPhotos(row.report);
+  const source = force
+    ? {
+        ...row.report,
+        recommendations: row.report.recommendations.map((r) => ({ ...r, imageUrl: undefined })),
+      }
+    : row.report;
+  const report = await withPhotos(source);
   const changed = report.recommendations.filter((r, i) => r.imageUrl !== before[i]).length;
   if (changed === 0) return 0;
 

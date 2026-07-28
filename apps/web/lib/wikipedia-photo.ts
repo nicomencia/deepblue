@@ -85,7 +85,20 @@ const cache = new Map<string, Cached>();
  */
 class TransientLookupError extends Error {}
 
-async function apiJson(url: string): Promise<unknown> {
+/**
+ * Wikimedia throttles anonymous bursts hard, and resolving a whole report's
+ * photos IS a burst. Giving up on the first 429 was silently expensive: the
+ * rung was abandoned, a weaker one answered instead, and its worse photo got
+ * stored as if it were the best we could do — which is how one report showed a
+ * sedan and another the previous generation (live, 2026-07-28).
+ *
+ * So a 429 is waited out once, honouring `Retry-After` when it is sane. Only
+ * if it persists does it become transient trouble — never cached, so the next
+ * attempt starts clean.
+ */
+const RETRY_AFTER_CAP_MS = 10_000;
+
+async function apiJson(url: string, retryOn429 = true): Promise<unknown> {
   let res: Response;
   try {
     res = await fetch(url, {
@@ -94,6 +107,12 @@ async function apiJson(url: string): Promise<unknown> {
     });
   } catch {
     throw new TransientLookupError("network/timeout");
+  }
+  if (res.status === 429 && retryOn429) {
+    const header = Number(res.headers.get("retry-after"));
+    const wait = Number.isFinite(header) && header > 0 ? Math.min(header * 1000, RETRY_AFTER_CAP_MS) : 2_000;
+    await new Promise((r) => setTimeout(r, wait));
+    return apiJson(url, false);
   }
   if (!res.ok) throw new TransientLookupError(`http ${res.status}`);
   // Wikimedia rate limits can answer 200 with a plain-text scolding.
@@ -166,11 +185,69 @@ async function wikipediaLead(
  * cannot be inside it. That leaves the era gate with only one job — pick the
  * generation among that car's photos — which is what it is good at.
  */
+/**
+ * Which generation code to actually search for, out of the free text research
+ * puts in `generation`.
+ *
+ * Taking the first code was fine while research named one generation. Opus 5
+ * names two — "GD (2006-2008) y GE (2009-2015)" — and first-wins picked GD, the
+ * OLDER car, for a 2006-2013 hunt: the Jazz came back with a photo of the
+ * previous generation (live, 2026-07-28). When several are offered, the one
+ * that overlaps the hunt window most is the one being recommended.
+ *
+ * Tokens that merely repeat the model are still skipped: "207 RC / THP
+ * (2007-2012)" must yield "RC", never "207", or the search degenerates to
+ * "Peugeot 207 207" and lands on the model's generic article.
+ */
+export function pickGenerationCode(
+  generation: string | undefined,
+  cleanModel: string,
+  band?: YearBand,
+): string | undefined {
+  if (!generation) return undefined;
+  const codeOf = (segment: string): string | undefined =>
+    segment
+      .replace(/\([^)]*\)/g, "")
+      .split(/[\s/]+/)
+      .map((t) => t.replace(/[^A-Za-z0-9]/g, ""))
+      .find(
+        (t) =>
+          t.length > 0 &&
+          normalizeVehicleText(t) !== normalizeVehicleText(cleanModel) &&
+          !/^\d+$/.test(t),
+      );
+
+  // "A (…) y B (…)" — each half is a candidate generation with its own years.
+  const segments = generation.split(/\s+y\s+|\s+and\s+|[;,]/i).filter((s) => s.trim());
+  if (segments.length < 2) return codeOf(generation);
+
+  let best: { code: string; overlap: number } | undefined;
+  for (const segment of segments) {
+    const code = codeOf(segment);
+    if (!code) continue;
+    const years = [...segment.matchAll(/(?:19|20)\d{2}/g)].map((m) => Number(m[0]));
+    // No years to compare on: keep the first usable code, as before.
+    const overlap =
+      years.length && band
+        ? Math.max(
+            0,
+            Math.min(Math.max(...years), band.yearMax ?? Infinity) -
+              Math.max(Math.min(...years), band.yearMin ?? -Infinity),
+          )
+        : 0;
+    if (!best || overlap > best.overlap) best = { code, overlap };
+  }
+  return best?.code;
+}
+
 const BAD_CATEGORY =
   /competition|concept|racing|rally|motorcycle|taxi|police|interior|engine|wreck|crash|museum|replica/i;
 const NOT_A_CAR_FILE =
   /logo|icon|\bmap\b|flag|emblem|badge|engine|interior|dashboard|wheel|seat|symbol|\.svg$/i;
 const NOT_A_FRONT_SHOT = /rear|back|trasera|posterior|boot|trunk/i;
+/** Body words Commons filenames actually use, in the languages they use them. */
+const BODY_STYLE =
+  /hatchback|liftback|sedan|saloon|berlina|limousine|estate|wagon|touring|kombi|coupe|coupé|cabriolet|convertible|roadster|targa|pickup|van|minivan|mpv|suv/i;
 
 async function commonsCategoryPhoto(
   make: string,
@@ -261,7 +338,28 @@ async function commonsCategoryPhoto(
     const dated = files.filter((f) => photoMatchesEra(f.url!, catBand) && /(?:19|20)\d{2}/.test(f.name));
     const undated = files.filter((f) => !/(?:19|20)\d{2}/.test(f.name));
     const pool = dated.length ? dated : undated;
-    const best = pool.find((f) => !NOT_A_FRONT_SHOT.test(f.name)) ?? pool[0];
+
+    // Body style decides which of the right car's photos we show. Taking the
+    // first non-rear file gave the Yaris XP90 a SEDAN — a body barely sold in
+    // Spain — purely because it sorted first (live, 2026-07-28).
+    //
+    // An unqualified filename is the canonical shot: nobody writes the body
+    // into "Toyota Yaris II Facelift front.JPG" because it IS the Yaris. A
+    // filename that spells out a body is describing a variant, so it only wins
+    // when that body dominates the category — which is how an MX-5 still gets
+    // its convertible and a Jazz its hatchback, without hard-coding either.
+    const bodyCount = new Map<string, number>();
+    for (const f of pool) {
+      const body = f.name.match(BODY_STYLE)?.[0].toLowerCase();
+      if (body) bodyCount.set(body, (bodyCount.get(body) ?? 0) + 1);
+    }
+    const score = (name: string): number => {
+      const body = name.match(BODY_STYLE)?.[0].toLowerCase();
+      let s = body ? Math.min(4 * (bodyCount.get(body) ?? 0), 40) : 50;
+      if (NOT_A_FRONT_SHOT.test(name)) s -= 100;
+      return s;
+    };
+    const best = [...pool].sort((a, b) => score(b.name) - score(a.name))[0];
     if (best?.url) return best.url;
   }
   return undefined;
@@ -312,21 +410,7 @@ export async function fetchWikipediaPhoto(
 ): Promise<string | undefined> {
   const cleanModel = splitModelAndGeneration(model).model;
   if (!make.trim() || !cleanModel) return undefined;
-  // "VII (2012–2019)" → "VII"; "MZ/EZ y FZ/NZ" → "MZ" — free text from
-  // research, so only the first usable code is worth putting in a search box.
-  // Tokens that merely repeat the model are skipped: "207 RC / THP (2007-2012)"
-  // must yield "RC", not "207", or the search degenerates to "Peugeot 207 207"
-  // and lands on the model's generic article instead of the RC's photos.
-  const genCode = generation
-    ?.replace(/\([^)]*\)/g, "")
-    .split(/[\s/]+/)
-    .map((t) => t.replace(/[^A-Za-z0-9]/g, ""))
-    .find(
-      (t) =>
-        t.length > 0 &&
-        normalizeVehicleText(t) !== normalizeVehicleText(cleanModel) &&
-        !/^\d+$/.test(t),
-    );
+  const genCode = pickGenerationCode(generation, cleanModel, band);
 
   const bandKey = `${band?.yearMin ?? ""}-${band?.yearMax ?? ""}`;
   const attempts: Array<[string, () => Promise<string | undefined>]> = [];
