@@ -144,6 +144,31 @@ anuncios, digest con suelo de nota + alertas A/B sin duplicados, dossiers
 en la página del lead), tabs por búsqueda, página Actividad, descubrimiento de
 modelos y adopción manual de anuncios con dossier-first. 77 tests verdes.
 
+**Cambio 2026-07-28 (11) — dossiers duplicados: la guarda en memoria no basta.**
+Dos dossiers de Toyota RAV4 (V 2019–presente) y dos de Toyota Yaris (II
+2005–2011), estos últimos creados a las 16:21 y 16:22. Cada duplicado es una
+investigación pagada entera.
+
+SÍ había guarda: el `Set building` de `dossier-builder.ts` bloquea dos builds
+del mismo modelo. Pero vive en memoria: cubre un proceso y nada más. Muere con
+cada reinicio —y hoy el servidor se ha reiniciado ocho veces— y no ve un build
+corriendo en otro sitio. Además nadie volvía a mirar la cobertura DESPUÉS de
+investigar, así que un build que arrancó mientras otro terminaba insertaba
+igual; `insertDossier` versiona a propósito (v1, v2…), o sea que no choca:
+crea otro dossier vivo.
+
+Ahora, terminada la investigación, se le pregunta a la BASE DE DATOS otra vez
+con la misma regla de cobertura que usó `startBriefHunt` para decidir
+investigar. Si otro build llegó antes, este no inserta. No salva el dinero —a
+esas alturas ya se ha gastado— pero sí evita la fila duplicada, que es lo que
+ensucia /dossiers y lo que luego hay que limpiar a mano.
+
+Falta la otra mitad, y queda anotada: para no PAGAR dos veces hace falta una
+reserva en base de datos antes de investigar, como la de descubrimiento
+(`claimDiscoveryAnalysis`). `POST /api/dev/dossier-delete {id}` borra por la
+misma acción que el botón, así que reevalúa los leads del modelo y deja el
+evento `dossier_deleted`.
+
 **Cambio 2026-07-28 (10) — 4x2 y 4x4 dejan de ser el mismo coche.** Nico:
 "mezcla 4x2 y 4x4 y no promociona uno sobre otro, y no es justo". Tenía razón y
 el mecanismo era aritmético, no de opinión: `comparableWeight` pondera por

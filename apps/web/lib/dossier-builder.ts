@@ -5,11 +5,18 @@
  * verdicts immediately (getDossier skips disabled rows). PROJECT.md, Reliability.
  */
 
-import { modelDossierSchema, normalizeImageUrl, type ModelDossier } from "@deepblue/core";
+import {
+  dossierCoversModel,
+  dossierCoversYears,
+  generationYearSpan,
+  modelDossierSchema,
+  normalizeImageUrl,
+  type ModelDossier,
+} from "@deepblue/core";
 import { events, modelDossiers, type Db } from "@deepblue/db";
 import { zodOutputFormat } from "@anthropic-ai/sdk/helpers/zod";
 import type Anthropic from "@anthropic-ai/sdk";
-import { sql } from "drizzle-orm";
+import { and, isNull, sql } from "drizzle-orm";
 import { DOSSIER_MODEL, getAnthropic, messageText } from "./llm";
 import { reevaluateModelLeads } from "./reevaluate";
 import { enqueueSweeps } from "./sweep";
@@ -170,6 +177,31 @@ export async function insertDossier(
   return { id: inserted.id, version, dossier };
 }
 
+/**
+ * Does a live dossier already cover this exact generation?
+ *
+ * Same coverage rule startBriefHunt uses to decide whether to research at all
+ * — asked again after research, from the database, so the answer accounts for
+ * builds this process never knew about.
+ */
+async function isGenerationCovered(db: Db, dossier: ModelDossier): Promise<boolean> {
+  const span = generationYearSpan(dossier.generation);
+  const rows = await db
+    .select({ model: modelDossiers.model, content: modelDossiers.content })
+    .from(modelDossiers)
+    .where(
+      and(
+        sql`lower(${modelDossiers.make}) = ${dossier.make.toLowerCase()}`,
+        isNull(modelDossiers.disabledAt),
+      ),
+    );
+  return rows.some(
+    (d) =>
+      dossierCoversModel(d.model, dossier.model) &&
+      dossierCoversYears(d.content.generation, span?.yearMin, span?.yearMax),
+  );
+}
+
 // Research runs for minutes; auto-build (brief creation, adoption) and the
 // manual /dossiers click can overlap on the same model — one build is enough.
 const building = new Set<string>();
@@ -194,6 +226,22 @@ export async function buildDossier(
     const drafted = await draftWithResearch(req);
     // Canonical identity comes from the request, whatever the model echoed.
     const dossier: ModelDossier = { ...drafted, make: req.make, model: req.model };
+    // Ask the DATABASE again, now that research is over.
+    //
+    // `building` is an in-memory Set: it covers concurrent builds inside one
+    // process and nothing else. It dies with a restart, and it cannot see a
+    // build running anywhere else — so two builds of the same generation
+    // finished a minute apart and both inserted (live, 2026-07-28: two Toyota
+    // Yaris II dossiers at 16:21 and 16:22, two RAV4 V earlier the same day).
+    //
+    // Research is already paid for by the time we get here, so this cannot
+    // save the money — but it stops the duplicate ROW, which is what makes
+    // the /dossiers page wrong and what the user then has to clean up by hand.
+    if (await isGenerationCovered(db, dossier)) {
+      throw new Error(
+        `${req.make} ${req.model} ya tiene dossier de esa generación — otra investigación terminó antes`,
+      );
+    }
     return await insertDossier(db, dossier, userId, DOSSIER_MODEL);
   } finally {
     building.delete(key);
