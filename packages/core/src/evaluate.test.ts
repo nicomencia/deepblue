@@ -134,6 +134,61 @@ describe("issue findings", () => {
 
 // --- Grade bands --------------------------------------------------------------
 
+// Renault Jurado, official dealer, sold the Spider: 5.0 average but only 2
+// ratings, so "historial limitado" parked it on a neutral 55 (2026-07-29).
+describe("official dealership", () => {
+  const dealer = (overrides: Partial<NormalizedListing> = {}) =>
+    listing({
+      make: "Renault",
+      model: "Spider",
+      title: "Renault Spider 2.0 16V",
+      sellerType: "dealer",
+      sellerName: "Renault Jurado ",
+      sellerRating: 5,
+      sellerReviewCount: 2,
+      sellerSoldCount: 53,
+      ...overrides,
+    });
+  const spider = criteria({
+    vehicles: [{ make: "Renault", model: "Spider" }],
+    yearMin: 1995,
+    sellerPreference: "prefer_private",
+  });
+  const seller = (l: NormalizedListing) =>
+    evaluateListing(l, spider, { nonNegotiables: [] }).verdict.factors.sellerCredibility;
+
+  it("the marque's own dealer is not judged on its review count", () => {
+    const f = seller(dealer());
+    expect(f.score).toBeGreaterThanOrEqual(75);
+    expect(f.known.join(" ")).toContain("Concesionario oficial");
+  });
+
+  it("needs the trademark AND the matching make", () => {
+    // Same name, different marque on sale — not its official dealer.
+    expect(seller(dealer({ make: "Peugeot", title: "Peugeot 207" })).score).toBeLessThan(75);
+    // A private seller called Renault-anything is still a private seller.
+    expect(seller(dealer({ sellerType: "private" })).known.join(" ")).not.toContain(
+      "Concesionario oficial",
+    );
+  });
+
+  it("matches whole words, so 'Auto Seaton' is no SEAT dealer", () => {
+    const f = seller(dealer({ make: "Seat", title: "Seat Ibiza", sellerName: "Auto Seaton" }));
+    expect(f.known.join(" ")).not.toContain("Concesionario oficial");
+  });
+
+  it("does not paint over a badly rated official dealer", () => {
+    const f = seller(dealer({ sellerRating: 2.5, sellerReviewCount: 30 }));
+    expect(f.score).toBeLessThan(75);
+  });
+
+  it("never carries the prefer-private penalty meant for chains", () => {
+    const f = seller(dealer({ sellerSoldCount: 4_000 }));
+    expect(f.known.join(" ")).not.toContain("Penalizado");
+    expect(f.score).toBeGreaterThanOrEqual(75);
+  });
+});
+
 describe("scoreToGrade", () => {
   it("bands scores at A≥85 B≥70 C≥55 D≥40 E<40", () => {
     expect(scoreToGrade(85)).toBe("A");

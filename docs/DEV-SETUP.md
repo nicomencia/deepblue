@@ -144,6 +144,30 @@ anuncios, digest con suelo de nota + alertas A/B sin duplicados, dossiers
 en la página del lead), tabs por búsqueda, página Actividad, descubrimiento de
 modelos y adopción manual de anuncios con dossier-first. 77 tests verdes.
 
+**Cambio 2026-07-29 (19) — el concesionario oficial es una tercera categoría.**
+El Spider lo vende "Renault Jurado", concesionario oficial: cuenta de negocio
+verificada, 5,0 de media… pero solo 2 valoraciones, así que `assessSeller` caía
+en "historial limitado" y lo dejaba en 55 neutro. La reputación de Wallapop no
+es la fuente de confianza aquí.
+
+La preferencia por particulares es desconfianza de las CADENAS de compraventa,
+no de la red del fabricante. Un concesionario oficial trae garantía, kilometraje
+certificado, revisión multipunto y una empresa con dirección a la que reclamar,
+y nada de eso depende de cuántos compradores se acordaron de dejar estrellas.
+Así que: nunca cuenta como cadena, nunca lleva la penalización de
+`prefer_private`, y recibe un SUELO de credibilidad de 75 — suelo, no bonus,
+y solo si la nota no lo contradice (un oficial con 2,5/5 no se maquilla).
+
+`isOfficialDealer`: el nombre del vendedor lleva la marca registrada Y el
+anuncio es de esa marca. Por tokens completos, para que "Auto Seaton" no pase
+por concesionario SEAT. El texto del anuncio ("concesionario oficial") NO se usa
+a propósito: cualquiera lo escribe, mientras que una cuenta de negocio no puede
+operar bajo el nombre de una marca sin estar en su red. Se pierden los oficiales
+con nombre familiar ("Automóviles Martín") y esa asimetría es la buena:
+quedarse corto es seguro, inventar una garantía no.
+
+En vivo: sellerCredibility 55 → 70 (C → B) y el veredicto 60 → 63.
+
 **Cambio 2026-07-29 (18) — el mismo coche con otro nombre: alias de modelo.**
 Nico encontró un Renault Spider en Wallapop que la búsqueda no vio. Renault lo
 homologó como "Sport Spider", pero los anuncios ponen solo "Renault Spider", y

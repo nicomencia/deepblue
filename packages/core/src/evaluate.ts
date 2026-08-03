@@ -737,6 +737,35 @@ function assessPrice(
 /** Above this many platform sales a dealer reads as a compraventa chain. */
 const CHAIN_SOLD_THRESHOLD = 1000;
 
+/**
+ * Credibility an official dealership does not have to earn on Wallapop.
+ * Applied as a FLOOR, not a bonus: the guarantees come from the manufacturer's
+ * network — warranty, certified mileage, multi-point inspection, a real address
+ * and a company to claim against — and none of that depends on how many buyers
+ * remembered to leave a star rating.
+ */
+const OFFICIAL_DEALER_FLOOR = 75;
+
+/**
+ * Is this the marque's own dealership selling its own brand?
+ *
+ * The signal is the seller NAME carrying the manufacturer's trademark while
+ * selling that make: "Renault Jurado" listing a Renault. A business account
+ * cannot trade under a marque's name without being in its network, which makes
+ * this far harder to fake than the ad text — anyone can type "concesionario
+ * oficial" into a description, so that is deliberately NOT trusted here.
+ *
+ * Matched on whole tokens: "Auto Seaton" must not read as a SEAT dealer. It
+ * misses official dealers trading under a family name ("Automóviles Martín"),
+ * and that asymmetry is the right one — under-claiming a guarantee is safe,
+ * inventing one is not.
+ */
+export function isOfficialDealer(listing: NormalizedListing): boolean {
+  if (listing.sellerType !== "dealer" || !listing.make || !listing.sellerName) return false;
+  const make = normalizeVehicleText(listing.make);
+  return make.length > 0 && vehicleTokens(listing.sellerName).includes(make);
+}
+
 function assessSeller(listing: NormalizedListing, criteria: BriefCriteria): VerdictFactor {
   const rating = listing.sellerRating;
   const reviews = listing.sellerReviewCount;
@@ -773,8 +802,23 @@ function assessSeller(listing: NormalizedListing, criteria: BriefCriteria): Verd
   const known = [note];
 
   // Seller-type preference: encoded brief criteria, not prompt vibes.
-  const isChain = listing.sellerType === "dealer" && (sold ?? 0) >= CHAIN_SOLD_THRESHOLD;
-  if (isChain) {
+  //
+  // The marque's own dealership is its own category, NOT a compraventa: the
+  // preference for particulares is a distrust of used-car chains, and it would
+  // be wrong to aim it at the manufacturer's network. So an official dealer is
+  // never treated as a chain and never carries the prefer-private penalty.
+  const official = isOfficialDealer(listing);
+  const isChain =
+    !official && listing.sellerType === "dealer" && (sold ?? 0) >= CHAIN_SOLD_THRESHOLD;
+
+  if (official) {
+    known.push(
+      `Concesionario oficial ${listing.make}: red del fabricante — garantía, kilometraje certificado y revisión multipunto, con empresa y dirección a la que reclamar`,
+    );
+    // Only when nothing contradicts it. Bad reviews of an official dealer are
+    // still bad reviews, and this floor must not paint over them.
+    if (rating >= 4) score = Math.max(score, OFFICIAL_DEALER_FLOOR);
+  } else if (isChain) {
     known.push(`Compraventa de gran volumen (${(sold ?? 0).toLocaleString("es-ES")} ventas en la plataforma)`);
     if (preferPrivate) {
       score -= 20;
