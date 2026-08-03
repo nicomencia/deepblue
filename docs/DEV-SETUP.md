@@ -144,6 +144,36 @@ anuncios, digest con suelo de nota + alertas A/B sin duplicados, dossiers
 en la página del lead), tabs por búsqueda, página Actividad, descubrimiento de
 modelos y adopción manual de anuncios con dossier-first. 77 tests verdes.
 
+**Cambio 2026-07-29 (20) — nada se enseña antes de estar analizado.** Nico:
+"recibir un correo de candidato nuevo con «Confianza global: B — Buen candidato:
+merece escribir al vendedor ya» no es bueno; hacemos un enriquecimiento para
+tener la info clave y damos info genérica". Y después: "el enriquecimiento
+debería ir antes de enseñar unidades en el programa también".
+
+Misma causa en los dos sitios: la unidad se PRESENTA antes del análisis que la
+hace legible. `composeUnitLine` ya prefiere `llm.keyLine` y solo cae en la frase
+de banda cuando no hay ninguno — el problema nunca fue la redacción, era el
+momento. La alerta salía en el ingest, y el enriquecimiento llega después.
+
+- **Correo**: con la vía LLM activa, la alerta de un lead shortlisted ESPERA a
+  su enriquecimiento (`alertEnrichedLead` dentro de `saveEnrichment`).
+  `alertedAt` sigue siendo el sello de una sola vez. Los near miss nunca se
+  enriquecen (guarda de coste deliberada), así que siguen alertando en el
+  ingest. Efecto lateral bueno: un lead que solo supera el umbral DESPUÉS del
+  enriquecimiento ahora sí avisa; antes no avisaba nunca.
+- **Panel**: la portada retiene los leads sin `enrichedAt` y los cuenta
+  ("⏳ N analizándose") en vez de enseñarlos con la nota de reglas como si fuera
+  el veredicto. Sin `ANTHROPIC_API_KEY` no va a llegar ningún análisis, así que
+  se enseña todo.
+
+No estrangula nada: `enrichPendingLeadsSoon` ya se dispara desde el report del
+runner en cada job, así que los lotes se encadenan — 86 analizados y 15 en cola
+mientras se escribía esto.
+
+Medido en la búsqueda ancha del Golf: de 97 shortlisted solo 5 pasan el umbral
+de alerta (A/B y ≥75), y de los 28 Golf solo 2. La selectividad aguanta el
+ancho.
+
 **Cambio 2026-07-29 (19) — el concesionario oficial es una tercera categoría.**
 El Spider lo vende "Renault Jurado", concesionario oficial: cuenta de negocio
 verificada, 5,0 de media… pero solo 2 valoraciones, así que `assessSeller` caía

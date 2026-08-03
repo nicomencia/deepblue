@@ -3,6 +3,7 @@ import { briefs, leads, listings } from "@deepblue/db";
 import { and, asc, count, desc, eq, ne, sql } from "drizzle-orm";
 import Link from "next/link";
 import { getDb } from "../lib/db";
+import { isLlmConfigured } from "../lib/llm";
 import { fmtEur, fmtKm, gradeVar } from "../lib/ui";
 export const dynamic = "force-dynamic";
 
@@ -42,6 +43,15 @@ export default async function Home({
     .orderBy(desc(sql`(${leads.verdict}->>'score')::int`), desc(leads.createdAt))
     .limit(200);
 
+  // A lead is only WORTH looking at once its enrichment has read the ad: before
+  // that its verdict carries the rule score and a canned band phrase, and
+  // reading a list of those teaches you nothing about which car to open. So
+  // un-analysed leads are held back and counted rather than shown as if final.
+  // Without the LLM lane no enrichment is ever coming, so everything shows.
+  const holdUnanalysed = isLlmConfigured();
+  const shown = holdUnanalysed ? rows.filter((r) => r.lead.enrichedAt) : rows;
+  const analysing = rows.length - shown.length;
+
   return (
     <main style={{ maxWidth: 1080, margin: "0 auto", padding: "2rem 1.5rem" }}>
       {allBriefs.length > 1 && (
@@ -58,11 +68,25 @@ export default async function Home({
       )}
 
       <p style={{ color: "var(--ink-muted)", marginTop: 0 }}>
-        {rows.length} lead{rows.length === 1 ? "" : "s"} activos
+        {shown.length} lead{shown.length === 1 ? "" : "s"} analizados
         {activeBrief ? ` en «${activeBrief.name}»` : ""}, ordenados por puntuación
+        {analysing > 0 && (
+          <>
+            {" · "}
+            <span title="Aparecen en cuanto su análisis termina: antes solo tendrían la nota de reglas y una frase genérica.">
+              ⏳ {analysing} analizándose
+            </span>
+          </>
+        )}
       </p>
 
-      {rows.length === 0 ? (
+      {shown.length === 0 && analysing > 0 ? (
+        <p style={{ color: "var(--ink-muted)" }}>
+          El barrido encontró {analysing} unidad{analysing === 1 ? "" : "es"} y se están analizando
+          ahora. Aparecerán aquí con su lectura del anuncio — nota, puntos a favor y pegas
+          concretas— en cuanto termine.
+        </p>
+      ) : shown.length === 0 ? (
         <p style={{ color: "var(--ink-muted)" }}>
           Sin leads todavía{activeBrief ? " en esta búsqueda" : ""}. Crea una búsqueda en{" "}
           <Link href="/briefs">Búsquedas</Link> y arranca el runner (
@@ -84,7 +108,7 @@ export default async function Home({
               </tr>
             </thead>
             <tbody>
-              {rows.map(({ lead, listing }) => (
+              {shown.map(({ lead, listing }) => (
                 <tr key={lead.id} style={{ borderBottom: "1px solid var(--border)" }}>
                   <td style={{ ...td, padding: "0.35rem 0.75rem 0.35rem 0" }}>
                     {listing.imageUrl && (

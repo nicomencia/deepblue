@@ -7,16 +7,20 @@
  */
 
 import {
+  gradeAtMost,
   llmEnrichmentPayloadSchema,
   MAX_ENRICHMENT_DELTA,
+  type ConfidenceGrade,
   type LlmEnrichment,
   type LlmEnrichmentPayload,
 } from "@deepblue/core";
-import { briefs, events, leads, listings, type Db } from "@deepblue/db";
+import { briefs, events, leads, listings, users, type Db } from "@deepblue/db";
 import { zodOutputFormat } from "@anthropic-ai/sdk/helpers/zod";
 import { and, desc, eq, isNull, sql } from "drizzle-orm";
 import { ENRICH_MODEL, getAnthropic, isLlmConfigured, messageText } from "./llm";
-import { newEvalCaches, reevaluateLead, type EvalCaches } from "./reevaluate";
+import { sendEmail } from "./email";
+import { composeAlert, composeAlertHtml } from "./ingest";
+import { listingRowToNormalized, newEvalCaches, reevaluateLead, type EvalCaches } from "./reevaluate";
 
 type LeadRow = typeof leads.$inferSelect;
 type ListingRow = typeof listings.$inferSelect;
@@ -92,6 +96,44 @@ Instrucciones:
  * enrichment merged on top — never applied over an already-enriched verdict,
  * so re-enriching a lead can't compound deltas.
  */
+/**
+ * Send the instant alert for a lead that has just been enriched.
+ *
+ * Ingest deliberately stays quiet for shortlisted leads while the LLM lane is
+ * on (see ingest.ts): an alert composed before enrichment can only carry the
+ * canned band phrase, because `composeUnitLine` falls back to it when there is
+ * no keyLine yet. Alerting here instead costs a few minutes and buys an email
+ * that says something about THIS car.
+ *
+ * `alertedAt` is the once-only stamp, so a later re-evaluation never re-alerts.
+ */
+async function alertEnrichedLead(
+  db: Db,
+  leadId: string,
+  listing: ListingRow,
+  brief: BriefRow,
+): Promise<void> {
+  const [fresh] = await db.select().from(leads).where(eq(leads.id, leadId)).limit(1);
+  if (!fresh?.verdict || fresh.alertedAt || fresh.state !== "shortlisted") return;
+
+  const grade = (process.env.ALERT_MAX_GRADE ?? "B") as ConfidenceGrade;
+  const minScore = Number(process.env.ALERT_MIN_SCORE ?? 75);
+  if (!gradeAtMost(fresh.verdict.overall, grade) || fresh.verdict.score < minScore) return;
+
+  const [owner] = await db.select().from(users).where(eq(users.id, fresh.userId)).limit(1);
+  if (!owner) return;
+
+  const item = listingRowToNormalized(listing, brief);
+  const evaluation = { outcome: "shortlisted" as const, verdict: fresh.verdict };
+  await sendEmail({
+    to: owner.email,
+    subject: `deepblue · candidato ${fresh.verdict.overall}: ${item.title}`,
+    text: composeAlert(item, evaluation, fresh.id),
+    html: composeAlertHtml(item, evaluation, fresh.id),
+  });
+  await db.update(leads).set({ alertedAt: new Date() }).where(eq(leads.id, fresh.id));
+}
+
 export async function saveEnrichment(
   db: Db,
   lead: LeadRow,
@@ -114,6 +156,10 @@ export async function saveEnrichment(
     .where(eq(leads.id, lead.id));
 
   const result = await reevaluateLead(db, { ...lead, enrichment }, listing, brief, caches);
+
+  // The alert waits for THIS moment: only now does the lead have a keyLine,
+  // and the keyLine is what makes the email worth opening.
+  await alertEnrichedLead(db, lead.id, listing, brief);
 
   await db.insert(events).values({
     userId: lead.userId,

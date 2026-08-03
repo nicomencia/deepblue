@@ -24,6 +24,7 @@ import { briefs, events, jobs, leads, listings, users, type Db } from "@deepblue
 import { and, eq, inArray, ne, sql } from "drizzle-orm";
 import { sendEmail } from "./email";
 import { leadUrl } from "./links";
+import { isLlmConfigured } from "./llm";
 import { getBenchmark, getDossierForBrief } from "./lookups";
 import { applyPriceChange } from "./price-watch";
 import { newEvalCaches, reevaluateLead } from "./reevaluate";
@@ -116,7 +117,15 @@ export async function ingestSearchResults(
         const worthInterrupting =
           topOfBand && (!nearMiss || evaluation.verdict.score > barToBeat);
 
-        if (owner && alertsSent < MAX_ALERTS_PER_INGEST && worthInterrupting) {
+        // With the LLM lane on, a shortlisted lead's alert WAITS for its
+        // enrichment. The keyLine — this unit's own best argument and worst
+        // objection — is the entire value of the email, and at ingest time it
+        // does not exist yet, so sending now guarantees a generic band phrase
+        // ("Buen candidato: merece escribir al vendedor ya"). Near misses are
+        // never enriched (deliberate cost guard), so they still alert here.
+        const deferToEnrichment = isLlmConfigured() && !nearMiss;
+
+        if (owner && alertsSent < MAX_ALERTS_PER_INGEST && worthInterrupting && !deferToEnrichment) {
           alertsSent += 1;
           const miss = evaluation.nearMiss;
           const note = miss ? describeMiss(miss) : undefined;
