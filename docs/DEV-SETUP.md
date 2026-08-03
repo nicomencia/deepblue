@@ -144,6 +144,30 @@ anuncios, digest con suelo de nota + alertas A/B sin duplicados, dossiers
 en la página del lead), tabs por búsqueda, página Actividad, descubrimiento de
 modelos y adopción manual de anuncios con dossier-first. 77 tests verdes.
 
+**Cambio 2026-07-29 (15) — el digest ordenado por nota, con la nota a la vista y
+separado por búsqueda.** Nico recibió un correo de 52 unidades: una lista plana
+donde no se veía ni cuál abrir primero ni de qué búsqueda venía cada coche.
+
+Tres cosas. (1) El orden era `verdict->>'overall'`, la LETRA: una tirada de
+"C" no dice nada sobre cuál mirar antes. Ahora ordena por la nota numérica
+(`coalesce((verdict->>'score')::int, 0)`). (2) La cabecera de cada unidad pasa
+de `[C]` a `[C · 67]`, porque la letra agrupa cinco puntos en un cubo y a ojo no
+se puede ordenar. (3) Una sección por búsqueda, con su nombre y su cuenta, y las
+secciones encabezadas por la que tiene el mejor candidato — que es la que
+interesa leer primero.
+
+El tope pasa de global (`MAX_LISTED = 25`) a POR BÚSQUEDA (`MAX_PER_BRIEF = 10`):
+con varias búsquedas activas, un tope global dejaba que la más prolífica se
+comiera el correo entero y las demás no aparecieran. Cada sección dice cuántas
+se guarda.
+
+Y `/api/dev/digest-preview` (dev): compone el correo que se enviaría SIN
+enviarlo y SIN escribir el evento `digest_run`. Los dos efectos importan — el
+correo va al buzón real, y el evento es lo que mueve la ventana, así que forzar
+un envío "solo para verlo" habría suprimido el digest de verdad de ese día.
+`?html=1` para el cuerpo HTML, `?hours=N` para ensanchar la ventana al inspeccionar.
+Verificado en vivo: 54 candidatos, 3 secciones, tope por búsqueda respetado.
+
 **Cambio 2026-07-28 (14) — el GR Sport no es un GR Yaris, y lo que no sabemos
 identificar no puede encabezar la lista.** Nico, sobre los resultados del cambio
 13: "acepto el Yaris GR FWD, pero el GR Sport no debería estar, es un coche

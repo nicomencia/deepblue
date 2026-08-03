@@ -12,12 +12,47 @@ import { sendEmail } from "./email";
 import { leadUrl } from "./links";
 import { newEvalCaches, reevaluateLead } from "./reevaluate";
 
-const MAX_LISTED = 25;
+/**
+ * Cap per SEARCH, not per email: with several briefs running, a global cap let
+ * one prolific search eat the whole digest and hide the others entirely. Each
+ * search now shows its own best and says how many it is holding back.
+ */
+const MAX_PER_BRIEF = 10;
 /** Worst grade the digest bothers emailing; D/E stay on the dashboard only. */
 const DIGEST_FLOOR = (process.env.DIGEST_MAX_GRADE ?? "C") as ConfidenceGrade;
 
 type LeadRow = typeof leads.$inferSelect;
 type ListingRow = typeof listings.$inferSelect;
+type BriefRow = typeof briefs.$inferSelect;
+
+export interface DigestRow {
+  lead: LeadRow;
+  listing: ListingRow;
+  brief: BriefRow;
+}
+
+/** One search's slice of the digest, its rows already best-score-first. */
+interface DigestSection {
+  briefName: string;
+  rows: DigestRow[];
+}
+
+const scoreOf = (r: DigestRow): number => r.lead.verdict?.score ?? 0;
+
+/**
+ * One section per search, each ordered by score, sections led by the search
+ * holding the single best candidate — that is the one worth reading first.
+ */
+export function groupByBrief(rows: DigestRow[]): DigestSection[] {
+  const groups = new Map<string, DigestSection>();
+  for (const row of rows) {
+    const section = groups.get(row.brief.id) ?? { briefName: row.brief.name, rows: [] };
+    section.rows.push(row);
+    groups.set(row.brief.id, section);
+  }
+  for (const section of groups.values()) section.rows.sort((a, b) => scoreOf(b) - scoreOf(a));
+  return [...groups.values()].sort((a, b) => scoreOf(b.rows[0]!) - scoreOf(a.rows[0]!));
+}
 
 export interface DigestResult {
   usersProcessed: number;
@@ -26,6 +61,39 @@ export interface DigestResult {
 
 const madridDate = (d: Date) =>
   new Intl.DateTimeFormat("en-CA", { timeZone: "Europe/Madrid" }).format(d);
+
+/**
+ * Leads that became candidates inside the window, ordered by the NUMERIC score
+ * rather than the grade letter — a whole band of "C" said nothing about which C
+ * to open first. Shared with the dev preview route so what you preview is
+ * exactly what would be sent.
+ */
+export async function newCandidates(
+  db: Db,
+  userId: string,
+  windowStart: Date,
+): Promise<DigestRow[]> {
+  return db
+    .select({ lead: leads, listing: listings, brief: briefs })
+    .from(leads)
+    .innerJoin(listings, eq(leads.listingId, listings.id))
+    .innerJoin(briefs, eq(leads.briefId, briefs.id))
+    .where(
+      and(eq(leads.userId, userId), eq(leads.state, "shortlisted"), gte(leads.createdAt, windowStart)),
+    )
+    .orderBy(desc(sql`coalesce((${leads.verdict}->>'score')::int, 0)`), asc(listings.priceEur));
+}
+
+/** Start of the window the next digest would cover, without consuming it. */
+export async function digestWindowStart(db: Db, userId: string): Promise<Date> {
+  const [lastRun] = await db
+    .select({ at: events.createdAt })
+    .from(events)
+    .where(and(eq(events.userId, userId), eq(events.type, "digest_run")))
+    .orderBy(desc(events.createdAt))
+    .limit(1);
+  return lastRun?.at ?? new Date(Date.now() - 24 * 3600 * 1000);
+}
 
 export async function runDigest(
   db: Db,
@@ -61,19 +129,8 @@ export async function runDigest(
       await reevaluateLead(db, row.lead, row.listing, row.brief, caches);
     }
 
-    // New candidates in the window (re-query: re-evaluation may have killed some).
-    const fresh = await db
-      .select({ lead: leads, listing: listings })
-      .from(leads)
-      .innerJoin(listings, eq(leads.listingId, listings.id))
-      .where(
-        and(
-          eq(leads.userId, owner.id),
-          eq(leads.state, "shortlisted"),
-          gte(leads.createdAt, windowStart),
-        ),
-      )
-      .orderBy(asc(sql`${leads.verdict}->>'overall'`), asc(listings.priceEur));
+    // Re-query: re-evaluation may have killed some.
+    const fresh = await newCandidates(db, owner.id, windowStart);
 
     // Email-worthy only: at least DIGEST_FLOOR. Already-alerted leads stay in
     // as a labeled recap — the digest is the complete daily picture even for
@@ -122,7 +179,10 @@ function leadSummary({ lead, listing }: { lead: LeadRow; listing: ListingRow }):
     .filter(Boolean)
     .join(" · ");
 
-  const lines = [`[${v?.overall ?? "?"}] ${listing.title} — ${specs}`];
+  // Grade AND score: the letter bands five points into one bucket, so a list of
+  // Cs needs the number to be sortable by eye.
+  const badge = v ? `[${v.overall} · ${v.score}]` : "[?]";
+  const lines = [`${badge} ${listing.title} — ${specs}`];
   // The triage phrase first: pursue this one or wait for the next.
   if (v) lines.push(`    → ${composeUnitLine(v)}`);
   if (lead.alertedAt) {
@@ -146,33 +206,50 @@ function leadSummary({ lead, listing }: { lead: LeadRow; listing: ListingRow }):
   return lines;
 }
 
-function composeDigest(
-  rows: Array<{ lead: LeadRow; listing: ListingRow }>,
-): { text: string; html: string } {
-  const listed = rows.slice(0, MAX_LISTED);
-  const textBlocks = listed.map((r) => leadSummary(r).join("\n"));
-  const more = rows.length > MAX_LISTED ? `\n…y ${rows.length - MAX_LISTED} más en el dashboard.` : "";
-  const text = `Nuevos candidatos (${rows.length}):\n\n${textBlocks.join("\n\n")}${more}\n`;
+export function composeDigest(rows: DigestRow[]): { text: string; html: string } {
+  const sections = groupByBrief(rows);
+  const heading = `Nuevos candidatos (${rows.length}) en ${sections.length} búsqueda${
+    sections.length === 1 ? "" : "s"
+  }`;
 
-  const htmlItems = listed
-    .map((r) => {
-      const [head, ...rest] = leadSummary(r);
-      // Link lines are rendered as anchors below, not repeated as text.
-      const detail = rest
-        .filter((l) => !l.includes("http"))
-        .map((l) => `<br><small>${escapeHtml(l.trim())}</small>`)
-        .join("");
-      // The headline is the action: it opens the lead's page in deepblue
-      // (verdict, findings, approvals); the raw ad is the secondary link.
-      const photo = r.listing.imageUrl
-        ? `<br><a href="${leadUrl(r.lead.id)}"><img src="${r.listing.imageUrl}" alt="" width="280" style="max-width:100%;border-radius:6px;margin-top:6px"></a>`
+  const held = (s: DigestSection): number => Math.max(0, s.rows.length - MAX_PER_BRIEF);
+
+  const textParts = sections.map((s) => {
+    const listed = s.rows.slice(0, MAX_PER_BRIEF);
+    const blocks = listed.map((r) => leadSummary(r).join("\n")).join("\n\n");
+    const more = held(s) ? `\n\n  …y ${held(s)} más de esta búsqueda en el dashboard.` : "";
+    return `${s.briefName} (${s.rows.length})\n${"─".repeat(s.briefName.length + 6)}\n\n${blocks}${more}`;
+  });
+  const text = `${heading}:\n\n${textParts.join("\n\n\n")}\n`;
+
+  const htmlSections = sections
+    .map((s) => {
+      const items = s.rows
+        .slice(0, MAX_PER_BRIEF)
+        .map((r) => {
+          const [head, ...rest] = leadSummary(r);
+          // Link lines are rendered as anchors below, not repeated as text.
+          const detail = rest
+            .filter((l) => !l.includes("http"))
+            .map((l) => `<br><small>${escapeHtml(l.trim())}</small>`)
+            .join("");
+          // The headline is the action: it opens the lead's page in deepblue
+          // (verdict, findings, approvals); the raw ad is the secondary link.
+          const photo = r.listing.imageUrl
+            ? `<br><a href="${leadUrl(r.lead.id)}"><img src="${r.listing.imageUrl}" alt="" width="280" style="max-width:100%;border-radius:6px;margin-top:6px"></a>`
+            : "";
+          return `<li style="margin-bottom:16px"><a href="${leadUrl(r.lead.id)}">${escapeHtml(head ?? "")}</a>${detail}${photo}<br><small><a href="${r.listing.url}">anuncio original</a></small></li>`;
+        })
+        .join("\n");
+      const more = held(s)
+        ? `<p style="margin:4px 0 0"><small>…y ${held(s)} más de esta búsqueda en el dashboard.</small></p>`
         : "";
-      return `<li style="margin-bottom:16px"><a href="${leadUrl(r.lead.id)}">${escapeHtml(head ?? "")}</a>${detail}${photo}<br><small><a href="${r.listing.url}">anuncio original</a></small></li>`;
+      return `<h3 style="margin:24px 0 4px;padding-bottom:4px;border-bottom:1px solid #ddd">${escapeHtml(
+        s.briefName,
+      )} <small style="font-weight:normal;color:#666">(${s.rows.length})</small></h3><ul style="padding-left:16px;margin-top:8px">${items}</ul>${more}`;
     })
     .join("\n");
-  const html = `<p>Nuevos candidatos (${rows.length}):</p><ul style="padding-left:16px">${htmlItems}</ul>${
-    rows.length > MAX_LISTED ? `<p>…y ${rows.length - MAX_LISTED} más en el dashboard.</p>` : ""
-  }`;
+  const html = `<p>${escapeHtml(heading)}:</p>${htmlSections}`;
 
   return { text, html };
 }
