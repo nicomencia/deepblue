@@ -10,7 +10,9 @@ import { composeUnitLine, gradeAtMost, type ConfidenceGrade, type ConfidenceVerd
 import { briefs, events, leads, listings, users, type Db } from "@deepblue/db";
 import { and, eq, notInArray } from "drizzle-orm";
 import { sendEmail } from "./email";
+import { enrichLead } from "./enrich-verdict";
 import { leadUrl } from "./links";
+import { isLlmConfigured } from "./llm";
 import { newEvalCaches, reevaluateLead } from "./reevaluate";
 
 export interface PriceDrop {
@@ -41,6 +43,9 @@ export interface PriceChangeStats {
   reevaluated: number;
   alerted: number;
 }
+
+/** Below this, a price move is haggling noise — not worth a paid re-read. */
+const MATERIAL_PRICE_CHANGE = 0.03;
 
 /**
  * Apply one observed price change on a listing: event per active lead,
@@ -84,6 +89,32 @@ export async function applyPriceChange(
     stats.reevaluated += 1;
 
     if (newPriceEur >= oldPriceEur) continue;
+
+    // The rules re-price instantly, but the ENRICHMENT still quotes the old
+    // number — "Precio atractivo (4.000€, -17% vs mercado)" on a car now at
+    // 3.750€ and -23%. That line is the body of the price-drop email, so
+    // without this the mail contradicts its own subject. Re-read the ad first,
+    // then write. Gated on a material move: re-reading on every haggling cent
+    // would pay for a model call to change a rounding.
+    const moved = Math.abs(newPriceEur - oldPriceEur) / oldPriceEur;
+    if (moved >= MATERIAL_PRICE_CHANGE && isLlmConfigured()) {
+      try {
+        await enrichLead(
+          db,
+          row.lead,
+          { ...row.listing, priceEur: newPriceEur },
+          row.brief,
+          caches,
+        );
+      } catch (err) {
+        // A failed re-read must not swallow the price-drop email; it just
+        // means the keyLine stays stale for this one send.
+        console.error(
+          `re-enrich after price drop failed for lead ${row.lead.id}:`,
+          err instanceof Error ? err.message : err,
+        );
+      }
+    }
 
     // Same bar as instant alerts: only the top of the band interrupts.
     const [fresh] = await db

@@ -5,7 +5,8 @@ import type {
   NormalizedListing,
 } from "@deepblue/core";
 import { describe, expect, it } from "vitest";
-import { composeAlert, composeAlertHtml, describeMiss } from "./ingest";
+import { composeAlert, composeAlertHtml } from "./alerts";
+import { describeMiss } from "./ingest";
 
 const verdict = (over: Partial<ConfidenceVerdict>): ConfidenceVerdict =>
   ({

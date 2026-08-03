@@ -144,6 +144,26 @@ anuncios, digest con suelo de nota + alertas A/B sin duplicados, dossiers
 en la página del lead), tabs por búsqueda, página Actividad, descubrimiento de
 modelos y adopción manual de anuncios con dossier-first. 77 tests verdes.
 
+**Cambio 2026-07-29 (21) — la bajada de precio no refrescaba la lectura.**
+Nico avisó de un lead con bajada de precio "pero la nota y el resumen parecen
+iguales". Las reglas SÍ se recalculaban (priceFairness pasó a A 95, "23% por
+debajo de la mediana"), pero el enriquecimiento seguía citando el número viejo:
+"Precio atractivo (4.000€, -17% vs mercado)" en un coche que ya estaba a
+3.750 € y a -23%. Y esa línea es el cuerpo del correo de bajada, así que el
+mail se contradecía con su propio asunto.
+
+Ahora una bajada MATERIAL (≥3%, para no pagar una llamada al modelo por un
+regateo de céntimos) vuelve a leer el anuncio ANTES de escribir el correo. Si
+esa relectura falla, el correo sale igual con la línea vieja — un fallo del
+modelo no puede tragarse el aviso.
+
+De paso, `composeAlert`/`composeAlertHtml` salen a `lib/alerts.ts`: los envían
+tres vías (ingest, enriquecimiento y bajadas de precio) e importarlos desde
+ingest cerraba el ciclo ingest → price-watch → enrich-verdict → ingest.
+
+Verificado sobre el lead real: keyLine pasa de "(4.000€, -17%)" a "Precio de
+ganga (3.750€ vs ~4.850€ de mercado)" y la nota de 83 a 80.
+
 **Cambio 2026-07-29 (20) — nada se enseña antes de estar analizado.** Nico:
 "recibir un correo de candidato nuevo con «Confianza global: B — Buen candidato:
 merece escribir al vendedor ya» no es bueno; hacemos un enriquecimiento para

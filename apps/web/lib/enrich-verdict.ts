@@ -19,7 +19,7 @@ import { zodOutputFormat } from "@anthropic-ai/sdk/helpers/zod";
 import { and, desc, eq, isNull, sql } from "drizzle-orm";
 import { ENRICH_MODEL, getAnthropic, isLlmConfigured, messageText } from "./llm";
 import { sendEmail } from "./email";
-import { composeAlert, composeAlertHtml } from "./ingest";
+import { composeAlert, composeAlertHtml } from "./alerts";
 import { listingRowToNormalized, newEvalCaches, reevaluateLead, type EvalCaches } from "./reevaluate";
 
 type LeadRow = typeof leads.$inferSelect;
