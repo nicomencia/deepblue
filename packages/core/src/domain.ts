@@ -365,6 +365,37 @@ export function sameModelFamily(a: string, b: string): boolean {
   return dossierCoversModel(a, b) || dossierCoversModel(b, a);
 }
 
+/** Light singular: "sports" → "sport", but never shrink a token to a stub. */
+const singular = (t: string): string => (t.length > 3 && t.endsWith("s") ? t.slice(0, -1) : t);
+
+/**
+ * Is this the same model NAME, merely spelled differently? "Renault Sport
+ * Spider" and "Renault Sports Spider" are one car.
+ *
+ * Deliberately far stricter than sameModelFamily, because this gates PAID
+ * dossier research and must never fuse two real cars: the token COUNT has to
+ * match. That is what keeps "Golf" apart from "Golf R", "207" from "207 RC"
+ * and "Yaris" from "GR Yaris" — those differ by a whole word, and a whole
+ * extra word is exactly how manufacturers name a different car. Only inside an
+ * equal-length name do we forgive spelling.
+ *
+ * Written because two briefs one letter apart each paid for their own dossier:
+ * the guard compared `lower(model)` exactly, so it saw two cars (2026-07-29).
+ */
+export function sameModelName(a: string, b: string): boolean {
+  const tokens = (s: string): string[] =>
+    s
+      .toLowerCase()
+      .normalize("NFD")
+      .split(/[^\p{Letter}\p{Number}]+/u)
+      .map((t) => t.replace(/[^a-z0-9]/g, ""))
+      .filter(Boolean)
+      .map(singular);
+  const ta = tokens(a);
+  const tb = tokens(b);
+  return ta.length > 0 && ta.length === tb.length && ta.every((t, i) => t === tb[i]);
+}
+
 export const modelDossierSchema = z.object({
   make: z.string(),
   model: z.string(),

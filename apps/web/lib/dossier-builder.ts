@@ -7,6 +7,7 @@
 
 import {
   dossierCoversModel,
+  sameModelName,
   dossierCoversYears,
   generationYearSpan,
   modelDossierSchema,
@@ -200,7 +201,9 @@ async function isGenerationCovered(
     );
   return rows.some(
     (d) =>
-      dossierCoversModel(d.model, dossier.model) &&
+      // Same name spelled differently counts as covered — otherwise "Sport
+      // Spider" and "Sports Spider" each pay for their own research.
+      (dossierCoversModel(d.model, dossier.model) || sameModelName(d.model, dossier.model)) &&
       dossierCoversYears(d.content.generation, span?.yearMin, span?.yearMax),
   );
 }
@@ -220,16 +223,25 @@ const BUILD_STALE_MS = 20 * 60 * 1000;
  */
 export async function claimDossierBuild(db: Db, make: string, model: string): Promise<boolean> {
   const stale = new Date(Date.now() - BUILD_STALE_MS);
-  // Clear a dead claim first; if the holder is alive this deletes nothing.
+  // Clear this make's dead claims first; live holders are untouched.
   await db
     .delete(dossierBuilds)
     .where(
       and(
         sql`lower(${dossierBuilds.make}) = ${make.toLowerCase()}`,
-        sql`lower(${dossierBuilds.model}) = ${model.toLowerCase()}`,
         lt(dossierBuilds.startedAt, stale),
       ),
     );
+
+  // A live claim under a different SPELLING is the same research. The unique
+  // index cannot see that — it compares strings — so the near-name check runs
+  // here, and the index stays as the atomic settler of exact-name races.
+  const live = await db
+    .select({ model: dossierBuilds.model })
+    .from(dossierBuilds)
+    .where(sql`lower(${dossierBuilds.make}) = ${make.toLowerCase()}`);
+  if (live.some((c) => sameModelName(c.model, model))) return false;
+
   const inserted = await db
     .insert(dossierBuilds)
     .values({ make, model })

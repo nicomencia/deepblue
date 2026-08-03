@@ -144,6 +144,32 @@ anuncios, digest con suelo de nota + alertas A/B sin duplicados, dossiers
 en la página del lead), tabs por búsqueda, página Actividad, descubrimiento de
 modelos y adopción manual de anuncios con dossier-first. 77 tests verdes.
 
+**Cambio 2026-07-29 (17) — una letra de diferencia y el coche pagó dos
+dossiers.** Nico: "¿por qué tenemos 2 dossiers de este coche?". Culpa mía: al
+probar el cambio 16 creé la búsqueda como "Renault **Sport** Spider" mientras la
+suya decía "Renault **Sports** Spider". Dos investigaciones pagadas del mismo
+coche (17:15, 14 problemas / 17:21, 11 problemas).
+
+La guarda del cambio 12 existía justo para esto, pero comparaba
+`lower(model) = lower(model)`: para SQL "sport spider" y "sports spider" son dos
+coches. Es la misma clase de fallo que el GR Yaris —identidad de un coche por
+comparación exacta de cadenas— ahora en un tercer sitio.
+
+Nuevo `sameModelName` en core, a propósito MUCHO más estricto que
+`sameModelFamily`, porque esto controla gasto real y no puede fusionar dos
+coches: **el número de palabras tiene que coincidir**. Eso es lo que mantiene
+"Golf" separado de "Golf R", "207" de "207 RC" y "Yaris" de "GR Yaris" — una
+palabra de más es justo como los fabricantes nombran otro coche. Solo dentro de
+un nombre de la misma longitud se perdona la ortografía (singular/plural, sin
+encoger tokens cortos: "RS" nunca pasa a "R").
+
+Lo usan las dos guardas: la cobertura (`isGenerationCovered`) y la reserva
+(`claimDossierBuild`, que ahora mira las reservas vivas de la marca en código y
+deja el índice único como árbitro atómico de las carreras con nombre idéntico).
+
+Verificado en vivo: "Sports Spider" y "Sport Spiders" se rechazan al instante y
+sin gastar, mientras Yaris y GR Yaris siguen conviviendo con dossier propio.
+
 **Cambio 2026-07-29 (16) — el precio máximo deja de ser obligatorio.** Nico: "no
 quiero poner precio máximo al crear una búsqueda; busco un Renault Sport Spider
 y no sé por cuánto van, quiero crear la búsqueda para ver qué hay en el

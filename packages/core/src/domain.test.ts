@@ -22,6 +22,7 @@ import {
   pickDossierForYear,
   PLATFORMS,
   sameModelFamily,
+  sameModelName,
   type ModelDossier,
 } from "./domain.js";
 
@@ -54,6 +55,37 @@ describe("sameModelFamily", () => {
     expect(sameModelFamily("golf", "golf")).toBe(true);
     expect(sameModelFamily("207", "208")).toBe(false);
     expect(sameModelFamily("serie 3", "serie 5")).toBe(false);
+  });
+});
+
+describe("sameModelName", () => {
+  // Two briefs one letter apart each paid for their own dossier (2026-07-29).
+  it("forgives spelling inside a name of the same length", () => {
+    expect(sameModelName("Sport Spider", "Sports Spider")).toBe(true);
+    expect(sameModelName("Sports Spider", "Sport Spider")).toBe(true);
+    expect(sameModelName("GR Yaris", "gr yaris")).toBe(true);
+    expect(sameModelName("Serie 3", "serie-3")).toBe(true);
+  });
+
+  // The whole point of the token-count rule: an extra word is how a maker
+  // names a DIFFERENT car, and merging these would hide a real dossier.
+  it("never fuses a model with its hotter sibling", () => {
+    expect(sameModelName("Golf", "Golf R")).toBe(false);
+    expect(sameModelName("207", "207 RC")).toBe(false);
+    expect(sameModelName("Yaris", "GR Yaris")).toBe(false);
+    expect(sameModelName("RAV4", "RAV4 Adventure")).toBe(false);
+  });
+
+  it("keeps genuinely different models apart", () => {
+    expect(sameModelName("207", "208")).toBe(false);
+    expect(sameModelName("Serie 3", "Serie 5")).toBe(false);
+    expect(sameModelName("Clio", "Captur")).toBe(false);
+  });
+
+  it("does not shrink a short token to a stub", () => {
+    // "RS" must not become "R", or RS3 and R3 would read alike.
+    expect(sameModelName("RS 3", "R 3")).toBe(false);
+    expect(sameModelName("", "")).toBe(false);
   });
 });
 
