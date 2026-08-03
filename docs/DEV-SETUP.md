@@ -144,6 +144,32 @@ anuncios, digest con suelo de nota + alertas A/B sin duplicados, dossiers
 en la página del lead), tabs por búsqueda, página Actividad, descubrimiento de
 modelos y adopción manual de anuncios con dossier-first. 77 tests verdes.
 
+**Cambio 2026-07-29 (16) — el precio máximo deja de ser obligatorio.** Nico: "no
+quiero poner precio máximo al crear una búsqueda; busco un Renault Sport Spider
+y no sé por cuánto van, quiero crear la búsqueda para ver qué hay en el
+mercado". El formulario exigía el dato que la búsqueda existe para averiguar.
+
+`HardLimits.maxPriceEur` pasa a opcional y con eso:
+- **Evaluación**: sin presupuesto no hay veto `price_over_budget` — nada puede
+  pasarse de un límite que no se puso. El resto de límites (km, año, modelo)
+  siguen igual.
+- **Sweep**: sin presupuesto NO se manda ni techo ni suelo a la plataforma.
+  Cualquier cota inventada aquí respondería la pregunta antes de hacerla.
+- **`budgetNote`**: sigue cuantificando la apuesta de reparaciones, pero sin
+  compararla contra un techo que no existe.
+- **Negociación: se apaga.** El tope ES lo único que acota una oferta o un
+  "accept"; sin él no hay número seguro que poner encima de la mesa. Así que
+  `agreedPriceEur` devuelve null, `chat-reads` no emite `negotiation_ready`, y
+  la ficha del lead no propone oferta ni contraoferta. Preguntas y visitas
+  siguen funcionando. El typechecker encontró los cinco sitios solo.
+
+Nuevo `/api/dev/brief-create` (dev): crea una búsqueda llamando a la MISMA
+server action del formulario, así lo que se prueba es el camino real (validación
++ cadena dossier/sweep). Y el PATCH de `/api/dev/briefs` acepta `name`.
+
+Verificado en vivo: la búsqueda del Spider sin tope encola un job **sin
+`priceMaxEur` ni `priceMinEur`**, mientras las demás mantienen los suyos.
+
 **Cambio 2026-07-29 (15) — el digest ordenado por nota, con la nota a la vista y
 separado por búsqueda.** Nico recibió un correo de 52 unidades: una lista plana
 donde no se veía ni cuál abrir primero ni de qué búsqueda venía cada coche.

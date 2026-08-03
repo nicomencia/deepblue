@@ -53,7 +53,11 @@ Versión: ${listing.version ?? "?"} · Vendedor: ${listing.sellerName ?? "?"} ($
 Descripción:
 ${(listing.description ?? "(sin descripción)").slice(0, MAX_DESCRIPTION_CHARS)}
 
-LO QUE BUSCA EL COMPRADOR: ${brief.name} · presupuesto máx ${brief.hardLimits.maxPriceEur} €${
+LO QUE BUSCA EL COMPRADOR: ${brief.name} · ${
+    brief.hardLimits.maxPriceEur !== undefined
+      ? `presupuesto máx ${brief.hardLimits.maxPriceEur} €`
+      : "sin presupuesto fijado (busca conocer el mercado de este modelo)"
+  }${
     brief.criteria.notes?.length ? ` · condiciones: ${brief.criteria.notes.join("; ")}` : ""
   }
 

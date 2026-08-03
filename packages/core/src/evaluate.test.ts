@@ -43,7 +43,8 @@ const criteria = (overrides: Partial<BriefCriteria> = {}): BriefCriteria => ({
   ...overrides,
 });
 
-const hardLimits: HardLimits = { maxPriceEur: 15_500, nonNegotiables: [] };
+const MAX_PRICE = 15_500;
+const hardLimits: HardLimits = { maxPriceEur: MAX_PRICE, nonNegotiables: [] };
 const benchmark: PriceBenchmark = { medianEur: 14_000, sampleSize: 20, market: "ES" };
 
 const dossier = (issues: ModelDossier["knownIssues"]): ModelDossier => ({
@@ -350,7 +351,7 @@ describe("hard filters", () => {
   });
 
   it("keeps asking prices within negotiation headroom, drops them above it", () => {
-    const cap = Math.round(hardLimits.maxPriceEur * NEGOTIATION_HEADROOM); // 17.825
+    const cap = Math.round(MAX_PRICE * NEGOTIATION_HEADROOM); // 17.825
     expect(evaluateListing(listing({ priceEur: cap }), criteria(), hardLimits).outcome).toBe("shortlisted");
     const over = evaluateListing(listing({ priceEur: cap + 1 }), criteria(), hardLimits);
     expect(over.outcome).not.toBe("shortlisted");
@@ -396,11 +397,40 @@ describe("near misses", () => {
   });
 
   it("stretches the budget beyond the negotiation headroom", () => {
-    const cap = hardLimits.maxPriceEur * NEGOTIATION_HEADROOM;
+    const cap = MAX_PRICE * NEGOTIATION_HEADROOM;
     expect(evaluateListing(listing({ priceEur: Math.round(cap * 1.1) }), criteria(), hardLimits).outcome)
       .toBe("near_miss");
     expect(evaluateListing(listing({ priceEur: Math.round(cap * 1.2) }), criteria(), hardLimits).outcome)
       .toBe("dead");
+  });
+
+  // A market-watch brief ("what does a Renault Sport Spider even go for?")
+  // exists to LEARN the price, so nothing can be over a limit never set.
+  it("shows any price when the brief has no budget", () => {
+    const noBudget: HardLimits = { nonNegotiables: [] };
+    for (const priceEur of [900, 15_500, 90_000, 400_000]) {
+      const r = evaluateListing(listing({ priceEur }), criteria(), noBudget);
+      expect(r.outcome, `${priceEur} €`).toBe("shortlisted");
+    }
+  });
+
+  it("still enforces the other limits without a budget", () => {
+    const noBudget: HardLimits = { nonNegotiables: [] };
+    const r = evaluateListing(listing({ km: 400_000, priceEur: 90_000 }), criteria(), noBudget);
+    expect(r.deadReason).toBe("km_over_limit");
+  });
+
+  it("quantifies the repair gamble without inventing a budget to compare it to", () => {
+    const noBudget: HardLimits = { nonNegotiables: [] };
+    const v = evaluateListing(
+      listing({ gearbox: "Automático", km: 70_000, priceEur: 10_000 }),
+      criteria(),
+      noBudget,
+      benchmark,
+      dossier([dsgIssue]),
+    ).verdict;
+    expect(v.budgetNote).toContain("no tiene presupuesto fijado");
+    expect(v.budgetNote).not.toContain("por encima de tu presupuesto");
   });
 
   it("never stretches an absolute limit — a wrong vehicle or an import is a no", () => {

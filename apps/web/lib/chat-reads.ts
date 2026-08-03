@@ -258,7 +258,11 @@ export async function saveConversationReading(
   // re-read of the same state must not re-email.
   const neg = payload.negotiation;
   const prevNeg = lead.chatReading?.negotiation;
+  // A brief with no budget never reaches "negotiation ready": the cap is what
+  // bounds the accept, so without one there is no safe number to agree to.
+  const maxBudgetEur = brief.hardLimits.maxPriceEur;
   if (
+    maxBudgetEur !== undefined &&
     neg?.ourLastOfferEur &&
     neg?.sellerLastOfferEur &&
     (prevNeg?.ourLastOfferEur !== neg.ourLastOfferEur ||
@@ -267,7 +271,7 @@ export async function saveConversationReading(
     const decision = respondToCounterEur({
       ourLastOfferEur: neg.ourLastOfferEur,
       sellerCounterEur: neg.sellerLastOfferEur,
-      maxBudgetEur: brief.hardLimits.maxPriceEur,
+      maxBudgetEur,
     });
     if (decision.action === "accept") {
       await db.insert(events).values({

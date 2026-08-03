@@ -24,7 +24,8 @@ const patchSchema = z.object({
   id: z.string(),
   // `null` clears the area — the brief then covers all of Spain. Distinct from
   // omitting the key, which leaves the existing area untouched.
-  location: z.object({ lat: z.number(), lon: z.number(), radiusKm: z.number() }).nullable(),
+  location: z.object({ lat: z.number(), lon: z.number(), radiusKm: z.number() }).nullable().optional(),
+  name: z.string().min(1).optional(),
 });
 
 /** Dev-only: retarget a brief's search area without retyping the whole form. */
@@ -37,9 +38,18 @@ export async function PATCH(req: Request): Promise<Response> {
   const [brief] = await db.select().from(briefs).where(eq(briefs.id, parsed.data.id)).limit(1);
   if (!brief) return Response.json({ error: "brief not found" }, { status: 404 });
 
-  const criteria = { ...brief.criteria };
-  if (parsed.data.location) criteria.location = parsed.data.location;
-  else delete criteria.location;
-  await db.update(briefs).set({ criteria }).where(eq(briefs.id, brief.id));
-  return Response.json({ ok: true, id: brief.id, location: parsed.data.location });
+  const patch: { criteria?: typeof brief.criteria; name?: string } = {};
+  if (parsed.data.location !== undefined) {
+    const criteria = { ...brief.criteria };
+    if (parsed.data.location) criteria.location = parsed.data.location;
+    else delete criteria.location;
+    patch.criteria = criteria;
+  }
+  if (parsed.data.name !== undefined) patch.name = parsed.data.name;
+  if (Object.keys(patch).length === 0) {
+    return Response.json({ ok: false, error: "nada que cambiar" }, { status: 400 });
+  }
+
+  await db.update(briefs).set(patch).where(eq(briefs.id, brief.id));
+  return Response.json({ ok: true, id: brief.id, ...patch });
 }

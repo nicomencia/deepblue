@@ -49,9 +49,12 @@ function parseBriefForm(formData: FormData): {
 } {
   const make = String(formData.get("make") ?? "").trim();
   const model = String(formData.get("model") ?? "").trim();
+  // Price is OPTIONAL: a market-watch brief ("what does a Renault Sport Spider
+  // go for?") exists to answer that question, so demanding the answer up front
+  // made the search impossible to create.
   const maxPriceEur = num(formData.get("maxPriceEur"));
-  if (!make || !model || !maxPriceEur) {
-    throw new Error("marca, modelo y precio máximo son obligatorios");
+  if (!make || !model) {
+    throw new Error("marca y modelo son obligatorios");
   }
 
   // Generation is advisory (dossier-first machinery + card display); the year
@@ -78,14 +81,15 @@ function parseBriefForm(formData: FormData): {
   if (criteria.gearbox?.length === 0) delete criteria.gearbox;
 
   const hardLimits: HardLimits = {
-    maxPriceEur,
+    ...(maxPriceEur !== undefined ? { maxPriceEur } : {}),
     nonNegotiables: lines(formData.get("nonNegotiables")),
     ...(formData.get("noRhd") ? { noRhd: true } : {}),
     ...(formData.get("requireSpanishPlates") ? { requireSpanishPlates: true } : {}),
   };
 
   const name =
-    String(formData.get("name") ?? "").trim() || `${make} ${model} hasta ${maxPriceEur} €`;
+    String(formData.get("name") ?? "").trim() ||
+    (maxPriceEur !== undefined ? `${make} ${model} hasta ${maxPriceEur} €` : `${make} ${model}`);
 
   return { name, make, model, generation, criteria, hardLimits };
 }

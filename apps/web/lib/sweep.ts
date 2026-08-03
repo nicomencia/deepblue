@@ -14,6 +14,22 @@ import {
 import { briefs, events, jobs, type Db } from "@deepblue/db";
 import { and, eq, sql } from "drizzle-orm";
 
+/**
+ * Price bounds for the platform query, or none at all.
+ *
+ * With a budget: the ceiling keeps asking prices within negotiation headroom,
+ * and the floor skips financing/installment posts (329 € "cars") and wrecks —
+ * capped so a big budget hunting cheap old units never silently excludes the
+ * honest end of the market.
+ */
+function priceBounds(maxPriceEur?: number): { priceMaxEur?: number; priceMinEur?: number } {
+  if (maxPriceEur === undefined) return {};
+  return {
+    priceMaxEur: Math.round(maxPriceEur * NEGOTIATION_HEADROOM),
+    priceMinEur: Math.min(Math.round(maxPriceEur * 0.3), 1500),
+  };
+}
+
 export async function enqueueSweeps(
   db: Db,
   /** Only briefs hunting this model (e.g. right after its dossier landed). */
@@ -59,12 +75,10 @@ export async function enqueueSweeps(
             keywords: `${vehicle.make} ${vehicle.model}`,
             make: vehicle.make,
             model: vehicle.model,
-            // Asking prices above budget within negotiation headroom still matter.
-            priceMaxEur: Math.round(brief.hardLimits.maxPriceEur * NEGOTIATION_HEADROOM),
-            // Floor skips financing/installment posts (329€ "cars") and
-            // wrecks — capped so a big budget on cheap old units (20k€ hunting
-            // 3–5k€ vans) never silently excludes the honest end of the market.
-            priceMinEur: Math.min(Math.round(brief.hardLimits.maxPriceEur * 0.3), 1500),
+            // No budget → no price bounds at all: the brief exists precisely to
+            // find out what the model goes for, so any floor or ceiling we
+            // invented here would answer the question before it was asked.
+            ...priceBounds(brief.hardLimits.maxPriceEur),
             yearMin: brief.criteria.yearMin,
             yearMax: brief.criteria.yearMax,
             kmMax: brief.criteria.kmMax,

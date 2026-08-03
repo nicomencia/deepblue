@@ -55,8 +55,12 @@ export function BriefForm({
         <input name="kmMax" type="number" placeholder="140000" defaultValue={c?.kmMax} style={inp} />
       </label>
       <label style={lbl}>
-        Precio máximo (€) *
-        <input name="maxPriceEur" type="number" required placeholder="15500" defaultValue={h?.maxPriceEur} style={inp} />
+        Precio máximo (€)
+        <input name="maxPriceEur" type="number" placeholder="sin tope" defaultValue={h?.maxPriceEur} style={inp} />
+        <small style={hint}>
+          Vacío = sin tope: útil para ver a cuánto va un modelo que no conoces. Sin tope no se
+          negocia ni se ofertan precios.
+        </small>
       </label>
       <label style={lbl}>
         Precio objetivo (€)

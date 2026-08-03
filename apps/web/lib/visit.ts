@@ -15,10 +15,15 @@ type BriefRow = typeof briefs.$inferSelect;
 export function agreedPriceEur(lead: LeadRow, brief: BriefRow): number | null {
   const neg = lead.chatReading?.negotiation;
   if (!neg?.ourLastOfferEur || !neg?.sellerLastOfferEur) return null;
+  // No declared budget → nothing to accept against. The cap is the ONLY thing
+  // stopping "accept" from agreeing to any number, so its absence must mean no
+  // decision, never an unbounded one.
+  const maxBudgetEur = brief.hardLimits.maxPriceEur;
+  if (maxBudgetEur === undefined) return null;
   const decision = respondToCounterEur({
     ourLastOfferEur: neg.ourLastOfferEur,
     sellerCounterEur: neg.sellerLastOfferEur,
-    maxBudgetEur: brief.hardLimits.maxPriceEur,
+    maxBudgetEur,
   });
   return decision.action === "accept" ? decision.priceEur : null;
 }

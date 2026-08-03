@@ -142,22 +142,29 @@ export default async function LeadDetail({
   // answer. A pending counter takes precedence over questions and fresh
   // offers — the one wrong move is repeating a number they already refused.
   const negotiation = lead.chatReading?.negotiation;
+  // Every number we would put on the table is bounded by this cap. A brief
+  // without one (a market-watch search) therefore proposes no price at all —
+  // questions and visits still work, offers and counters do not.
+  const maxBudgetEur = brief.hardLimits.maxPriceEur;
   const counterInput =
-    !waitingForSeller && negotiation?.ourLastOfferEur && negotiation?.sellerLastOfferEur
+    maxBudgetEur !== undefined &&
+    !waitingForSeller &&
+    negotiation?.ourLastOfferEur &&
+    negotiation?.sellerLastOfferEur
       ? {
           ourLastOfferEur: negotiation.ourLastOfferEur,
           sellerCounterEur: negotiation.sellerLastOfferEur,
-          maxBudgetEur: brief.hardLimits.maxPriceEur,
+          maxBudgetEur,
         }
       : null;
   const counterDecision = counterInput ? respondToCounterEur(counterInput) : null;
 
   const askingPriceEur = listing.cashPriceEur ?? listing.priceEur;
   const offerInput =
-    askingPriceEur != null
+    askingPriceEur != null && maxBudgetEur !== undefined
       ? {
           askingPriceEur,
-          maxBudgetEur: brief.hardLimits.maxPriceEur,
+          maxBudgetEur,
           repairExposureEur: lead.verdict?.repairExposureEur,
           pendingRisks: lead.verdict?.issues
             ?.filter((i) => i.status === "unconfirmed")

@@ -145,8 +145,9 @@ export default async function BriefsPage({
                     ? ` · ${c.yearMin ?? "…"}–${c.yearMax ?? "hoy"}`
                     : ""}
                   {c.kmMax ? ` · hasta ${c.kmMax.toLocaleString("es-ES")} km` : ""}
-                  {" · máx "}
-                  {fmtEur(brief.hardLimits.maxPriceEur)}
+                  {brief.hardLimits.maxPriceEur !== undefined
+                    ? ` · máx ${fmtEur(brief.hardLimits.maxPriceEur)}`
+                    : " · sin tope de precio"}
                   {c.targetPriceEur ? ` (objetivo ${fmtEur(c.targetPriceEur)})` : ""}
                   {" · riesgo "}
                   {c.riskTolerance ?? "medium"} · {shortlisted}/{total} leads vivos

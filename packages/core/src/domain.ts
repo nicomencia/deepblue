@@ -84,7 +84,15 @@ export type AutonomyMode = (typeof AUTONOMY_MODES)[number];
  * The agent physically cannot offer above maxPriceEur.
  */
 export interface HardLimits {
-  maxPriceEur: number;
+  /**
+   * Optional: a market-watch brief ("what does a Renault Sport Spider even go
+   * for?") has no budget yet — that is the question, not the constraint. When
+   * absent nothing is over budget and the sweep asks for no price bound.
+   *
+   * It stays the offer ceiling wherever it IS set, and negotiation refuses to
+   * run without one: an agent with no cap cannot be trusted with a number.
+   */
+  maxPriceEur?: number;
   nonNegotiables: string[];
   /** RHD at no price: confirmed right-hand drive is dead on arrival. */
   noRhd?: boolean;
