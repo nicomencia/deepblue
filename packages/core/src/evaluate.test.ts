@@ -298,6 +298,31 @@ describe("hard filters", () => {
     expect(r.verdict.vetoes ?? []).not.toContain("model_variant");
   });
 
+  // Renault badged it "Sport Spider"; every ad says "Renault Spider". A missing
+  // word can still be the same car, which is why aliases are DECLARED per brief
+  // and never inferred — inferring it would merge Golf and Golf R (2026-07-29).
+  it("matches a shorter trade name only when the brief declares it", () => {
+    const ad = listing({
+      title: "Renault Spider 2.0 16V",
+      make: "Renault",
+      model: "Spider",
+      year: 1998,
+      km: 40_000,
+      priceEur: 40_000,
+    });
+    const strict = criteria({ vehicles: [{ make: "Renault", model: "Sport Spider" }], yearMin: 1995 });
+    expect(evaluateListing(ad, strict, { nonNegotiables: [] }).deadReason).toBe("different_vehicle");
+
+    const withAlias = criteria({
+      vehicles: [
+        { make: "Renault", model: "Sport Spider" },
+        { make: "Renault", model: "Spider" },
+      ],
+      yearMin: 1995,
+    });
+    expect(evaluateListing(ad, withAlias, { nonNegotiables: [] }).outcome).not.toBe("dead");
+  });
+
   // The words must be WORDS: "gr" hides inside "gris", and a grey Yaris is not
   // a GR Yaris. Without this the widened match would swallow half the corpus.
   it("does not read a colour as a model name", () => {

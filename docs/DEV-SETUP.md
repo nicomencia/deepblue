@@ -144,6 +144,34 @@ anuncios, digest con suelo de nota + alertas A/B sin duplicados, dossiers
 en la página del lead), tabs por búsqueda, página Actividad, descubrimiento de
 modelos y adopción manual de anuncios con dossier-first. 77 tests verdes.
 
+**Cambio 2026-07-29 (18) — el mismo coche con otro nombre: alias de modelo.**
+Nico encontró un Renault Spider en Wallapop que la búsqueda no vio. Renault lo
+homologó como "Sport Spider", pero los anuncios ponen solo "Renault Spider", y
+faltando esa palabra fallaban DOS cosas: el sweep buscaba las keywords
+equivocadas, y la evaluación exigía después una palabra que el vendedor nunca
+escribió (`different_vehicle`).
+
+Aquí no se puede inferir: quitar una palabra a veces SÍ es otro coche ("Golf" vs
+"Golf R"), así que los alias se **declaran** por búsqueda. Campo nuevo "Otros
+nombres del modelo" que añade entradas a `criteria.vehicles` — el array que el
+sweep y `matchesVehicle` ya recorrían, así que no hace falta maquinaria nueva.
+De paso, `updateBrief` re-añadía `vehicles.slice(1)` al guardar (escrito cuando
+solo el vehículo primario tenía campos): ahora el formulario los devuelve todos
+y duplicaría cada alias en cada guardado.
+
+Y el efecto colateral que casi se escapa: `getDossier` busca por el modelo del
+ANUNCIO, así que un anuncio "Spider" no encontraba el dossier "Sport Spider" y
+se evaluaba con cero conocimiento — o sea, otra vez el 55 neutro ganándole a la
+investigación. Nuevo `getDossierForBrief` (en `lookups.ts`): modelo del anuncio
+primero, y si no, los nombres que la búsqueda conoce. Vive ahí y no en las
+llamadas porque ingest, reevaluate y adopt lo buscaban cada uno por su cuenta:
+parcheé ingest, y el mismo anuncio tuvo dossier al entrar y lo perdió en la
+siguiente reevaluación. Los tres pasan ya por el helper.
+
+Verificado en vivo con el anuncio real (1148355781): aparece en la lista, 1998,
+60.000 €, con los 11 riesgos del dossier, confianza 50% → 65% y exposición
+4.320–23.050 €.
+
 **Cambio 2026-07-29 (17) — una letra de diferencia y el coche pagó dos
 dossiers.** Nico: "¿por qué tenemos 2 dossiers de este coche?". Culpa mía: al
 probar el cambio 16 creé la búsqueda como "Renault **Sport** Spider" mientras la

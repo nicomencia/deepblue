@@ -28,7 +28,7 @@ import { and, eq, isNull, sql } from "drizzle-orm";
 import { buildDossier } from "./dossier-builder";
 import { detailImportFact } from "./ingest";
 import { isLlmConfigured } from "./llm";
-import { getBenchmark, getDossier } from "./lookups";
+import { getBenchmark, getDossierForBrief } from "./lookups";
 import { newEvalCaches, listingRowToNormalized, reevaluateLead } from "./reevaluate";
 
 export interface AdoptRequest {
@@ -298,7 +298,7 @@ export async function completeAdoption(
     { version: nl.version, year: nl.year, powerCv: nl.powerCv, fuel: nl.fuel, gearbox: nl.gearbox },
     caches.benchmark,
   );
-  const reviewedDossier = await getDossier(db, nl.make, nl.model, caches.dossier, nl.year);
+  const reviewedDossier = await getDossierForBrief(db, nl, brief.criteria.vehicles, caches.dossier);
   const evaluation = evaluateListing(nl, brief.criteria, brief.hardLimits, benchmark, reviewedDossier);
 
   const [lead] = await db

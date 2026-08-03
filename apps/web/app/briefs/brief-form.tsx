@@ -54,6 +54,23 @@ export function BriefForm({
         Km máximos
         <input name="kmMax" type="number" placeholder="140000" defaultValue={c?.kmMax} style={inp} />
       </label>
+      <label style={{ ...lbl, gridColumn: "1 / -1" }}>
+        Otros nombres del modelo (uno por línea)
+        <textarea
+          name="modelAliases"
+          rows={2}
+          placeholder={"Spider\nSpider 2.0 16V"}
+          defaultValue={c?.vehicles
+            ?.slice(1)
+            .map((v) => v.model)
+            .join("\n")}
+          style={inp}
+        />
+        <small style={hint}>
+          El mismo coche con otro nombre. Renault lo vendió como “Sport Spider” pero los anuncios
+          ponen solo “Spider”: sin el alias, ni se busca ni se reconoce.
+        </small>
+      </label>
       <label style={lbl}>
         Precio máximo (€)
         <input name="maxPriceEur" type="number" placeholder="sin tope" defaultValue={h?.maxPriceEur} style={inp} />

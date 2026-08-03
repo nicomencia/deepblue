@@ -61,8 +61,20 @@ function parseBriefForm(formData: FormData): {
   // bounds do the actual filtering — sweep query and evaluation both enforce.
   const generation = String(formData.get("generation") ?? "").trim() || undefined;
   const area = searchArea(formData);
+
+  // Other names the SAME car is sold under. Renault badged it "Sport Spider"
+  // but every ad just says "Renault Spider", and a brief hunting the full name
+  // matched none of them: the sweep searched the wrong keywords and evaluation
+  // then demanded a word the seller never wrote. Each alias becomes its own
+  // vehicle, which is exactly what the sweep and matchesVehicle already iterate.
+  const aliases = lines(formData.get("modelAliases")).filter(
+    (a) => a.toLowerCase() !== model.toLowerCase(),
+  );
   const criteria: BriefCriteria = {
-    vehicles: [{ make, model, ...(generation ? { generations: [generation] } : {}) }],
+    vehicles: [
+      { make, model, ...(generation ? { generations: [generation] } : {}) },
+      ...aliases.map((alias) => ({ make, model: alias })),
+    ],
     yearMin: num(formData.get("yearMin")),
     yearMax: num(formData.get("yearMax")),
     kmMax: num(formData.get("kmMax")),
@@ -141,11 +153,12 @@ export async function updateBrief(formData: FormData): Promise<void> {
   const [brief] = await db.select().from(briefs).where(eq(briefs.id, id)).limit(1);
   if (!brief) throw new Error(`brief ${id} not found`);
 
+  // The form now round-trips EVERY vehicle: the primary one plus the alias
+  // textarea, which is prefilled from vehicles[1..]. Re-appending the stored
+  // extras here (as this did when only vehicle[0] had fields) would duplicate
+  // every alias on each save.
   const parsed = parseBriefForm(formData);
-  const criteria: BriefCriteria = {
-    ...parsed.criteria,
-    vehicles: [...parsed.criteria.vehicles, ...brief.criteria.vehicles.slice(1)],
-  };
+  const criteria: BriefCriteria = { ...parsed.criteria };
   await db
     .update(briefs)
     .set({ name: parsed.name, criteria, hardLimits: parsed.hardLimits })

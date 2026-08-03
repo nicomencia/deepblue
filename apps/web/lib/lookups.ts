@@ -86,6 +86,34 @@ export async function getBenchmark(
   return computeBenchmark(target, comparables, mkt);
 }
 
+/**
+ * The dossier to judge a listing of THIS brief by: the seller's own model text
+ * first, then the names the brief knows the car under.
+ *
+ * The fallback exists because trade names and ad text disagree: Renault badged
+ * it "Sport Spider" and every ad says "Renault Spider", so the listing's model
+ * field finds no dossier at all and the unit is judged with zero knowledge —
+ * which lands it on a neutral 55 and lets ignorance outrank research.
+ *
+ * Lives here, not at the call sites: ingest, reevaluate and adopt each looked
+ * the dossier up on their own, and patching one of the three is precisely how
+ * the same listing got a dossier on ingest and lost it on the next re-eval.
+ */
+export async function getDossierForBrief(
+  db: Db,
+  listing: { make?: string | null; model?: string | null; year?: number | null },
+  vehicles: ReadonlyArray<{ make: string; model: string }>,
+  cache: Map<string, ModelDossier | undefined>,
+): Promise<ModelDossier | undefined> {
+  const year = listing.year ?? undefined;
+  let dossier = await getDossier(db, listing.make ?? undefined, listing.model ?? undefined, cache, year);
+  for (const v of vehicles) {
+    if (dossier) break;
+    dossier = await getDossier(db, v.make, v.model, cache, year);
+  }
+  return dossier;
+}
+
 /** Latest live dossier for make+model. Disabled (or legacy unreviewed) rows never drive claims. */
 export async function getDossier(
   db: Db,

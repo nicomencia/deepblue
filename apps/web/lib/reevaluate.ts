@@ -9,7 +9,7 @@ import {
 } from "@deepblue/core";
 import { briefs, events, leads, listings, type Db } from "@deepblue/db";
 import { and, eq, or, sql } from "drizzle-orm";
-import { getBenchmark, getDossier, type ComparableCache } from "./lookups";
+import { getBenchmark, getDossierForBrief, type ComparableCache } from "./lookups";
 
 type ListingRow = typeof listings.$inferSelect;
 type BriefRow = typeof briefs.$inferSelect;
@@ -149,7 +149,7 @@ export async function reevaluateLead(
     { version: nl.version, year: nl.year, powerCv: nl.powerCv, fuel: nl.fuel, gearbox: nl.gearbox },
     caches.benchmark,
   );
-  const dossier = await getDossier(db, nl.make, nl.model, caches.dossier, nl.year);
+  const dossier = await getDossierForBrief(db, nl, brief.criteria.vehicles, caches.dossier);
   const evaluation = evaluateListing(
     nl,
     brief.criteria,

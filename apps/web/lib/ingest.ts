@@ -24,7 +24,7 @@ import { briefs, events, jobs, leads, listings, users, type Db } from "@deepblue
 import { and, eq, inArray, ne, sql } from "drizzle-orm";
 import { sendEmail } from "./email";
 import { leadUrl } from "./links";
-import { getBenchmark, getDossier } from "./lookups";
+import { getBenchmark, getDossierForBrief } from "./lookups";
 import { applyPriceChange } from "./price-watch";
 import { newEvalCaches, reevaluateLead } from "./reevaluate";
 
@@ -305,7 +305,7 @@ async function ingestOne(
     },
     caches.benchmark,
   );
-  const dossier = await getDossier(db, item.make, item.model, caches.dossier, item.year);
+  const dossier = await getDossierForBrief(db, item, brief.criteria.vehicles, caches.dossier);
   const evaluation = evaluateListing(
     item,
     brief.criteria,
