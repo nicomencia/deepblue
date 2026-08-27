@@ -114,6 +114,38 @@ export function BriefForm({
           ))}
         </span>
       </fieldset>
+      <fieldset
+        style={{ ...lbl, border: "none", padding: 0, margin: 0, gridColumn: "1 / -1" }}
+      >
+        Carrocería (vacío = cualquiera)
+        <span style={{ display: "flex", gap: "0.8rem", marginTop: "0.3rem", flexWrap: "wrap" }}>
+          {(
+            [
+              ["hatchback", "Compacto"],
+              ["sedan", "Berlina"],
+              ["estate", "Familiar"],
+              ["SUV", "SUV"],
+              ["coupe", "Coupé"],
+              ["convertible", "Descapotable"],
+              ["MPV", "Monovolumen"],
+            ] as const
+          ).map(([value, text]) => (
+            <label key={value}>
+              <input
+                type="checkbox"
+                name="bodyStyle"
+                value={value}
+                defaultChecked={c?.bodyStyle?.includes(value)}
+              />{" "}
+              {text}
+            </label>
+          ))}
+        </span>
+        <small style={hint}>
+          Un Golf Variant no es un Golf compacto. Se lee del texto del anuncio: si no lo nombra,
+          el coche pasa igualmente — el compacto suele anunciarse sin decirlo.
+        </small>
+      </fieldset>
       <label style={lbl}>
         Radio de búsqueda (km)
         <input

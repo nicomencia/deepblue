@@ -189,6 +189,56 @@ describe("official dealership", () => {
   });
 });
 
+// A wide Golf VII search returned 32 units of which 5 were Variant/Sportsvan —
+// a different car for anyone shopping a hatchback (2026-07-29).
+describe("body style filter", () => {
+  const golf = (version: string, title = "Volkswagen Golf") =>
+    listing({ make: "Volkswagen", model: "Golf", title, version, year: 2017, km: 90_000, priceEur: 13_000 });
+  const hatch = criteria({
+    vehicles: [{ make: "Volkswagen", model: "Golf" }],
+    yearMin: 2012,
+    bodyStyle: ["hatchback"],
+  });
+  const limits: HardLimits = { maxPriceEur: 15_000, nonNegotiables: [] };
+
+  it("kills the estate and the MPV when the hunt is a hatchback", () => {
+    // Real version strings from the corpus.
+    for (const v of [
+      "Advance 1.0 TSI 85kW (115CV) Variant",
+      "Advance 1.0 TSI 85kW (115CV) DSG Variant",
+      "1.5 TSI Sportsvan Advance",
+    ]) {
+      expect(evaluateListing(golf(v), hatch, limits).deadReason, v).toBe("body_style_mismatch");
+    }
+  });
+
+  // The plain hatchback is written as just the model — the absence of a marker
+  // must never read as a mismatch, or the filter kills what it exists to keep.
+  it("keeps units whose ad never names a body", () => {
+    for (const v of ["Advance 1.0 TSI 81kW (110CV)", "Edition 1.2 TSI BMT", "1.0 TSI 110 BMT Advance 5p"]) {
+      expect(evaluateListing(golf(v), hatch, limits).outcome, v).not.toBe("dead");
+    }
+  });
+
+  it("does nothing at all when the brief names no body", () => {
+    const anyBody = criteria({ vehicles: [{ make: "Volkswagen", model: "Golf" }], yearMin: 2012 });
+    const r = evaluateListing(golf("Advance 1.0 TSI 85kW (115CV) Variant"), anyBody, limits);
+    expect(r.outcome).not.toBe("dead");
+  });
+
+  it("hunts the estate just as happily when that is what you asked for", () => {
+    const estate = criteria({
+      vehicles: [{ make: "Volkswagen", model: "Golf" }],
+      yearMin: 2012,
+      bodyStyle: ["estate"],
+    });
+    expect(evaluateListing(golf("Advance 1.0 TSI 85kW (115CV) Variant"), estate, limits).outcome)
+      .not.toBe("dead");
+    expect(evaluateListing(golf("1.5 TSI Sportsvan Advance"), estate, limits).deadReason)
+      .toBe("body_style_mismatch");
+  });
+});
+
 describe("scoreToGrade", () => {
   it("bands scores at A≥85 B≥70 C≥55 D≥40 E<40", () => {
     expect(scoreToGrade(85)).toBe("A");

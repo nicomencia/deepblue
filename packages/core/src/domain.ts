@@ -119,6 +119,13 @@ export interface BriefCriteria {
    * different products at different prices, not two spellings of one car.
    */
   drivetrain?: Drivetrain[];
+  /**
+   * Which bodies count as the car being hunted. Unlike drivetrain — where 4x2
+   * and 4x4 are the same model priced differently — a Golf Variant is simply
+   * not the car someone shopping a Golf hatchback is shopping for, so this
+   * EXCLUDES rather than weights. Left empty every body is accepted.
+   */
+  bodyStyle?: BodyStyle[];
   /** Target price the user would be happy with (asking prices above maxPrice are still scouted for negotiation headroom). */
   targetPriceEur?: number;
   /** Search center + radius, e.g. { lat, lon, radiusKm } */
@@ -601,6 +608,42 @@ export function normalizeDrivetrain(...texts: Array<string | undefined>): Drivet
 /** Narrowing guard: free text from research is not a Drivetrain until checked. */
 export const isDrivetrain = (v: string | undefined): v is Drivetrain =>
   v !== undefined && (DRIVETRAINS as readonly string[]).includes(v);
+
+/**
+ * Body, read out of the ad text — no marketplace exposes it as a field.
+ *
+ * Every token here must be UNAMBIGUOUS on its own, because it is matched
+ * against seller free text and dealer boilerplate. That is why the list is
+ * short and skewed to trade names ("Variant", "Sportsvan", "Cabrio"): those
+ * name the body and nothing else. Deliberately absent is "berlina", which
+ * Spanish ads use for both a saloon and any mid-size car, and "familiar",
+ * which shows up in "coche familiar" describing the buyer, not the shape.
+ *
+ * Unknown is a real answer: a hatchback Golf is usually just "Golf", so the
+ * absence of a marker must never be read as a mismatch (see evaluate.ts —
+ * facts only, an unknown body passes the filter).
+ */
+const BODY_PATTERNS: ReadonlyArray<readonly [BodyStyle, RegExp]> = [
+  ["estate", /\b(variant|sportstourer|sports\s?tourer|avant|touring|kombi|familiar\s+break|break|ranchera|estate)\b/i],
+  ["MPV", /\b(sportsvan|sports\s?van|monovolumen|multivan|mpv)\b/i],
+  ["convertible", /\b(cabrio|cabriolet|cabriolé|descapotable|convertible)\b/i],
+  ["roadster", /\b(roadster|spider|spyder|barchetta)\b/i],
+  ["coupe", /\b(coup[eé]|fastback)\b/i],
+  ["pickup", /\b(pick[\s-]?up|pickup)\b/i],
+  ["van", /\b(furgon|furg[oó]n|furgoneta|panel\s?van)\b/i],
+  ["SUV", /\b(suv|todoterreno|crossover)\b/i],
+];
+
+/**
+ * Read the body out of ad text. Returns undefined when nothing names it —
+ * which is the common case for the plain hatchback of any model.
+ */
+export function bodyStyleFromText(...texts: Array<string | undefined>): BodyStyle | undefined {
+  const text = texts.filter(Boolean).join(" ");
+  if (!text.trim()) return undefined;
+  for (const [body, pattern] of BODY_PATTERNS) if (pattern.test(text)) return body;
+  return undefined;
+}
 
 export const ECO_LABELS = ["0", "ECO", "C", "B"] as const;
 export type EcoLabel = (typeof ECO_LABELS)[number];

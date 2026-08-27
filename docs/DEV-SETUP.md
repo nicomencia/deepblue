@@ -144,6 +144,34 @@ anuncios, digest con suelo de nota + alertas A/B sin duplicados, dossiers
 en la página del lead), tabs por búsqueda, página Actividad, descubrimiento de
 modelos y adopción manual de anuncios con dossier-first. 77 tests verdes.
 
+**Cambio 2026-07-29 (22) — carrocería: un Variant no es un compacto.** La
+búsqueda ancha del Golf VII devolvió 32 unidades y 5 eran Variant/Sportsvan.
+`BriefCriteria` tenía `fuel`, `gearbox` y `drivetrain` pero NO carrocería, así
+que "Golf compacto, no familiar" era inexpresable — y "Golf" es un solo token
+contenido en todos esos nombres, así que el matcher los aceptaba todos.
+
+Nuevo `bodyStyleFromText` en core, leyendo el texto del anuncio como ya hace
+`normalizeDrivetrain` (ninguna plataforma expone la carrocería como campo). Cada
+token tiene que ser INEQUÍVOCO por sí solo, así que la lista es corta y tira de
+nombres comerciales ("Variant", "Sportsvan", "Cabrio"): esos nombran la
+carrocería y nada más. Fuera queda a propósito "berlina", que en España vale
+para un sedán y para cualquier coche mediano, y "familiar", que aparece en
+"coche familiar" describiendo al comprador y no la forma.
+
+A diferencia de `drivetrain` —donde 4x2 y 4x4 son el mismo modelo a otro
+precio— la carrocería EXCLUYE: un Variant no es un compacto más caro, es otro
+coche. Filtro absoluto (`body_style_mismatch`), pero **solo con hechos**: si el
+anuncio no nombra carrocería, pasa. Es el caso normal — el compacto de
+cualquier modelo se anuncia como el modelo a secas, así que leer la ausencia
+como incompatibilidad mataría justo lo que el filtro existe para conservar.
+
+Verificado en vivo sobre el brief real: 32 → 24 vivos, 5 muertos por
+`body_style_mismatch` (los cinco Variant de verdad, uno de ellos con el
+marcador en el título y no en la versión) y CERO fugas entre los vivos.
+
+Los 7 GTI/GTD/R que quedan no son cuestión de carrocería sino de motor/acabado:
+son compactos y siguen, como debe ser.
+
 **Cambio 2026-07-29 (21) — la bajada de precio no refrescaba la lectura.**
 Nico avisó de un lead con bajada de precio "pero la nota y el resumen parecen
 iguales". Las reglas SÍ se recalculaban (priceFairness pasó a A 95, "23% por

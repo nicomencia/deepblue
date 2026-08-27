@@ -13,6 +13,7 @@
 
 import { MIN_BENCHMARK_SAMPLE, type PriceBenchmark } from "./benchmark.js";
 import { extractImportSignals, type ImportSignals } from "./extract.js";
+import { bodyStyleFromText } from "./domain.js";
 import type {
   BriefCriteria,
   ConfidenceGrade,
@@ -295,6 +296,14 @@ function absoluteKillReason(
   modelMatch: ModelMatch | undefined,
 ): string | undefined {
   if (!modelMatch) return "different_vehicle";
+  // Body is an absolute limit, not a preference: a Variant is not a hatchback
+  // with a different price, it is a different car. Facts only — a body the ad
+  // never names passes, because the plain hatchback of any model is usually
+  // written as just the model name.
+  if (criteria.bodyStyle?.length) {
+    const body = bodyStyleFromText(listing.version, listing.title, listing.model);
+    if (body !== undefined && !criteria.bodyStyle.includes(body)) return "body_style_mismatch";
+  }
   // Import hard limits kill on FACTS (explicit text or user-verified), never
   // on the RHD assumption alone — dead leads don't resurrect, and the open
   // question resolves the assumption first.
