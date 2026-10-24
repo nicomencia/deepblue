@@ -381,7 +381,7 @@ export async function saveDiscoveryReport(
  * purpose: MAX_TURNS × 12 web searches is minutes of work, and reclaiming a
  * run that is merely slow buys the double billing this guard exists to stop.
  */
-export const ANALYSIS_STALE_MS = 20 * 60 * 1000;
+const ANALYSIS_STALE_MS = 20 * 60 * 1000;
 
 /** Nobody else is analysing this profile → the caller may. Atomic. */
 export async function claimDiscoveryAnalysis(db: Db, discoveryId: string): Promise<boolean> {

@@ -115,7 +115,7 @@ export async function getDossierForBrief(
 }
 
 /** Latest live dossier for make+model. Disabled (or legacy unreviewed) rows never drive claims. */
-export async function getDossier(
+async function getDossier(
   db: Db,
   make: string | undefined,
   model: string | undefined,

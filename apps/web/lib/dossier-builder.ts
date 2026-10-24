@@ -221,7 +221,7 @@ const BUILD_STALE_MS = 20 * 60 * 1000;
  * so two simultaneous clicks cannot both win. Returns false if someone else
  * holds a live claim.
  */
-export async function claimDossierBuild(db: Db, make: string, model: string): Promise<boolean> {
+async function claimDossierBuild(db: Db, make: string, model: string): Promise<boolean> {
   const stale = new Date(Date.now() - BUILD_STALE_MS);
   // Clear this make's dead claims first; live holders are untouched.
   await db

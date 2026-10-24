@@ -16,8 +16,9 @@ RUNNER_TOKEN=              # bearer compartido Core <-> runner
 ENABLE_LOCAL_SCHEDULER=1   # scheduler embebido (sweeps/digest/reap)
 ```
 
-Opcionales reconocidas: `ANTHROPIC_API_KEY` (activa la vía LLM de pago; hoy
-vacía a propósito — se usa la sesión de Claude Code), `DATABASE_URL` (Postgres
+Opcionales reconocidas: `ANTHROPIC_API_KEY` (activa la vía LLM de pago; puesta
+desde el 2026-07-26 — sin ella, la sesión de Claude Code hace de LLM vía
+`import-*`), `DATABASE_URL` (Postgres
 real en vez de PGlite), `PUBLIC_BASE_URL` (base de los deep links de email a
 la ficha del lead; def. http://localhost:3000), `ALERT_MAX_GRADE` (def. B),
 `DIGEST_MAX_GRADE` (def. C), `SWEEP_INTERVAL_MINUTES` (def. 180),
@@ -124,10 +125,19 @@ el escritorio. Para pararlo, cierra las dos ventanas (web y runner).
 | `POST /api/dev/reevaluate` | backfill + retire + dedup + reevaluar todo |
 | `POST /api/dev/adopt` | adoptar anuncio por URL `{url, maxPriceEur?, briefId?}` |
 | `POST /api/dev/finding` | registrar hallazgo `{leadId, title, status, note?}` |
-| `POST /api/dev/import-dossier` | vía suscripción: importar dossier (borrador) |
+| `POST /api/dev/brief-create` · `/brief-edit` | crear / editar búsqueda por la MISMA server action del formulario (campos del form; `id` para editar) |
+| `POST /api/dev/lead-state` | mover un lead de estado `{leadId, state, reason?}` (respeta `canTransition`) |
+| `POST /api/dev/lead-delete` | borrar un lead que produjo un bug `{leadId, reason}` (no es resucitar) |
+| `POST /api/dev/enrich` | encolar enriquecimiento pendiente (`?limit=`) / `{leadId}` relee uno con el LLM |
+| `GET /api/dev/digest-preview` | el digest que SE ENVIARÍA, sin enviarlo (`?html=1`, `?hours=N`) |
+| `POST /api/dev/build-dossier` | vía API: investigar un dossier `{make, model}` |
+| `POST /api/dev/dossier-delete` | borrar dossier por la action de la UI `{id}` (reevalúa sus leads) |
+| `POST /api/dev/import-dossier` | vía suscripción: importar dossier (entra en uso al llegar) |
 | `POST /api/dev/import-enrichment` | vía suscripción: `{leadId, enrichment}` |
 | `GET/POST/PATCH /api/dev/discoveries` | sesiones de descubrimiento |
 | `POST /api/dev/import-discovery` | vía suscripción: `{discoveryId, report}` |
+| `POST /api/dev/discovery-photos` | resolver fotos de informes guardados `{id?, force?}` (gratis, idempotente) |
+| `POST /api/dev/discovery-claim` | probar/soltar la marca en-curso `{id, action: claim\|release}` |
 | `POST /api/dev/seed` · `/seed-dossier` | arranque desde cero |
 
 **Modo suscripción (sin ANTHROPIC_API_KEY):** los dossiers, enrichments e
@@ -140,9 +150,25 @@ dónde aplica ("pide el análisis en tu sesión de Claude Code").
 Hecho y en master: motor de evaluación con benchmark ponderado por acabado/año,
 dedup por REF, precio al contado, preferencia por particulares, reaper de
 anuncios, digest con suelo de nota + alertas A/B sin duplicados, dossiers
-(207/THP, Golf, Elise) con verificación manual de riesgos (Confirmar/Descartar
+auto-aprobados con verificación manual de riesgos (Confirmar/Descartar
 en la página del lead), tabs por búsqueda, página Actividad, descubrimiento de
-modelos y adopción manual de anuncios con dossier-first. 77 tests verdes.
+modelos, adopción manual de anuncios con dossier-first, vía LLM activa
+(API key) y Fase 2 en Wallapop: mensajes al vendedor con aprobación, lectura
+de respuestas, contraofertas e informe de visita. 274 tests verdes.
+
+**Cambio 2026-10-25 (23) — limpieza de lo que ya no servía.** Barrido con
+knip + revisión a mano. Fuera: `apps/runner/src/probe-limit.ts` (diagnóstico
+de un solo uso; lo que midió vive en `CHAT_MAX_CHARS`) y
+`/api/dev/drivetrain-backfill` (se ejecutó el 2026-07-28; el ingest ya
+clasifica la tracción de cada anuncio nuevo, así que no quedaba nada que
+rellenar). Siete `export` de `apps/web/lib` que nadie importaba pasan a
+privados — el contrato público de cada módulo es lo que de verdad se usa.
+Docs al día: README y PROJECT.md decían que los dossiers esperan aprobación
+(son opt-out desde el 2026-07-14), que el sweep incluye AutoScout24, que la
+API key estaba vacía y que la Fase 2 estaba por hacer; la caja de herramientas (§4) gana las 9 rutas dev
+que faltaban. Se queda a propósito: el adaptador de AutoScout24 (en pausa,
+no muerto), las rutas `import-*` (respaldo sin API key) y `seed*` (receta de
+recuperación de PGlite).
 
 **Cambio 2026-07-29 (22) — carrocería: un Variant no es un compacto.** La
 búsqueda ancha del Golf VII devolvió 32 unidades y 5 eran Variant/Sportsvan.

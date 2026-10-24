@@ -14,7 +14,7 @@ import { zodOutputFormat } from "@anthropic-ai/sdk/helpers/zod";
 import { z } from "zod";
 import { getAnthropic, isLlmConfigured, messageText } from "./llm";
 
-export const DRAFT_MODEL = process.env.DEEPBLUE_DRAFT_MODEL ?? "claude-haiku-4-5-20251001";
+const DRAFT_MODEL = process.env.DEEPBLUE_DRAFT_MODEL ?? "claude-haiku-4-5-20251001";
 
 const draftSchema = z.object({ message: z.string() });
 

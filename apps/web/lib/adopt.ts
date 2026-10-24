@@ -39,7 +39,7 @@ export interface AdoptRequest {
 
 /** Wallapop item URL → platform ref. The numeric web id is provisional; the
  * runner resolves the canonical API id from the page itself. */
-export function parseAdoptUrl(
+function parseAdoptUrl(
   raw: string,
 ): { platform: "wallapop"; url: string; provisionalId: string } | null {
   let u: URL;

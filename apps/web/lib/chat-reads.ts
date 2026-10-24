@@ -303,7 +303,7 @@ export async function saveConversationReading(
 }
 
 /** LLM lane: read one pending conversation with the API. */
-export async function readConversation(
+async function readConversation(
   db: Db,
   p: PendingConversation,
 ): Promise<{ before?: string; after: string }> {

@@ -12,7 +12,7 @@ type ListingRow = typeof listings.$inferSelect;
 type BriefRow = typeof briefs.$inferSelect;
 
 /** The price the chat settled on, if the negotiation reached accept. */
-export function agreedPriceEur(lead: LeadRow, brief: BriefRow): number | null {
+function agreedPriceEur(lead: LeadRow, brief: BriefRow): number | null {
   const neg = lead.chatReading?.negotiation;
   if (!neg?.ourLastOfferEur || !neg?.sellerLastOfferEur) return null;
   // No declared budget → nothing to accept against. The cap is the ONLY thing

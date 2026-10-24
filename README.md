@@ -26,7 +26,7 @@ packages/db     Drizzle ORM schema + Postgres client
 ```
 pnpm install
 pnpm typecheck        # typecheck all workspaces
-pnpm test             # unit tests (packages/core: scoring rules, extraction, state machine)
+pnpm test             # unit tests (core: scoring, extraction, state machine; web: ingest, digest, discovery…)
 pnpm dev:web          # dashboard on http://localhost:3000
 pnpm dev:runner       # job-polling worker (needs CORE_API_URL + RUNNER_TOKEN)
 ```
@@ -61,19 +61,21 @@ Set `ANTHROPIC_API_KEY` in `apps/web/.env.local` to enable:
 
 - **Dossier builder** — from `/dossiers` (or `POST /api/dev/build-dossier`), Claude
   researches a model on the web and drafts a source-cited reliability dossier.
-  Drafts never drive verdicts: you review and approve them in `/dossiers` first;
-  approval re-evaluates every shortlisted lead on that model.
+  Review is opt-out: a dossier goes live on creation and re-evaluates that
+  model's leads at once; disabling it in `/dossiers` pulls it out of every verdict.
 - **Verdict enrichment** — the scheduler (or `POST /api/cron/enrich`) has Claude read
   each shortlisted ad's free text and refine the rule-based verdict within hard
   bounds (±15 per factor, vetoes stay code). Runs once per lead, best-scored first.
 
-Models default to `claude-opus-5`; override with `DEEPBLUE_DOSSIER_MODEL` /
-`DEEPBLUE_ENRICH_MODEL`. Without the key both features stay off and say so.
+One model per LLM lane, each overridable by env: judgement lanes (dossier,
+enrichment, discovery, chat readings) default to `claude-opus-5`, message
+drafting to Haiku — see the table in docs/DEV-SETUP.md §1. Without the key
+every LLM feature stays off and says so.
 
 **No API key? Subscription mode.** A Claude Code session can play the LLM role on
 the flat subscription instead of per-token billing: ask it to research a dossier or
 read the shortlisted ads, and it imports the results through the same zod trust
-boundary via `POST /api/dev/import-dossier` (draft → approve in `/dossiers`) and
+boundary via `POST /api/dev/import-dossier` and
 `POST /api/dev/import-enrichment` (`{leadId, source, enrichment}` — same clamps and
 veto caps as the API path, safe to re-import). The API lane stays dormant until a
 key appears; nothing else changes.
@@ -82,8 +84,8 @@ key appears; nothing else changes.
 
 ```
 curl -X POST http://localhost:3000/api/dev/seed          # dev user + sample brief (VW Golf, Madrid)
-curl -X POST http://localhost:3000/api/dev/seed-dossier  # reviewed Golf VII reliability dossier
-curl -X POST http://localhost:3000/api/dev/sweep         # enqueue search jobs (Wallapop + AutoScout24)
+curl -X POST http://localhost:3000/api/dev/seed-dossier  # Golf VII reliability dossier
+curl -X POST http://localhost:3000/api/dev/sweep         # enqueue search jobs (Wallapop; AutoScout24 is paused)
 pnpm dev:runner                                          # leases jobs, searches, reports back
 curl http://localhost:3000/api/dev/state                 # counts: jobs, listings, leads
 curl -X POST http://localhost:3000/api/dev/reevaluate    # refresh verdicts (dossier + benchmark)

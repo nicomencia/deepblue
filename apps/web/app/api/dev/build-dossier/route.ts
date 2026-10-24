@@ -14,7 +14,7 @@ const bodySchema = z.object({
  * Dev-only: draft a model dossier with Claude + web research.
  * curl -X POST localhost:3000/api/dev/build-dossier \
  *   -H 'content-type: application/json' -d '{"make":"Volkswagen","model":"Golf"}'
- * The draft lands unreviewed — approve it in /dossiers before it drives claims.
+ * The dossier goes live on creation — disable it in /dossiers to revoke it.
  */
 export async function POST(req: Request): Promise<Response> {
   if (process.env.NODE_ENV === "production") return new Response(null, { status: 404 });
