@@ -31,11 +31,17 @@ código en las cinco, así que el modelo refina pero nunca manda:
 
 | Variable | Def. en código | Recomendado | Por qué |
 | --- | --- | --- | --- |
-| `DEEPBLUE_DOSSIER_MODEL` | `claude-opus-5` | Opus 5 | Búsqueda web + salida larga; un dossier flojo estropea el veredicto de cada unidad de ese modelo durante meses |
-| `DEEPBLUE_DISCOVERY_MODEL` | `claude-opus-5` | Opus 5 | Igual: investigación, y de aquí salen las búsquedas |
-| `DEEPBLUE_ENRICH_MODEL` | `claude-opus-5` | Sonnet 5 | Mueve subnotas ±15, y eso mueve nota, alertas y euros ofrecidos |
-| `DEEPBLUE_READS_MODEL` | `claude-opus-5` | Sonnet 5 | Volumen mínimo, pero decide exposición a reparaciones |
-| `DEEPBLUE_DRAFT_MODEL` | `claude-haiku-4-5-20251001` | Haiku 4.5 | Redactar no es juzgar; lo valida `isValidDraft()` y cae a texto determinista |
+| `DEEPBLUE_DOSSIER_MODEL` | `claude-opus-5-5` | Opus 5.5 | Búsqueda web + salida larga; un dossier flojo estropea el veredicto de cada unidad de ese modelo durante meses |
+| `DEEPBLUE_DISCOVERY_MODEL` | `claude-opus-5-5` | Opus 5.5 | Igual: investigación, y de aquí salen las búsquedas |
+| `DEEPBLUE_ENRICH_MODEL` | `claude-opus-5-5` | Sonnet 5.5 | Mueve subnotas ±15, y eso mueve nota, alertas y euros ofrecidos |
+| `DEEPBLUE_READS_MODEL` | `claude-opus-5-5` | Sonnet 5.5 | Volumen mínimo, pero decide exposición a reparaciones |
+| `DEEPBLUE_DRAFT_MODEL` | `claude-haiku-5-5` | Haiku 5.5 | Redactar no es juzgar; lo valida `isValidDraft()` y cae a texto determinista |
+
+Las cuatro vías de juicio piden esfuerzo `high` explícito (Opus 5.5 bajaría
+a `medium` si se omite) y llevan fallback de rechazo del servidor según el
+modelo activo (`refusalFallback()` en lib/llm.ts: Opus 5.5 → Opus 5, Sonnet
+5.5 → `"default"`); la redacción va con Haiku 5.5 a esfuerzo `low` y sin
+fallback (Haiku no tiene).
 
 ### `apps/web/.data/pglite/` — muy recomendable
 
@@ -155,6 +161,39 @@ en la página del lead), tabs por búsqueda, página Actividad, descubrimiento d
 modelos, adopción manual de anuncios con dossier-first, vía LLM activa
 (API key) y Fase 2 en Wallapop: mensajes al vendedor con aprobación, lectura
 de respuestas, contraofertas e informe de visita. 274 tests verdes.
+
+**Cambio 2026-10-25 (24) — cada vía de LLM sube a la última versión de su
+familia, y el backup deja de fallar en Git Bash.** Opus 5 → Opus 5.5
+(dossier, descubrimiento), Sonnet 5 → Sonnet 5.5 (enriquecimiento, lecturas
+del chat; lo que fija `.env.local`, que manda sobre el código) y Haiku 4.5 →
+Haiku 5.5 (redacción). Se respeta el reparto por vía que ya había: la subida
+es dentro de cada familia, no un cambio de criterio. Más barato en las tres:
+Opus $4/$20 frente a $5/$25 por millón, Sonnet igual, Haiku $0,10/$0,50
+frente a $1/$5.
+
+Lo que el código tuvo que asumir, porque los modelos nuevos lo cambian:
+(1) el thinking ya no se apaga y cuenta contra `max_tokens`, así que los
+topes suben (dossier y descubrimiento a 64k, enriquecimiento de 4.000 a
+16.000 con chequeo de truncado como ya tenían las lecturas, redacción de 400
+a 2.000) — solo se cobra lo producido; (2) Opus 5.5 baja el esfuerzo por
+defecto a `medium`, así que cada vía lo fija explícito: `high` en las cuatro
+de juicio (el nivel en que corrían) y `low` en la redacción; (3) un
+clasificador de seguridad puede declinar una petición benigna: las vías de
+juicio llevan fallback del servidor según el modelo activo
+(`refusalFallback()`), y `messageText` convierte un rechazo en un error con
+su categoría en vez de un JSON vacío.
+
+Verificado en vivo con la API: las cinco formas de petición aceptadas (las
+dos de fallback incluidas), y la búsqueda web de investigación con
+`web_search_20260318` sobre Opus 5.5 — 3 búsquedas, 29 resultados, respuesta
+citando fuentes. `/v1/models` confirma los destinos de fallback permitidos
+de Opus 5.5 (claude-opus-5, claude-opus-4-8).
+
+Backup: con `pnpm dev:web` lanzado desde Git Bash, el `tar` de GNU leía
+`C:\…` en `-f` como host remoto "C" y caía a la copia plana. Ahora tar escribe
+a stdout desde la carpeta de datos y Node guarda el fichero — ninguna ruta
+llega a tar. Probado con GNU tar (Git Bash) y bsdtar (Windows): mismo .tgz,
+1.083 entradas.
 
 **Cambio 2026-10-25 (23) — limpieza de lo que ya no servía.** Barrido con
 knip + revisión a mano. Fuera: `apps/runner/src/probe-limit.ts` (diagnóstico

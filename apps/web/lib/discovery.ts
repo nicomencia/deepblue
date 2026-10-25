@@ -21,10 +21,10 @@ import {
   type ModelRecommendation,
 } from "@deepblue/core";
 import { discoveries, events, type Db } from "@deepblue/db";
-import { zodOutputFormat } from "@anthropic-ai/sdk/helpers/zod";
+import { betaZodOutputFormat } from "@anthropic-ai/sdk/helpers/beta/zod";
 import type Anthropic from "@anthropic-ai/sdk";
 import { and, eq, lt, or } from "drizzle-orm";
-import { DISCOVERY_MODEL, getAnthropic, messageText } from "./llm";
+import { DISCOVERY_MODEL, getAnthropic, messageText, refusalFallback } from "./llm";
 import { fetchWikipediaPhoto } from "./wikipedia-photo";
 
 const MAX_SEARCHES = 12;
@@ -172,16 +172,18 @@ function constraintRules(profile: DiscoveryProfile): string {
 /** One research turn; loops while the server pauses long tool interactions. */
 async function draftReport(profile: DiscoveryProfile): Promise<DiscoveryReport> {
   const client = getAnthropic();
-  let messages: Anthropic.MessageParam[] = [{ role: "user", content: prompt(profile) }];
+  let messages: Anthropic.Beta.Messages.BetaMessageParam[] = [{ role: "user", content: prompt(profile) }];
 
   for (let turn = 0; turn < MAX_TURNS; turn++) {
-    const msg = await client.messages
+    const msg = await client.beta.messages
       .stream({
         model: DISCOVERY_MODEL,
-        max_tokens: 16_000,
+        // Room for thinking plus the report; only produced tokens are billed.
+        max_tokens: 64_000,
         thinking: { type: "adaptive" },
         tools: [{ type: "web_search_20260318", name: "web_search", max_uses: MAX_SEARCHES }],
-        output_config: { format: zodOutputFormat(discoveryResearchSchema) },
+        output_config: { effort: "high", format: betaZodOutputFormat(discoveryResearchSchema) },
+        ...refusalFallback(DISCOVERY_MODEL),
         messages,
       })
       .finalMessage();

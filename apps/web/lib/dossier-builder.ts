@@ -15,10 +15,10 @@ import {
   type ModelDossier,
 } from "@deepblue/core";
 import { dossierBuilds, events, modelDossiers, type Db } from "@deepblue/db";
-import { zodOutputFormat } from "@anthropic-ai/sdk/helpers/zod";
+import { betaZodOutputFormat } from "@anthropic-ai/sdk/helpers/beta/zod";
 import type Anthropic from "@anthropic-ai/sdk";
 import { and, isNull, lt, sql } from "drizzle-orm";
-import { DOSSIER_MODEL, getAnthropic, messageText } from "./llm";
+import { DOSSIER_MODEL, getAnthropic, messageText, refusalFallback } from "./llm";
 import { reevaluateModelLeads } from "./reevaluate";
 import { enqueueSweeps } from "./sweep";
 
@@ -83,16 +83,19 @@ Reglas estrictas:
 /** One research turn; loops while the server pauses long tool interactions. */
 async function draftWithResearch(req: DossierRequest): Promise<ModelDossier> {
   const client = getAnthropic();
-  let messages: Anthropic.MessageParam[] = [{ role: "user", content: prompt(req) }];
+  let messages: Anthropic.Beta.Messages.BetaMessageParam[] = [{ role: "user", content: prompt(req) }];
 
   for (let turn = 0; turn < MAX_TURNS; turn++) {
-    const msg = await client.messages
+    const msg = await client.beta.messages
       .stream({
         model: DOSSIER_MODEL,
-        max_tokens: 24_000,
+        // Thinking counts against the cap; a truncated dossier is research
+        // paid for and thrown away. Only produced tokens are billed.
+        max_tokens: 64_000,
         thinking: { type: "adaptive" },
         tools: [{ type: "web_search_20260318", name: "web_search", max_uses: MAX_SEARCHES }],
-        output_config: { format: zodOutputFormat(modelDossierSchema) },
+        output_config: { effort: "high", format: betaZodOutputFormat(modelDossierSchema) },
+        ...refusalFallback(DOSSIER_MODEL),
         messages,
       })
       .finalMessage();

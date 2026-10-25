@@ -160,6 +160,8 @@ curl localhost:3000/api/dev/state              # counts at a glance
 ```
 
 Env lives in `apps/web/.env.local` (web reads it natively; the runner resolves
-it as fallback). Models per lane: `DEEPBLUE_ENRICH_MODEL` (Haiku),
-`DEEPBLUE_READS_MODEL`, `DEEPBLUE_DRAFT_MODEL` (Haiku), `DEEPBLUE_DOSSIER_MODEL`,
-`DEEPBLUE_DISCOVERY_MODEL`.
+it as fallback). Models per lane: `DEEPBLUE_DOSSIER_MODEL`,
+`DEEPBLUE_DISCOVERY_MODEL`, `DEEPBLUE_ENRICH_MODEL`, `DEEPBLUE_READS_MODEL`,
+`DEEPBLUE_DRAFT_MODEL` — defaults, recommendations and the why in the table in
+docs/DEV-SETUP.md §1. Effort and refusal fallback live at each call site /
+`refusalFallback()` in lib/llm.ts, chosen from the model in effect.

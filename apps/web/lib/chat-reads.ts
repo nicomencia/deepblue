@@ -17,12 +17,12 @@ import {
   type IssueFinding,
 } from "@deepblue/core";
 import { briefs, events, leads, listings, messages, users, type Db } from "@deepblue/db";
-import { zodOutputFormat } from "@anthropic-ai/sdk/helpers/zod";
+import { betaZodOutputFormat } from "@anthropic-ai/sdk/helpers/beta/zod";
 import { and, asc, eq, gt, inArray, isNull, or } from "drizzle-orm";
 import { sendEmail } from "./email";
 import { leadUrl } from "./links";
 import { visitInputForLead } from "./visit";
-import { getAnthropic, isLlmConfigured, messageText, READS_MODEL } from "./llm";
+import { getAnthropic, isLlmConfigured, messageText, READS_MODEL, refusalFallback } from "./llm";
 import { newEvalCaches, reevaluateLead } from "./reevaluate";
 
 type LeadRow = typeof leads.$inferSelect;
@@ -311,10 +311,11 @@ async function readConversation(
   // Generous output budget: models may spend tokens before/while emitting the
   // JSON, and a truncated payload fails the parse (seen live with Sonnet 5 at
   // 4000). Only produced tokens are billed — the cap is protection, not cost.
-  const msg = await client.messages.create({
+  const msg = await client.beta.messages.create({
     model: READS_MODEL,
     max_tokens: 16_000,
-    output_config: { format: zodOutputFormat(conversationReadingPayloadSchema) },
+    output_config: { effort: "high", format: betaZodOutputFormat(conversationReadingPayloadSchema) },
+    ...refusalFallback(READS_MODEL),
     messages: [{ role: "user", content: conversationPrompt(p) }],
   });
   if (msg.stop_reason === "max_tokens") {

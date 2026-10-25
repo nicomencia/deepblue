@@ -15,9 +15,9 @@ import {
   type LlmEnrichmentPayload,
 } from "@deepblue/core";
 import { briefs, events, leads, listings, users, type Db } from "@deepblue/db";
-import { zodOutputFormat } from "@anthropic-ai/sdk/helpers/zod";
+import { betaZodOutputFormat } from "@anthropic-ai/sdk/helpers/beta/zod";
 import { and, desc, eq, isNull, sql } from "drizzle-orm";
-import { ENRICH_MODEL, getAnthropic, isLlmConfigured, messageText } from "./llm";
+import { ENRICH_MODEL, getAnthropic, isLlmConfigured, messageText, refusalFallback } from "./llm";
 import { sendEmail } from "./email";
 import { composeAlert, composeAlertHtml } from "./alerts";
 import { listingRowToNormalized, newEvalCaches, reevaluateLead, type EvalCaches } from "./reevaluate";
@@ -186,12 +186,19 @@ export async function enrichLead(
   if (!lead.verdict) throw new Error(`lead ${lead.id} has no verdict to enrich`);
   const client = getAnthropic();
 
-  const msg = await client.messages.create({
+  // Same budget as the conversation readings: thinking counts against the
+  // cap, and 4000 already truncated Sonnet 5 there. Only produced tokens are
+  // billed — the cap is protection, not cost.
+  const msg = await client.beta.messages.create({
     model: ENRICH_MODEL,
-    max_tokens: 4000,
-    output_config: { format: zodOutputFormat(llmEnrichmentPayloadSchema) },
+    max_tokens: 16_000,
+    output_config: { effort: "high", format: betaZodOutputFormat(llmEnrichmentPayloadSchema) },
+    ...refusalFallback(ENRICH_MODEL),
     messages: [{ role: "user", content: prompt(listing, brief, lead) }],
   });
+  if (msg.stop_reason === "max_tokens") {
+    throw new Error(`enriquecimiento truncado por max_tokens (${ENRICH_MODEL}) — sube el límite`);
+  }
 
   // Trust boundary: validate before it touches the verdict or the DB.
   const payload = llmEnrichmentPayloadSchema.parse(JSON.parse(messageText(msg)));

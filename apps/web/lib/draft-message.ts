@@ -14,7 +14,7 @@ import { zodOutputFormat } from "@anthropic-ai/sdk/helpers/zod";
 import { z } from "zod";
 import { getAnthropic, isLlmConfigured, messageText } from "./llm";
 
-const DRAFT_MODEL = process.env.DEEPBLUE_DRAFT_MODEL ?? "claude-haiku-4-5-20251001";
+const DRAFT_MODEL = process.env.DEEPBLUE_DRAFT_MODEL ?? "claude-haiku-5-5";
 
 const draftSchema = z.object({ message: z.string() });
 
@@ -91,10 +91,12 @@ export async function draftSellerProse(req: DraftRequest): Promise<{ text: strin
   if (!isLlmConfigured()) return { text: req.fallback, model: "deterministic" };
   try {
     const client = getAnthropic();
+    // Haiku 5.5 thinks by default and the thinking counts against the cap:
+    // `low` keeps it short, the cap leaves room for it plus a ≤300-char reply.
     const msg = await client.messages.create({
       model: DRAFT_MODEL,
-      max_tokens: 400,
-      output_config: { format: zodOutputFormat(draftSchema) },
+      max_tokens: 2_000,
+      output_config: { effort: "low", format: zodOutputFormat(draftSchema) },
       messages: [{ role: "user", content: prompt(req) }],
     });
     const { message } = draftSchema.parse(JSON.parse(messageText(msg)));
