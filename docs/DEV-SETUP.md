@@ -139,6 +139,7 @@ el escritorio. Para pararlo, cierra las dos ventanas (web y runner).
 | `POST /api/dev/build-dossier` | vía API: investigar un dossier `{make, model}` |
 | `POST /api/dev/dossier-delete` | borrar dossier por la action de la UI `{id}` (reevalúa sus leads) |
 | `POST /api/dev/import-dossier` | vía suscripción: importar dossier (entra en uso al llegar) |
+| `GET /api/dev/import-dossier?make=&model=` | contenido vivo de un dossier, para enmendarlo e importarlo como versión siguiente |
 | `POST /api/dev/import-enrichment` | vía suscripción: `{leadId, enrichment}` |
 | `GET/POST/PATCH /api/dev/discoveries` | sesiones de descubrimiento |
 | `POST /api/dev/import-discovery` | vía suscripción: `{discoveryId, report}` |
@@ -161,6 +162,32 @@ en la página del lead), tabs por búsqueda, página Actividad, descubrimiento d
 modelos, adopción manual de anuncios con dossier-first, vía LLM activa
 (API key) y Fase 2 en Wallapop: mensajes al vendedor con aprobación, lectura
 de respuestas, contraofertas e informe de visita. 274 tests verdes.
+
+**Cambio 2026-10-25 (25) — no preguntar lo que el modelo ya contesta: "¿Es
+4x2 o 4x4?" a un Subaru.** Nico generó el primer mensaje para un Outback y la
+primera pregunta era la tracción. Todos los Outback BS son 4x4: preguntarlo le
+dice al vendedor que no hemos hecho los deberes. Causa: la búsqueda nacida del
+descubrimiento exige 4x4, el anuncio no la nombra, y `assessUnit` convierte
+todo dato desconocido en pregunta — sin forma de saber que en ese modelo no
+hay elección.
+
+Ese saber es conocimiento del modelo, así que vive donde vive el resto: en el
+dossier, con fuentes. Nuevo campo opcional `drivetrains` (tracciones con que
+se vendió la generación en España) que el constructor investiga desde ya, y
+`dossierDrivetrain` en core: solo una certeza cuenta — una sola tracción
+legible; con dos, con una entrada ilegible o sin dato (dossiers antiguos), la
+pregunta sigue. Lo que diga el propio anuncio manda sobre el dossier. 7 tests.
+
+El Outback recibió su v2 por la vía de importación (los dossiers se versionan,
+no se editan): `drivetrains: ["4x4"]` con fuente comprobada (coches.com,
+gama 2015: "tracción integral permanente"). La misma fuente desmintió una nota
+del v1 — "no hay versiones manuales": el 2.0D se vendió también con manual de
+6 marchas (Sport y Executive). Corregida en el v2; el problema del CVT ya
+estaba acotado a automáticos, así que una unidad manual nunca cargó con él.
+Para leer el contenido vivo y enmendarlo, `GET /api/dev/import-dossier`.
+
+Verificado en vivo: 13 de 13 Outback dejan de preguntar la tracción y la
+muestran como dato conocido. 236 + 45 tests verdes.
 
 **Cambio 2026-10-25 (24) — cada vía de LLM sube a la última versión de su
 familia, y el backup deja de fallar en Git Bash.** Opus 5 → Opus 5.5

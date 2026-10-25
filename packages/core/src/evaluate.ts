@@ -13,11 +13,12 @@
 
 import { MIN_BENCHMARK_SAMPLE, type PriceBenchmark } from "./benchmark.js";
 import { extractImportSignals, type ImportSignals } from "./extract.js";
-import { bodyStyleFromText } from "./domain.js";
+import { bodyStyleFromText, dossierDrivetrain } from "./domain.js";
 import type {
   BriefCriteria,
   ConfidenceGrade,
   ConfidenceVerdict,
+  Drivetrain,
   HardLimits,
   IssueAssessment,
   IssueFinding,
@@ -572,6 +573,7 @@ function assessUnit(
   listing: NormalizedListing,
   criteria: BriefCriteria,
   openQuestions: string[],
+  impliedDrivetrain?: Drivetrain,
 ): VerdictFactor {
   const known: string[] = [];
   const unverified: string[] = [];
@@ -619,11 +621,16 @@ function assessUnit(
   } else openQuestions.push("¿Es cambio manual o automático?");
   // Only asked when the hunt actually cares. On a hatchback there is nothing
   // to choose, and a generic "4x2 or 4x4?" in the opener wastes the seller's
-  // patience on a question whose answer changes nothing.
+  // patience on a question whose answer changes nothing. Nor when the model
+  // only ever came one way: the dossier's drivetrain is then a fact about
+  // this unit, and asking it tells the seller we haven't done our homework.
   if (criteria.drivetrain?.length) {
     if (listing.drivetrain !== undefined) {
       score += 5;
       known.push(`Tracción: ${listing.drivetrain}`);
+    } else if (impliedDrivetrain !== undefined) {
+      score += 5;
+      known.push(`Tracción: ${impliedDrivetrain} (todas las unidades de esta generación, según el dossier)`);
     } else openQuestions.push("¿Es 4x2 o 4x4?");
   }
   if (listing.powerCv !== undefined) {
@@ -864,7 +871,7 @@ function buildVerdict(
 ): ConfidenceVerdict {
   const openQuestions: string[] = [];
 
-  const unitEvidence = assessUnit(listing, criteria, openQuestions);
+  const unitEvidence = assessUnit(listing, criteria, openQuestions, dossierDrivetrain(dossier));
   const reliability = assessModelReliability(listing, dossier, findings);
   openQuestions.push(...reliability.questions);
 

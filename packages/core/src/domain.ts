@@ -415,6 +415,15 @@ export const modelDossierSchema = z.object({
    */
   imageUrl: z.string().optional(),
   engineCode: z.string().optional(),
+  /**
+   * Drivetrains this generation was sold with in Spain ("4x4", "4x2"),
+   * researched like everything else here. A single entry means there is
+   * nothing to ask: every Outback BS is 4x4, so "¿Es 4x2 o 4x4?" in the opener
+   * asked the seller something we should already know (live, 2026-10-25).
+   * Lenient strings — structured output does not enforce enums; read it
+   * through `dossierDrivetrain`. Absent on older dossiers = unknown.
+   */
+  drivetrains: z.array(z.string()).optional(),
   knownIssues: z.array(knownIssueSchema),
   recalls: z.array(
     z.object({ title: z.string(), year: z.number().optional(), source: z.string() }),
@@ -608,6 +617,21 @@ export function normalizeDrivetrain(...texts: Array<string | undefined>): Drivet
 /** Narrowing guard: free text from research is not a Drivetrain until checked. */
 export const isDrivetrain = (v: string | undefined): v is Drivetrain =>
   v !== undefined && (DRIVETRAINS as readonly string[]).includes(v);
+
+/**
+ * The one drivetrain EVERY unit of this generation has, per its dossier — or
+ * undefined when there is a choice, no data, or an entry we cannot read. Only
+ * a certainty counts: a single unreadable entry means we cannot rule out a
+ * second drivetrain, so the question stays.
+ */
+export function dossierDrivetrain(dossier: ModelDossier | undefined): Drivetrain | undefined {
+  const listed = dossier?.drivetrains ?? [];
+  if (listed.length === 0) return undefined;
+  const read = listed.map((d) => (isDrivetrain(d) ? d : normalizeDrivetrain(d)));
+  if (read.some((d) => d === undefined)) return undefined;
+  const distinct = new Set(read);
+  return distinct.size === 1 ? read[0] : undefined;
+}
 
 /**
  * Body, read out of the ad text — no marketplace exposes it as a field.

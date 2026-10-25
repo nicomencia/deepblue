@@ -67,6 +67,49 @@ const dsgIssue = {
   sources: ["https://example.com"],
 };
 
+// --- Drivetrain: never ask what the model already answers --------------------
+
+describe("drivetrain question", () => {
+  const ASK = "¿Es 4x2 o 4x4?";
+  const hunt4x4 = criteria({ drivetrain: ["4x4"] });
+  const withDrivetrains = (drivetrains?: string[]): ModelDossier => ({ ...dossier([]), drivetrains });
+  const evalWith = (d?: ModelDossier, l: Partial<NormalizedListing> = {}) =>
+    evaluateListing(listing(l), hunt4x4, hardLimits, benchmark, d).verdict;
+
+  it("is not asked when every unit of the generation is 4x4 (the Outback opener, live 2026-10-25)", () => {
+    const v = evalWith(withDrivetrains(["4x4"]));
+    expect(v.openQuestions).not.toContain(ASK);
+    expect(v.factors.unitEvidence.known.join(" ")).toContain("Tracción: 4x4 (todas las unidades");
+  });
+
+  it("reads the dossier's lenient wording the same way", () => {
+    expect(evalWith(withDrivetrains(["AWD", "tracción total"])).openQuestions).not.toContain(ASK);
+  });
+
+  it("is still asked when the generation came both ways", () => {
+    expect(evalWith(withDrivetrains(["4x2", "4x4"])).openQuestions).toContain(ASK);
+  });
+
+  it("is still asked when an entry cannot be read — no certainty, no shortcut", () => {
+    expect(evalWith(withDrivetrains(["4x4", "según versión"])).openQuestions).toContain(ASK);
+  });
+
+  it("is still asked when the dossier says nothing (older dossiers)", () => {
+    expect(evalWith(withDrivetrains(undefined)).openQuestions).toContain(ASK);
+    expect(evalWith(undefined).openQuestions).toContain(ASK);
+  });
+
+  it("prefers what the ad itself states over the dossier", () => {
+    const v = evalWith(withDrivetrains(["4x4"]), { drivetrain: "4x4" });
+    expect(v.factors.unitEvidence.known).toContain("Tracción: 4x4");
+  });
+
+  it("is never asked when the hunt does not care about drivetrain", () => {
+    const v = evaluateListing(listing(), criteria(), hardLimits, benchmark, dossier([])).verdict;
+    expect(v.openQuestions).not.toContain(ASK);
+  });
+});
+
 // --- Issue findings: seller evidence beats theory ------------------------------
 
 describe("issue findings", () => {

@@ -1,7 +1,35 @@
 import { modelDossierSchema } from "@deepblue/core";
-import { users } from "@deepblue/db";
+import { modelDossiers, users } from "@deepblue/db";
+import { and, desc, isNull, sql } from "drizzle-orm";
 import { getDb } from "../../../../lib/db";
 import { insertDossier } from "../../../../lib/dossier-builder";
+
+/**
+ * Dev-only read side of the same lane: `?make=&model=` returns the live
+ * dossier's content, so a session amending one (a new field, a corrected
+ * issue) starts from exactly what is in use and POSTs it back as the next
+ * version — dossiers are versioned, never edited in place.
+ */
+export async function GET(req: Request): Promise<Response> {
+  if (process.env.NODE_ENV === "production") return new Response(null, { status: 404 });
+  const url = new URL(req.url);
+  const make = url.searchParams.get("make")?.toLowerCase();
+  const model = url.searchParams.get("model")?.toLowerCase();
+  if (!make || !model) return Response.json({ ok: false, error: "make y model obligatorios" }, { status: 400 });
+
+  const db = await getDb();
+  const rows = await db
+    .select({ id: modelDossiers.id, version: modelDossiers.version, content: modelDossiers.content })
+    .from(modelDossiers)
+    .where(
+      and(
+        sql`lower(${modelDossiers.make}) = ${make} and lower(${modelDossiers.model}) = ${model}`,
+        isNull(modelDossiers.disabledAt),
+      ),
+    )
+    .orderBy(desc(modelDossiers.version));
+  return Response.json({ ok: true, dossiers: rows });
+}
 
 /**
  * Dev-only: import a ready-made dossier — the no-API-key lane, where a

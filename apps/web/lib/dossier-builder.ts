@@ -64,6 +64,11 @@ Reglas estrictas:
   (facturas, libro de mantenimiento, prueba dinámica, lectura OBD...).
 - "sellerQuestions": preguntas directas y coloquiales en español para el vendedor.
 - "severity": minor | moderate | major | critical según coste y consecuencias.
+- "drivetrains": las tracciones con que se vendió ESTA generación en España,
+  con los tokens "4x2" y/o "4x4". Si todas las unidades salieron con la misma
+  (un Subaru con tracción total de serie, un utilitario solo delantera), pon
+  solo esa: el sistema deja de preguntársela al vendedor. Si hubo elección,
+  pon las dos. Si no lo has podido comprobar, omite el campo.
 - Todos los textos visibles (title, description, evidence, sellerQuestions,
   generalNotes) en español. "generation" con el formato "VII (2012–2019)":
   el rango de años entre paréntesis es OBLIGATORIO cuando investigas una
