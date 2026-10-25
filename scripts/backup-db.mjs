@@ -14,7 +14,7 @@
  */
 
 import { spawnSync } from "node:child_process";
-import { existsSync, mkdirSync, readdirSync, rmSync, statSync, cpSync } from "node:fs";
+import { closeSync, cpSync, existsSync, mkdirSync, openSync, readdirSync, rmSync, statSync } from "node:fs";
 import net from "node:net";
 import os from "node:os";
 import path from "node:path";
@@ -71,7 +71,13 @@ const name = `pglite-${timestamp()}`;
 const tgz = path.join(backupDir, `${name}.tgz`);
 
 // tar ships with Windows 10+, macOS and Linux; fall back to a plain copy.
-const tar = spawnSync("tar", ["-czf", tgz, "-C", dataDir, "pglite"], { stdio: "inherit" });
+// The archive goes to stdout and Node owns the file: no path ever reaches
+// tar. Git Bash's GNU tar reads `C:\…` given to -f as host "C" (remote
+// archive) and fails, while Windows' own bsdtar has no --force-local to
+// stop it — a relative cwd plus `-f -` works the same on every tar.
+const out = openSync(tgz, "w");
+const tar = spawnSync("tar", ["-czf", "-", "pglite"], { cwd: dataDir, stdio: ["ignore", out, "inherit"] });
+closeSync(out);
 if (tar.status === 0) {
   const mb = (statSync(tgz).size / 1024 / 1024).toFixed(1);
   console.log(`[backup-db] ${tgz} (${mb} MB)`);
