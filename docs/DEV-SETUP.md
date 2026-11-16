@@ -163,6 +163,31 @@ modelos, adopción manual de anuncios con dossier-first, vía LLM activa
 (API key) y Fase 2 en Wallapop: mensajes al vendedor con aprobación, lectura
 de respuestas, contraofertas e informe de visita. 274 tests verdes.
 
+**Cambio 2026-11-16 (26) — un fallo del LLM ya no se paga cada 15 minutos.**
+Revisión del repo: el enriquecimiento y las lecturas del chat elegían "leads
+sin marca de éxito" (`enrichedAt` / `chatReadAt`) en cada tick, y esa marca
+solo se pone cuando la llamada sale bien. Un lead cuya llamada falla siempre
+(negativa del modelo, truncado, payload que el schema rechaza) no la ganaba
+nunca: se volvía a pagar en Opus cada tick y tras cada informe del runner,
+sin techo. Además el lote va por nota, así que seis leads atascados arriba
+habrían dejado sin enriquecer a todos los demás — y la portada los esconde,
+porque no enseña nada sin analizar.
+
+Era la única vía por lead sin la guarda que la regla de coste exige. Ahora
+tiene la misma forma que la de dossiers: cada fallo es un evento
+(`lead_enrich_failed`, `chat_read_failed`) y `lib/llm-retry.ts` salta el lead
+que falló hace menos de una hora o 3 veces en 24 h. Se calcula desde el log
+de eventos — sobrevive a reinicios y no necesita migración — y se aplica en
+la consulta, antes del límite, para que un lead saltado no ocupe hueco. La
+vía manual (releer desde la página del lead, importar) no se frena.
+
+Pendiente a propósito: un lead que agota el techo sigue oculto en la portada
+hasta que su enriquecimiento salga; el fallo queda en Actividad.
+
+Verificado contra una PGlite temporal (no contra el stack: arrancarlo aquí
+dispara el scheduler): los leads frenados salen de la consulta y el resto
+entra. 5 tests nuevos de la regla.
+
 **Cambio 2026-10-25 (25) — no preguntar lo que el modelo ya contesta: "¿Es
 4x2 o 4x4?" a un Subaru.** Nico generó el primer mensaje para un Outback y la
 primera pregunta era la tracción. Todos los Outback BS son 4x4: preguntarlo le

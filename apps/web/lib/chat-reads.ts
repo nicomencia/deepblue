@@ -18,9 +18,10 @@ import {
 } from "@deepblue/core";
 import { briefs, events, leads, listings, messages, users, type Db } from "@deepblue/db";
 import { betaZodOutputFormat } from "@anthropic-ai/sdk/helpers/beta/zod";
-import { and, asc, eq, gt, inArray, isNull, or } from "drizzle-orm";
+import { and, asc, eq, gt, inArray, isNull, notInArray, or } from "drizzle-orm";
 import { sendEmail } from "./email";
 import { leadUrl } from "./links";
+import { recordLlmFailure, throttledLeadIds } from "./llm-retry";
 import { visitInputForLead } from "./visit";
 import { getAnthropic, isLlmConfigured, messageText, READS_MODEL, refusalFallback } from "./llm";
 import { newEvalCaches, reevaluateLead } from "./reevaluate";
@@ -38,8 +39,16 @@ export interface PendingConversation {
   conversation: MessageRow[];
 }
 
-/** Leads with inbound messages newer than their last reading. */
-export async function pendingConversations(db: Db, limit = 6): Promise<PendingConversation[]> {
+/**
+ * Leads with inbound messages newer than their last reading. `excludeLeadIds`
+ * is applied in the query, before the limit, so skipped leads never take a
+ * slot from one that can be read.
+ */
+export async function pendingConversations(
+  db: Db,
+  limit = 6,
+  excludeLeadIds: string[] = [],
+): Promise<PendingConversation[]> {
   const rows = await db
     .selectDistinct({ lead: leads, listing: listings, brief: briefs })
     .from(messages)
@@ -50,6 +59,7 @@ export async function pendingConversations(db: Db, limit = 6): Promise<PendingCo
       and(
         eq(messages.direction, "inbound"),
         or(isNull(leads.chatReadAt), gt(messages.createdAt, leads.chatReadAt)),
+        excludeLeadIds.length > 0 ? notInArray(leads.id, excludeLeadIds) : undefined,
       ),
     )
     .limit(limit);
@@ -332,10 +342,17 @@ export interface ChatReadBatchStats {
   failed: number;
 }
 
-/** Drain pending conversations, bounded per call (scheduler ticks it). */
+/**
+ * Drain pending conversations, bounded per call (scheduler ticks it).
+ * `chatReadAt` only marks success, so a conversation whose reading recently
+ * failed is skipped (llm-retry.ts) instead of being paid for on every tick.
+ * The manual lane (pendingConversations / re-read on the lead page) is not
+ * throttled: a person asking is not a metronome.
+ */
 export async function readPendingConversations(db: Db, limit = 4): Promise<ChatReadBatchStats> {
   if (!isLlmConfigured()) return { candidates: 0, read: 0, failed: 0 };
-  const pending = await pendingConversations(db, limit);
+  const throttled = await throttledLeadIds(db, "chat_read_failed");
+  const pending = await pendingConversations(db, limit, throttled);
   const stats: ChatReadBatchStats = { candidates: pending.length, read: 0, failed: 0 };
   for (const p of pending) {
     try {
@@ -347,6 +364,12 @@ export async function readPendingConversations(db: Db, limit = 4): Promise<ChatR
         `chat read failed for lead ${p.lead.id}:`,
         err instanceof Error ? err.message : err,
       );
+      await recordLlmFailure(db, {
+        userId: p.lead.userId,
+        leadId: p.lead.id,
+        type: "chat_read_failed",
+        error: err,
+      });
     }
   }
   return stats;

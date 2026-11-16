@@ -16,9 +16,10 @@ import {
 } from "@deepblue/core";
 import { briefs, events, leads, listings, users, type Db } from "@deepblue/db";
 import { betaZodOutputFormat } from "@anthropic-ai/sdk/helpers/beta/zod";
-import { and, desc, eq, isNull, sql } from "drizzle-orm";
+import { and, desc, eq, isNull, notInArray, sql } from "drizzle-orm";
 import { ENRICH_MODEL, getAnthropic, isLlmConfigured, messageText, refusalFallback } from "./llm";
 import { sendEmail } from "./email";
+import { recordLlmFailure, throttledLeadIds } from "./llm-retry";
 import { composeAlert, composeAlertHtml } from "./alerts";
 import { listingRowToNormalized, newEvalCaches, reevaluateLead, type EvalCaches } from "./reevaluate";
 
@@ -214,17 +215,26 @@ export interface EnrichBatchStats {
 /**
  * Enrich pending shortlisted leads, best-scored first (they're the ones the
  * user will look at). Bounded per call — the scheduler ticks it, so a backlog
- * drains steadily without a cost spike.
+ * drains steadily without a cost spike. Leads whose call recently failed are
+ * skipped (llm-retry.ts): `enrichedAt` only marks success, so without that a
+ * lead that can't be enriched would be paid for again on every tick.
  */
 export async function enrichPendingLeads(db: Db, limit = 6): Promise<EnrichBatchStats> {
   if (!isLlmConfigured()) return { candidates: 0, enriched: 0, failed: 0 };
 
+  const throttled = await throttledLeadIds(db, "lead_enrich_failed");
   const rows = await db
     .select({ lead: leads, listing: listings, brief: briefs })
     .from(leads)
     .innerJoin(listings, eq(leads.listingId, listings.id))
     .innerJoin(briefs, eq(leads.briefId, briefs.id))
-    .where(and(eq(leads.state, "shortlisted"), isNull(leads.enrichedAt)))
+    .where(
+      and(
+        eq(leads.state, "shortlisted"),
+        isNull(leads.enrichedAt),
+        throttled.length > 0 ? notInArray(leads.id, throttled) : undefined,
+      ),
+    )
     .orderBy(desc(sql`(${leads.verdict} ->> 'score')::int`))
     .limit(limit);
 
@@ -240,13 +250,19 @@ export async function enrichPendingLeads(db: Db, limit = 6): Promise<EnrichBatch
         `enrich failed for lead ${row.lead.id}:`,
         err instanceof Error ? err.message : err,
       );
+      await recordLlmFailure(db, {
+        userId: row.lead.userId,
+        leadId: row.lead.id,
+        type: "lead_enrich_failed",
+        error: err,
+      });
     }
   }
   return stats;
 }
 
 // One batch at a time: several runner reports can land within seconds and the
-// pending-select is not atomic — a flag beats paying Haiku twice for one lead.
+// pending-select is not atomic — a flag beats paying twice for one lead.
 let enrichInFlight = false;
 
 /**
