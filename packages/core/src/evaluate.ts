@@ -343,19 +343,25 @@ function elasticMiss(
     beyondBand,
   });
 
+  // Every limit is checked, not just the first one missed. Returning early let
+  // a unit one year too old AND at twice the budget through as a "near miss on
+  // year": the first overshoot found was inside its band, and the one that
+  // should have killed the lead was never looked at.
+  const misses: Array<{ miss: NearMiss; beyondBand: boolean }> = [];
+
   if (listing.year !== undefined) {
     // Years stretch by whole years — a percentage of a calendar year is meaningless.
     if (criteria.yearMin !== undefined && listing.year < criteria.yearMin) {
       const behind = criteria.yearMin - listing.year;
-      return over("year_below_minimum", criteria.yearMin, listing.year, behind > NEAR_MISS_YEAR_SLACK);
+      misses.push(over("year_below_minimum", criteria.yearMin, listing.year, behind > NEAR_MISS_YEAR_SLACK));
     }
     if (criteria.yearMax !== undefined && listing.year > criteria.yearMax) {
       const ahead = listing.year - criteria.yearMax;
-      return over("year_above_maximum", criteria.yearMax, listing.year, ahead > NEAR_MISS_YEAR_SLACK);
+      misses.push(over("year_above_maximum", criteria.yearMax, listing.year, ahead > NEAR_MISS_YEAR_SLACK));
     }
   }
   if (listing.km !== undefined && criteria.kmMax !== undefined && listing.km > criteria.kmMax) {
-    return over("km_over_limit", criteria.kmMax, listing.km, listing.km > bandEdge(criteria.kmMax));
+    misses.push(over("km_over_limit", criteria.kmMax, listing.km, listing.km > bandEdge(criteria.kmMax)));
   }
   // The budget boundary already includes negotiation headroom; the stretch
   // band sits beyond it, so an asking price can be over budget twice over
@@ -366,7 +372,7 @@ function elasticMiss(
   if (hardLimits.maxPriceEur !== undefined) {
     const budget = Math.round(hardLimits.maxPriceEur * NEGOTIATION_HEADROOM);
     if (price !== undefined && price > budget) {
-      return over("price_over_budget", budget, price, price > bandEdge(budget));
+      misses.push(over("price_over_budget", budget, price, price > bandEdge(budget)));
     }
   }
   // Wallapop's API ignores distance params (verified 2026-07-22, RECON.md),
@@ -377,10 +383,13 @@ function elasticMiss(
     const boundary = criteria.location.radiusKm + RADIUS_SLACK_KM;
     const distance = haversineKm(criteria.location, { lat: listing.lat, lon: listing.lon });
     if (distance > boundary) {
-      return over("outside_search_radius", boundary, distance, distance > bandEdge(boundary));
+      misses.push(over("outside_search_radius", boundary, distance, distance > bandEdge(boundary)));
     }
   }
-  return undefined;
+  // One limit beyond its band is enough to kill, whatever the others say.
+  // Otherwise the first miss (year, km, price, distance) names the near miss,
+  // as it always has.
+  return misses.find((m) => m.beyondBand) ?? misses[0];
 }
 
 /** City-centroid coordinates put a village seller ~this far from their pin. */

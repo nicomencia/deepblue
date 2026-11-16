@@ -316,8 +316,19 @@ async function ingestOne(
     caches.benchmark,
   );
   const dossier = await getDossierForBrief(db, item, brief.criteria.vehicles, caches.dossier);
+  // Judge the unit with the facts just read out of its text — the same ones
+  // stored above. Evaluating the bare `item` meant the FIRST verdict (the one
+  // that decides shortlisted/near-miss/dead and feeds the alert) used the
+  // financing headline instead of the cash price and never knew the drivetrain,
+  // while every later re-evaluation, reading the row, did.
   const evaluation = evaluateListing(
-    item,
+    {
+      ...item,
+      cashPriceEur,
+      drivetrain: drivetrainFact,
+      rhd: rhdFact,
+      foreignPlates: foreignPlatesFact,
+    },
     brief.criteria,
     brief.hardLimits,
     benchmark,
@@ -415,6 +426,11 @@ export async function ingestListingDetail(
       km: item.km,
       fuel: item.fuel,
       gearbox: item.gearbox,
+      // The detail page carries the full description; a drivetrain the search
+      // snippet didn't name may be named here. Fills gaps only.
+      drivetrain: sql`coalesce(${listings.drivetrain}, ${
+        item.drivetrain ?? normalizeDrivetrain(item.version, item.title, item.description) ?? null
+      })`,
       powerCv: sanitizePowerCv(item.powerCv),
       ecoLabel: item.ecoLabel,
       sellerType: item.sellerType,

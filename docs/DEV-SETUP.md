@@ -163,6 +163,45 @@ modelos, adopción manual de anuncios con dossier-first, vía LLM activa
 (API key) y Fase 2 en Wallapop: mensajes al vendedor con aprobación, lectura
 de respuestas, contraofertas e informe de visita. 274 tests verdes.
 
+**Cambio 2026-11-16 (29) — la tracción llevaba desde julio guardada y sin
+usar.** El cambio (10) del 2026-07-28 ("4x2 y 4x4 dejan de ser el mismo
+coche") añadió la columna, el peso en `computeBenchmark` y sus tests — y la
+parte web nunca los conectó. Revisando el motor de evaluación:
+
+- `getBenchmark` no leía `listings.drivetrain` al traer los comparables. El
+  peso solo actúa cuando AMBOS lados dicen su tracción, y un comparable que
+  nunca la trae calla siempre: un 4x4 seguía tasándose contra el charco
+  mezclado, exactamente la queja original.
+- `listingRowToNormalized` no copiaba la tracción de la fila, así que cada
+  reevaluación la olvidaba; y `reevaluateLead` y la adopción tampoco la
+  pasaban al benchmark.
+- El primer veredicto (ingest) evaluaba el `item` crudo del runner, sin los
+  datos recién leídos de su texto: ni tracción, ni precio al contado, ni
+  RHD/matrícula. Ese veredicto decide shortlist/near-miss/muerte y alimenta
+  la alerta; ahora ve lo mismo que se guarda.
+
+Resultado visible: el vendedor deja de recibir "¿Es 4x2 o 4x4?" cuando el
+anuncio ya lo dice, y la mediana de un 4x4 sale de otros 4x4. Las filas
+antiguas o adoptadas sin columna leen la tracción del texto al evaluar, y el
+detalle del anuncio rellena el hueco si la descripción completa la nombra.
+
+De paso, un fallo en los near-miss: `elasticMiss` devolvía el PRIMER límite
+incumplido. Un coche un año por debajo del mínimo y al doble del presupuesto
+salía como "casi, por año" porque el precio no llegaba a mirarse. Ahora se
+miran todos y basta uno fuera de banda para morir. 2 tests.
+
+Verificado contra una PGlite temporal con 8 Tucson 4x2 baratos y 8 HTRAC
+caros: mediana 4x4 > mediana sin tracción > mediana 4x2, y el lead 4x4 no
+pregunta la tracción ni al nacer ni al reevaluarse. No se ha medido contra el
+corpus real (la copia de este PC es anterior a la migración 0015).
+238 + 50 tests verdes.
+
+Sin decidir, a propósito: `criteria.fuel` con varios combustibles,
+`criteria.gearbox` y `criteria.drivetrain` se guardan en la búsqueda pero
+ninguna regla filtra por ellos (solo un combustible único llega a Wallapop
+como parámetro). Carrocería sí mata. Falta elegir si estos matan, degradan a
+near-miss o solo puntúan.
+
 **Cambio 2026-11-16 (28) — el resto de la revisión: tres cabos sueltos en la
 cola y en la aprobación.** Ninguno había mordido todavía; los tres eran
 caminos por los que el sistema podía hacer de más sin que nadie lo pidiera.

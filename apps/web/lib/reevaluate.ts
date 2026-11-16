@@ -4,6 +4,7 @@ import {
   applyEnrichment,
   canTransition,
   evaluateListing,
+  normalizeDrivetrain,
   type ModelDossier,
   type NormalizedListing,
 } from "@deepblue/core";
@@ -50,6 +51,13 @@ export function listingRowToNormalized(
     km: listing.km ?? undefined,
     fuel: listing.fuel ?? undefined,
     gearbox: listing.gearbox ?? undefined,
+    // Stored at ingest, or read now from the text for rows that predate the
+    // column or arrived by adoption. Dropping it here made every re-evaluation
+    // forget the drivetrain: the unit was priced against the mixed pool again
+    // and the seller was asked "¿4x2 o 4x4?" about an ad that says so.
+    drivetrain:
+      listing.drivetrain ??
+      normalizeDrivetrain(listing.version ?? undefined, listing.title, listing.description ?? undefined),
     powerCv: listing.powerCv ?? undefined,
     ecoLabel: listing.ecoLabel ?? undefined,
     rhd: listing.rhd ?? undefined,
@@ -146,7 +154,14 @@ export async function reevaluateLead(
     nl.make,
     nl.model,
     nl.countryCode,
-    { version: nl.version, year: nl.year, powerCv: nl.powerCv, fuel: nl.fuel, gearbox: nl.gearbox },
+    {
+      version: nl.version,
+      year: nl.year,
+      powerCv: nl.powerCv,
+      fuel: nl.fuel,
+      gearbox: nl.gearbox,
+      drivetrain: nl.drivetrain,
+    },
     caches.benchmark,
   );
   const dossier = await getDossierForBrief(db, nl, brief.criteria.vehicles, caches.dossier);

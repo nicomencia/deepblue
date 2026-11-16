@@ -295,7 +295,14 @@ export async function completeAdoption(
     nl.make,
     nl.model,
     nl.countryCode,
-    { version: nl.version, year: nl.year, powerCv: nl.powerCv, fuel: nl.fuel, gearbox: nl.gearbox },
+    {
+      version: nl.version,
+      year: nl.year,
+      powerCv: nl.powerCv,
+      fuel: nl.fuel,
+      gearbox: nl.gearbox,
+      drivetrain: nl.drivetrain,
+    },
     caches.benchmark,
   );
   const reviewedDossier = await getDossierForBrief(db, nl, brief.criteria.vehicles, caches.dossier);

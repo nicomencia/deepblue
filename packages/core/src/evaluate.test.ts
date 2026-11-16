@@ -569,6 +569,24 @@ describe("near misses", () => {
     expect(evaluateListing(listing({ year: 2013 }), criteria(), hardLimits).outcome).toBe("dead");
   });
 
+  it("dies when ANY limit is past its band, even if an earlier one is only just missed", () => {
+    // One year below the minimum (inside the slack) and at twice the budget.
+    const r = evaluateListing(
+      listing({ year: 2014, priceEur: MAX_PRICE * 2 }),
+      criteria(),
+      hardLimits,
+    );
+    expect(r.outcome).toBe("dead");
+    expect(r.deadReason).toBe("price_over_budget");
+    expect(r.nearMiss).toBeUndefined();
+  });
+
+  it("stays a near miss when two limits are both inside their bands", () => {
+    const r = evaluateListing(listing({ year: 2014, km: 150_000 }), criteria(), hardLimits);
+    expect(r.outcome).toBe("near_miss");
+    expect(r.nearMiss?.reason).toBe("year_below_minimum");
+  });
+
   it("stretches the budget beyond the negotiation headroom", () => {
     const cap = MAX_PRICE * NEGOTIATION_HEADROOM;
     expect(evaluateListing(listing({ priceEur: Math.round(cap * 1.1) }), criteria(), hardLimits).outcome)

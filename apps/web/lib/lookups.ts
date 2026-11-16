@@ -52,6 +52,10 @@ export async function getBenchmark(
         powerCv: listings.powerCv,
         fuel: listings.fuel,
         gearbox: listings.gearbox,
+        // Without this the 4x2/4x4 weight in computeBenchmark never fires: it
+        // only judges when BOTH sides state the drivetrain, and a comparable
+        // that never carries it is always silent.
+        drivetrain: listings.drivetrain,
       })
       .from(listings)
       .where(
@@ -79,6 +83,7 @@ export async function getBenchmark(
       powerCv: r.powerCv ?? undefined,
       fuel: r.fuel ?? undefined,
       gearbox: r.gearbox ?? undefined,
+      drivetrain: r.drivetrain ?? undefined,
     }));
     cache.set(key, comparables);
   }
