@@ -182,12 +182,28 @@ export async function decideApproval(
     return { ok: false, error: "el mensaje ya no está pendiente", leadId: approval.leadId };
   }
 
-  if (decision === "reject") {
-    await db.update(messages).set({ status: "draft" }).where(eq(messages.id, message.id));
-    await db
+  // The claim: one conditional UPDATE decides who gets to act. The checks
+  // above are reads, and two requests a few milliseconds apart (a double-click
+  // on the email link) both pass them — each then queued its own send_message
+  // job for the same draft, i.e. the seller got the text twice. Whoever flips
+  // `pending` wins; the other finds no row and stops before writing anything.
+  const claim = async (status: "approved" | "rejected"): Promise<boolean> => {
+    const claimed = await db
       .update(approvals)
-      .set({ status: "rejected", decidedAt: new Date() })
-      .where(eq(approvals.id, approval.id));
+      .set({ status, decidedAt: new Date() })
+      .where(and(eq(approvals.id, approval.id), eq(approvals.status, "pending")))
+      .returning({ id: approvals.id });
+    return claimed.length > 0;
+  };
+  const alreadyDecided: ApprovalDecision = {
+    ok: false,
+    error: "esta aprobación ya se decidió",
+    leadId: approval.leadId,
+  };
+
+  if (decision === "reject") {
+    if (!(await claim("rejected"))) return alreadyDecided;
+    await db.update(messages).set({ status: "draft" }).where(eq(messages.id, message.id));
     await db.insert(events).values({
       userId: approval.userId,
       leadId: approval.leadId,
@@ -216,12 +232,9 @@ export async function decideApproval(
     body: message.body,
     messageId: message.id,
   };
+  if (!(await claim("approved"))) return alreadyDecided;
   await db.insert(jobs).values({ userId: approval.userId, type: payload.type, payload });
   await db.update(messages).set({ status: "queued" }).where(eq(messages.id, message.id));
-  await db
-    .update(approvals)
-    .set({ status: "approved", decidedAt: new Date() })
-    .where(eq(approvals.id, approval.id));
   await db.insert(events).values({
     userId: approval.userId,
     leadId: approval.leadId,

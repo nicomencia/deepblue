@@ -163,6 +163,17 @@ modelos, adopción manual de anuncios con dossier-first, vía LLM activa
 (API key) y Fase 2 en Wallapop: mensajes al vendedor con aprobación, lectura
 de respuestas, contraofertas e informe de visita. 274 tests verdes.
 
+**Cambio 2026-11-16 (27) — aprobar dos veces ya no escribe dos veces al
+vendedor.** `decideApproval` leía la aprobación como pendiente, encolaba el
+`send_message` y solo al final la marcaba decidida. Dos peticiones casi
+simultáneas (doble clic en el enlace del email) pasaban las dos la lectura y
+cada una encolaba su envío del mismo borrador. Ahora un UPDATE condicional
+(`where status = 'pending'` con `returning`) decide quién actúa, antes de
+escribir nada; la segunda no encuentra fila y devuelve "ya se decidió".
+
+Verificado contra una PGlite temporal: 4 aprobaciones concurrentes del mismo
+token → 1 ok, 1 job, 1 evento `message_approved`. 236 + 50 tests verdes.
+
 **Cambio 2026-11-16 (26) — un fallo del LLM ya no se paga cada 15 minutos.**
 Revisión del repo: el enriquecimiento y las lecturas del chat elegían "leads
 sin marca de éxito" (`enrichedAt` / `chatReadAt`) en cada tick, y esa marca
