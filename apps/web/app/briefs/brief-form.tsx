@@ -153,9 +153,9 @@ export function BriefForm({
         </span>
       </fieldset>
       <small style={{ ...hint, gridColumn: "1 / -1" }}>
-        Combustible, cambio y tracción no descartan: un anuncio que diga otra cosa sale de la
-        lista y queda en «fuera de la búsqueda por poco», porque el vendedor a veces marca mal
-        la casilla. Si el anuncio no lo dice, el coche pasa.
+        Combustible, cambio y tracción descartan para siempre: un anuncio que diga otra cosa
+        se da por muerto y no vuelve, aunque luego quites el filtro. Si el anuncio no lo dice,
+        el coche pasa.
       </small>
       <fieldset
         style={{ ...lbl, border: "none", padding: 0, margin: 0, gridColumn: "1 / -1" }}

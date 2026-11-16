@@ -194,8 +194,8 @@ export default async function Home({
             {nearMisses.length} fuera de la búsqueda por poco
           </summary>
           <p style={{ color: "var(--ink-muted)", fontSize: "0.85rem" }}>
-            No cumplen lo que pediste, pero se quedan cerca: un límite superado por poco, o un
-            combustible, cambio o tracción distintos. No entran en el resumen diario.
+            No cumplen lo que pediste, pero se quedan cerca: precio, km, año o distancia
+            superados por poco. No entran en el resumen diario.
           </p>
           <table style={{ borderCollapse: "collapse", width: "100%", fontSize: "0.9rem" }}>
             <tbody>

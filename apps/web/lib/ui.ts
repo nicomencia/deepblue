@@ -24,9 +24,6 @@ export const fmtDate = (d: Date | string): string =>
  * Short on purpose: the row beside it already shows the price, year and km.
  */
 const MISS_REASON: Record<string, string> = {
-  fuel_mismatch: "combustible distinto al que buscas",
-  gearbox_mismatch: "cambio distinto al que buscas",
-  drivetrain_mismatch: "tracción distinta a la que buscas",
   km_over_limit: "km por encima de tu tope",
   price_over_budget: "precio por encima de tu presupuesto",
   year_below_minimum: "más antiguo que tu año mínimo",

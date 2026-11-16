@@ -16,7 +16,7 @@ import {
 } from "@deepblue/core";
 import { briefs, events, leads, listings, users, type Db } from "@deepblue/db";
 import { betaZodOutputFormat } from "@anthropic-ai/sdk/helpers/beta/zod";
-import { and, desc, eq, isNull, notInArray, sql } from "drizzle-orm";
+import { and, desc, eq, isNotNull, isNull, lt, notInArray, or, sql } from "drizzle-orm";
 import { ENRICH_MODEL, getAnthropic, isLlmConfigured, messageText, refusalFallback } from "./llm";
 import { sendEmail } from "./email";
 import { recordLlmFailure, throttledLeadIds } from "./llm-retry";
@@ -206,6 +206,9 @@ export async function enrichLead(
   return saveEnrichment(db, lead, listing, brief, payload, ENRICH_MODEL, caches);
 }
 
+/** How long a lead waits for its detail page before being read without it. */
+const DETAIL_WAIT_MS = 30 * 60 * 1000;
+
 export interface EnrichBatchStats {
   candidates: number;
   enriched: number;
@@ -232,6 +235,16 @@ export async function enrichPendingLeads(db: Db, limit = 6): Promise<EnrichBatch
       and(
         eq(leads.state, "shortlisted"),
         isNull(leads.enrichedAt),
+        // Wait for the detail page before paying for the read. Search results
+        // carry no gearbox and a clipped description, so a lead read straight
+        // off the sweep was sometimes paid for minutes before its detail
+        // showed it was the automatic the brief excludes — and the read itself
+        // is better with the full ad. The age fallback covers a detail fetch
+        // that failed or a platform with none: nothing waits forever.
+        or(
+          isNotNull(listings.detailFetchedAt),
+          lt(leads.createdAt, new Date(Date.now() - DETAIL_WAIT_MS)),
+        ),
         throttled.length > 0 ? notInArray(leads.id, throttled) : undefined,
       ),
     )

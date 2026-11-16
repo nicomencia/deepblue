@@ -163,6 +163,44 @@ modelos, adopción manual de anuncios con dossier-first, vía LLM activa
 (API key) y Fase 2 en Wallapop: mensajes al vendedor con aprobación, lectura
 de respuestas, contraofertas e informe de visita. 274 tests verdes.
 
+**Cambio 2026-11-16 (31) — combustible, cambio y tracción matan; ya no
+degradan.** La nota 30 los dejó en near-miss por miedo a la casilla mal
+marcada. Nico, al verlo: "no tiene sentido listar cosas que el usuario no
+está buscando, y además nos sube el coste". Tiene razón en las dos: un
+near-miss sigue vivo, y vivo cuesta sondas de vigencia y vigilancia de
+precio sobre un coche que nadie pidió.
+
+Ahora un anuncio que DICE otro combustible, cambio o tracción muere, como la
+carrocería (`fuel_mismatch`, `gearbox_mismatch`, `drivetrain_mismatch`). El
+coste se asume a sabiendas y queda escrito en el formulario: un lead muerto
+no vuelve, ni corrigiendo el anuncio ni quitando el filtro después. Por eso
+la regla sigue estrecha — solo hechos (lo que el anuncio calla o no sabemos
+clasificar, pasa) y el híbrido archivado bajo su combustible se salva si su
+título dice híbrido.
+
+Dos protecciones alrededor:
+
+- *Una conversación en marcha no muere por un filtro.* Si el lead ya está
+  contactado y el detalle o el chat revelan otro cambio, se queda en su
+  estado con el motivo guardado. Los filtros deciden qué se lista, no cortan
+  un hilo abierto con un vendedor.
+- *El enriquecimiento espera al detalle del anuncio.* La búsqueda no trae el
+  cambio y trae la descripción recortada, así que a veces se pagaba la
+  lectura del LLM minutos antes de que el detalle revelara el automático que
+  la búsqueda excluye. Ahora se lee con el detalle ya guardado (mejor
+  lectura, además); si el detalle no llega en 30 min, se lee igualmente.
+
+Se filtra DESPUÉS de traer los datos, no en la API: a Wallapop solo le llega
+un combustible único (`engine`, verificado en RECON). El cambio no está en
+los resultados de búsqueda y su parámetro está sin verificar; la tracción no
+existe como campo. Verificar `gearbox` en vivo ahorraría el detalle de los
+automáticos — pendiente de decidir, es tocar Wallapop.
+
+Verificado contra una PGlite temporal: el diésel nace muerto y no encola
+detalle; el automático muere al llegar su detalle; el lead contactado se
+queda contactado. La espera del enriquecimiento no se ha ejecutado (necesita
+la API). 246 + 50 tests verdes.
+
 **Cambio 2026-11-16 (30) — combustible, cambio y tracción dejan de ser
 decorativos.** Los tres se guardaban en cada búsqueda y ninguna regla los
 miraba (lo que quedó "sin decidir" en la nota 29): una búsqueda de gasolina

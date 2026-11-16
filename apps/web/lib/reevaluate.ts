@@ -4,6 +4,7 @@ import {
   applyEnrichment,
   canTransition,
   evaluateListing,
+  FILTER_KILL_REASONS,
   normalizeDrivetrain,
   type ModelDossier,
   type NormalizedListing,
@@ -193,9 +194,20 @@ export async function reevaluateLead(
   // allows it: a contacted lead is never demoted to near_miss mid-conversation
   // (canTransition says no), while shortlisted ↔ near_miss moves both ways as
   // the brief's limits change.
+  //
+  // One more exception: a brief FILTER (fuel, gearbox, drivetrain) never kills
+  // a lead that is already in conversation. Those filters decide what gets
+  // listed; once the user is talking to a seller, a field on the ad turning
+  // out different is something to tell them, not a reason to drop the thread.
   const target = evaluation.outcome;
+  const inConversation = lead.state !== "shortlisted" && lead.state !== "near_miss";
+  const filterKill =
+    target === "dead" && FILTER_KILL_REASONS.includes(evaluation.deadReason ?? "");
   const nextState =
-    lead.origin !== "manual" && target !== lead.state && canTransition(lead.state, target)
+    lead.origin !== "manual" &&
+    target !== lead.state &&
+    canTransition(lead.state, target) &&
+    !(filterKill && inConversation)
       ? target
       : lead.state;
 

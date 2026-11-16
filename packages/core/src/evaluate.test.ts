@@ -550,11 +550,11 @@ describe("brief filters", () => {
   const evalF = (l: Partial<NormalizedListing>, c: Partial<BriefCriteria>, d?: ModelDossier) =>
     evaluateListing(listing(l), criteria(c), hardLimits, benchmark, d);
 
-  it("demotes a stated fuel the brief did not ask for — near miss, never dead", () => {
+  it("kills a stated fuel the brief did not ask for", () => {
     const r = evalF({ fuel: "Diesel" }, { fuel: ["gasoline"] });
-    expect(r.outcome).toBe("near_miss");
+    expect(r.outcome).toBe("dead");
     expect(r.deadReason).toBe("fuel_mismatch");
-    expect(r.nearMiss?.filter).toEqual({ wanted: ["gasolina"], actual: "diésel" });
+    expect(r.nearMiss).toBeUndefined();
   });
 
   it("accepts any of several fuels, in whatever language the platform writes them", () => {
@@ -562,7 +562,7 @@ describe("brief filters", () => {
     expect(evalF({ fuel: "Gasolina" }, c).outcome).toBe("shortlisted");
     expect(evalF({ fuel: "Hybrid" }, c).outcome).toBe("shortlisted");
     expect(evalF({ fuel: "Electro/Gasolina" }, c).outcome).toBe("shortlisted");
-    expect(evalF({ fuel: "Diésel" }, c).outcome).toBe("near_miss");
+    expect(evalF({ fuel: "Diésel" }, c).outcome).toBe("dead");
   });
 
   it("passes a fuel the ad does not state or that we cannot classify", () => {
@@ -575,36 +575,36 @@ describe("brief filters", () => {
     expect(
       evalF({ fuel: "Gasoline", title: "Volkswagen Golf 1.4 GTE Híbrido enchufable" }, hybridHunt).outcome,
     ).toBe("shortlisted");
-    expect(evalF({ fuel: "Gasoline" }, hybridHunt).outcome).toBe("near_miss");
+    expect(evalF({ fuel: "Gasoline" }, hybridHunt).outcome).toBe("dead");
   });
 
-  it("demotes the wrong gearbox, including trade names", () => {
+  it("kills the wrong gearbox, including trade names", () => {
     const manualHunt = { gearbox: ["manual"] as BriefCriteria["gearbox"] };
     expect(evalF({ gearbox: "Manual" }, manualHunt).outcome).toBe("shortlisted");
     expect(evalF({ gearbox: undefined }, manualHunt).outcome).toBe("shortlisted");
     for (const g of ["Automatic", "Automático", "Semi-automatic", "DSG"]) {
       const r = evalF({ gearbox: g }, manualHunt);
-      expect(r.outcome).toBe("near_miss");
+      expect(r.outcome).toBe("dead");
       expect(r.deadReason).toBe("gearbox_mismatch");
     }
   });
 
-  it("demotes the wrong drivetrain, from the ad or from what the dossier knows", () => {
+  it("kills the wrong drivetrain, from the ad or from what the dossier knows", () => {
     const hunt4x4 = { drivetrain: ["4x4"] as BriefCriteria["drivetrain"] };
     expect(evalF({ drivetrain: "4x4" }, hunt4x4).outcome).toBe("shortlisted");
     expect(evalF({ drivetrain: undefined }, hunt4x4).outcome).toBe("shortlisted");
     const r = evalF({ drivetrain: "4x2" }, hunt4x4);
-    expect(r.outcome).toBe("near_miss");
-    expect(r.nearMiss?.filter).toEqual({ wanted: ["4x4"], actual: "4x2" });
+    expect(r.outcome).toBe("dead");
+    expect(r.deadReason).toBe("drivetrain_mismatch");
     // Every unit of this generation is 4x2 → a 4x4 hunt cannot be met by it.
     const onlyFwd: ModelDossier = { ...dossier([]), drivetrains: ["4x2"] };
     expect(evalF({ drivetrain: undefined }, hunt4x4, onlyFwd).deadReason).toBe("drivetrain_mismatch");
   });
 
-  it("still dies when a numeric limit is past its band, filter or no filter", () => {
-    const r = evalF({ fuel: "Diesel", km: 400_000 }, { fuel: ["gasoline"] });
+  it("is a death, not a near miss, even when a numeric limit is only just missed", () => {
+    const r = evalF({ fuel: "Diesel", km: 150_000 }, { fuel: ["gasoline"] });
     expect(r.outcome).toBe("dead");
-    expect(r.deadReason).toBe("km_over_limit");
+    expect(r.deadReason).toBe("fuel_mismatch");
   });
 
   it("filters nothing when the brief states no preference", () => {
