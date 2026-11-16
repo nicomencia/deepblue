@@ -220,8 +220,25 @@ export async function decideApproval(
     .where(eq(leads.id, approval.leadId))
     .limit(1);
   if (!row) return { ok: false, error: "lead no encontrado" };
+  // Same gates as drafting, asked again at send time: the draft may have sat
+  // in the inbox for days, and a lead that died, moved on or was paused in the
+  // meantime must not get a message because of an old email link.
   if (row.lead.state === "dead") {
     return { ok: false, error: "el lead está muerto — no se envía nada", leadId: approval.leadId };
+  }
+  if (!(CONTACTABLE_STATES as readonly string[]).includes(row.lead.state)) {
+    return {
+      ok: false,
+      error: `el lead está en estado ${row.lead.state}, no contactable — no se envía nada`,
+      leadId: approval.leadId,
+    };
+  }
+  if (row.lead.autonomyMode === "paused") {
+    return {
+      ok: false,
+      error: "la conversación de este lead está en pausa — no se envía nada",
+      leadId: approval.leadId,
+    };
   }
 
   const payload: JobPayload = {

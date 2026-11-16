@@ -163,6 +163,32 @@ modelos, adopción manual de anuncios con dossier-first, vía LLM activa
 (API key) y Fase 2 en Wallapop: mensajes al vendedor con aprobación, lectura
 de respuestas, contraofertas e informe de visita. 274 tests verdes.
 
+**Cambio 2026-11-16 (28) — el resto de la revisión: tres cabos sueltos en la
+cola y en la aprobación.** Ninguno había mordido todavía; los tres eran
+caminos por los que el sistema podía hacer de más sin que nadie lo pidiera.
+
+- *Aprobar vuelve a preguntar el estado del lead.* Redactar exigía un lead
+  contactable y sin pausar; aprobar solo miraba que no estuviera muerto. Un
+  borrador puede pasar días en el correo: si entretanto el lead se pausó o
+  cambió de estado, el enlace viejo ya no envía nada. La aprobación queda
+  pendiente, así que al reanudar sigue sirviendo.
+- *Un job no se reparte para siempre.* `attempts` se contaba y nadie lo leía:
+  un lease caducado (runner muerto o colgado a mitad) se volvía a entregar
+  sin límite, y cada entrega es otra petición a Wallapop. A la tercera
+  caducidad el job muere con su motivo. Los envíos siguen igual: nunca se
+  reintentan.
+- *El runner ya no se queda colgado en una petición.* El `fetch` de Node no
+  tiene plazo propio; las cuatro llamadas a Wallapop llevan ahora 30 s. De
+  paso, un informe malformado del runner responde 400 en vez de 500.
+
+Verificado contra una PGlite temporal: aprobación rechazada con el lead en
+pausa y aceptada al reanudar; leases 200, 200, 200 y después 204 con el job
+en `failed`; informe malformado → 400. El plazo del `fetch` no se ha probado
+contra Wallapop. 236 + 50 tests verdes.
+
+Queda aparcado hasta que el panel salga de Tailscale: la aprobación se
+dispara con un GET, así que cualquier cosa que abra el enlace aprueba.
+
 **Cambio 2026-11-16 (27) — aprobar dos veces ya no escribe dos veces al
 vendedor.** `decideApproval` leía la aprobación como pendiente, encolaba el
 `send_message` y solo al final la marcaba decidida. Dos peticiones casi

@@ -34,7 +34,9 @@ export async function POST(
   if (!job) return new Response("job not found", { status: 404 });
   if (job.status !== "leased") return new Response("job not leased", { status: 409 });
 
-  const report = reportSchema.parse(await req.json());
+  const parsed = reportSchema.safeParse(await req.json().catch(() => null));
+  if (!parsed.success) return new Response("malformed report", { status: 400 });
+  const report = parsed.data;
 
   // Trust boundary: validate everything the runner reports before ingesting.
   let ingestStats: unknown;

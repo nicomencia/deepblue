@@ -29,6 +29,13 @@ const WALLAPOP_ENGINE: Record<NonNullable<SearchQuery["fuel"]>, string> = {
   electric: "electric",
 };
 
+/**
+ * Node's fetch has no deadline of its own: a connection that stalls would
+ * hold the runner — and every job queued behind it — for minutes.
+ */
+const TIMEOUT_MS = 30_000;
+const timeout = () => AbortSignal.timeout(TIMEOUT_MS);
+
 const HEADERS = {
   accept: "application/json",
   // 403 without X-DeviceOS — the one magic header (RECON.md).
@@ -142,7 +149,10 @@ export const wallapopAdapter: PlatformAdapter = {
     // gone (sold/removed), which aging off the newest-first search page does
     // not. One request, no user/stats calls — deliberately lighter than
     // fetchListing so liveness sweeps stay within pacing hygiene.
-    const res = await fetch(`${API_BASE}/items/${ref.platformListingId}`, { headers: HEADERS });
+    const res = await fetch(`${API_BASE}/items/${ref.platformListingId}`, {
+      headers: HEADERS,
+      signal: timeout(),
+    });
     assertNotBlocked("wallapop", res.status, "check_listing");
     if (res.status === 404 || res.status === 410) {
       return { platform: "wallapop", platformListingId: ref.platformListingId, status: "gone" };
@@ -182,7 +192,7 @@ export const wallapopAdapter: PlatformAdapter = {
 };
 
 async function fetchItems(params: URLSearchParams): Promise<RawItem[] | null> {
-  const res = await fetch(`${API}?${params}`, { headers: HEADERS });
+  const res = await fetch(`${API}?${params}`, { headers: HEADERS, signal: timeout() });
   assertNotBlocked("wallapop", res.status, "search");
   if (!res.ok) return null;
   const data: unknown = await res.json();
@@ -192,7 +202,7 @@ async function fetchItems(params: URLSearchParams): Promise<RawItem[] | null> {
 }
 
 async function fetchJson<T>(url: string): Promise<T | null> {
-  const res = await fetch(url, { headers: HEADERS });
+  const res = await fetch(url, { headers: HEADERS, signal: timeout() });
   assertNotBlocked("wallapop", res.status, "fetch");
   if (!res.ok) return null;
   return (await res.json()) as T;
@@ -200,7 +210,7 @@ async function fetchJson<T>(url: string): Promise<T | null> {
 
 /** Canonical item id from an item web page ("pageProps":{"item":{"id":"…"}}). */
 async function resolveItemIdFromPage(url: string): Promise<string | null> {
-  const res = await fetch(url, { headers: HEADERS });
+  const res = await fetch(url, { headers: HEADERS, signal: timeout() });
   assertNotBlocked("wallapop", res.status, "resolve_id");
   if (!res.ok) return null;
   const html = await res.text();

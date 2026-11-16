@@ -5,6 +5,12 @@ import { isAuthorizedRunner } from "../../../../../lib/runner-auth";
 import { applySendResult } from "../../../../../lib/outreach";
 
 const LEASE_MS = 2 * 60 * 1000;
+/**
+ * An expired lease means the runner died or hung mid-job. Once is bad luck;
+ * a job that does it every time would otherwise be handed out forever, and
+ * each hand-out is another request at the platform — "never retry harder".
+ */
+const MAX_ATTEMPTS = 3;
 
 /** Lease the oldest queued job (or reclaim an expired lease). 204 = queue empty. */
 export async function POST(req: Request): Promise<Response> {
@@ -40,6 +46,18 @@ export async function POST(req: Request): Promise<Response> {
         ok: false,
         error: "el runner no confirmó el envío (lease caducado); comprueba el chat en Wallapop antes de reintentar",
       });
+      continue;
+    }
+
+    if (job.status === "leased" && job.attempts >= MAX_ATTEMPTS) {
+      await db
+        .update(jobs)
+        .set({
+          status: "failed",
+          lastError: `lease expired ${job.attempts} times without a report — giving up`,
+          updatedAt: now,
+        })
+        .where(eq(jobs.id, job.id));
       continue;
     }
 
