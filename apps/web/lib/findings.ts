@@ -4,7 +4,7 @@
  * Phase 2 chat will feed this same path automatically.
  */
 
-import type { IssueFinding } from "@deepblue/core";
+import type { Drivetrain, IssueFinding } from "@deepblue/core";
 import { briefs, events, leads, listings, type Db } from "@deepblue/db";
 import { eq } from "drizzle-orm";
 import { newEvalCaches, reevaluateLead } from "./reevaluate";
@@ -68,6 +68,40 @@ export async function applyImportFact(
   field: ImportFactField,
   value: ImportFactValue,
 ): Promise<{ overall: string }> {
+  const stored = value === "unknown" ? null : value === "true";
+  return applyVerifiedFact(db, leadId, { [field]: stored }, "import_fact", { field, value });
+}
+
+export type DrivetrainFactValue = Drivetrain | "unknown";
+
+/**
+ * Mark the drivetrain the user read off the photos — the "4x4" badge on the
+ * tailgate of an ad whose text never mentions it. Same contract as the import
+ * facts above, on purpose: these are all things only a person looking at the
+ * pictures knows, so they are set in one place, stored on the car, and beat
+ * whatever the text suggests. "unknown" clears it and text reading takes over.
+ */
+export async function applyDrivetrainFact(
+  db: Db,
+  leadId: string,
+  value: DrivetrainFactValue,
+): Promise<{ overall: string }> {
+  const stored = value === "unknown" ? null : value;
+  return applyVerifiedFact(db, leadId, { drivetrain: stored }, "drivetrain_fact", { value });
+}
+
+/**
+ * The one path for a fact the user verified by eye: write it on the LISTING,
+ * re-evaluate with it, and leave an event. Every hand-set fact goes through
+ * here so they cannot drift apart in what they store or audit.
+ */
+async function applyVerifiedFact(
+  db: Db,
+  leadId: string,
+  patch: Partial<Pick<typeof listings.$inferSelect, "rhd" | "foreignPlates" | "drivetrain">>,
+  eventType: string,
+  eventPayload: Record<string, unknown>,
+): Promise<{ overall: string }> {
   const [row] = await db
     .select({ lead: leads, listing: listings, brief: briefs })
     .from(leads)
@@ -77,13 +111,12 @@ export async function applyImportFact(
     .limit(1);
   if (!row) throw new Error(`lead ${leadId} not found`);
 
-  const stored = value === "unknown" ? null : value === "true";
-  await db.update(listings).set({ [field]: stored }).where(eq(listings.id, row.listing.id));
+  await db.update(listings).set(patch).where(eq(listings.id, row.listing.id));
 
   const result = await reevaluateLead(
     db,
     row.lead,
-    { ...row.listing, [field]: stored },
+    { ...row.listing, ...patch },
     row.brief,
     newEvalCaches(),
   );
@@ -91,8 +124,8 @@ export async function applyImportFact(
   await db.insert(events).values({
     userId: row.lead.userId,
     leadId,
-    type: "import_fact",
-    payload: { field, value, overall: result.overall },
+    type: eventType,
+    payload: { ...eventPayload, overall: result.overall, outcome: result.outcome },
   });
 
   return { overall: result.overall };

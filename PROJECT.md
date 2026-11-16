@@ -284,6 +284,18 @@ session are reliably up, so it depends on the always-on deployment. Natural slot
 first delegated slice of Phase 3, only after Phase 2 conversations have been proven by
 hand — and after the message-economy change has been watched working under approval.
 
+**Photo read (parked 2026-11-16, to study).** Ads often show what their text never
+says: Nico bought a car whose listing did not mention the drivetrain, with the "4x4"
+badge plainly visible on the tailgate. Today that fact enters only by hand (the lead
+page's "Verificar en las fotos" controls: steering side, plates, drivetrain). The bet is
+to let the enrichment read look at a few of the ad's photos and fill those same fields.
+Constraints agreed up front: never for every lead — only shortlisted ones, and only
+when the brief cares about a fact the text and dossier leave open; it rides the
+enrichment call that already runs rather than adding one; and absence proves nothing
+(debadged, out of frame), so a photo can set a fact but "not seen" never can. To
+measure before building: added cost per read, and how often the badge is actually
+legible. The manual controls stay as the correction path.
+
 **Model discovery agent (long shot — the mass-market front door).** Conversational
 advisor for non-experts who arrive with needs ("familiar, fiable, ~12.000 €, ciudad +
 escapadas"), not models. Differentiator vs generic LLM advice: grounded in our live

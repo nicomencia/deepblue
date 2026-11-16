@@ -163,6 +163,34 @@ modelos, adopción manual de anuncios con dossier-first, vía LLM activa
 (API key) y Fase 2 en Wallapop: mensajes al vendedor con aprobación, lectura
 de respuestas, contraofertas e informe de visita. 274 tests verdes.
 
+**Cambio 2026-11-16 (34) — la tracción se puede marcar a mano, junto al
+volante y la matrícula.** Nico compró un coche cuyo anuncio no decía la
+tracción y llevaba el "4x4" a la vista en el portón. El texto no lo sabe; él,
+mirando las fotos, sí. Ese es exactamente el caso de volante a la derecha y
+matrícula extranjera, que ya se marcaban en la página del lead — así que la
+tracción entra por la misma puerta, no por una nueva.
+
+El desplegable pasa a llamarse "Verificar en las fotos (volante / matrícula
+/ tracción)" y gana una fila 4x2 / 4x4 / ¿?. Por debajo, los tres hechos
+comparten un único camino (`applyVerifiedFact` en `lib/findings.ts`):
+guardar en el ANUNCIO (el hecho es del coche, no de la búsqueda), reevaluar
+y dejar evento. Lo marcado a mano manda sobre lo que diga el texto; "¿?" lo
+borra y el texto vuelve a decidir. Un único componente `FactRow` pinta las
+tres filas.
+
+Como los filtros ahora matan, marcar la tracción contraria en una búsqueda
+que solo acepta una descarta el lead para siempre; la página lo avisa justo
+debajo cuando aplica.
+
+Verificado contra una PGlite temporal, búsqueda Tucson solo 4x4 con un
+anuncio que no nombra la tracción: nace preguntando "¿Es 4x2 o 4x4?"; al
+marcar 4x4 deja de preguntarlo y lo muestra como dato; "¿?" lo revierte;
+marcar 4x2 en el otro lo mata con `drivetrain_mismatch`. `next build`
+compila; no se ha abierto en un navegador. 246 + 50 tests verdes.
+
+Aparcado en PROJECT.md (Future bets): que la lectura del LLM mire las fotos
+y rellene estos mismos campos sola, con las condiciones ya acordadas.
+
 **Cambio 2026-11-16 (33) — eléctrico sí tiene valor en la API: se llama
 `electric-hybrid`.** La nota 32 lo dio por imposible tras probar `electric`
 y `electric_hybrid`. Nico: "raro que no lo tengan". Lo era. El valor es el

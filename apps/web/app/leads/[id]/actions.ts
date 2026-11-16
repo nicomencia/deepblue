@@ -23,7 +23,13 @@ export async function setIssueFinding(formData: FormData): Promise<void> {
 }
 
 import { redirect } from "next/navigation";
-import { applyImportFact, type ImportFactField, type ImportFactValue } from "../../../lib/findings";
+import {
+  applyDrivetrainFact,
+  applyImportFact,
+  type DrivetrainFactValue,
+  type ImportFactField,
+  type ImportFactValue,
+} from "../../../lib/findings";
 import { decideLeadApproval, sendUserMessage, updateDraftBody } from "../../../lib/outreach";
 
 /** Mark a verified import fact (RHD / foreign plates) and refresh the verdict. */
@@ -37,6 +43,20 @@ export async function setImportFact(formData: FormData): Promise<void> {
 
   const db = await getDb();
   await applyImportFact(db, leadId, field, value);
+  revalidatePath(`/leads/${leadId}`);
+  revalidatePath("/");
+}
+
+/** Mark the drivetrain seen in the photos (4x2 / 4x4) and refresh the verdict. */
+export async function setDrivetrainFact(formData: FormData): Promise<void> {
+  const leadId = String(formData.get("leadId") ?? "");
+  const value = String(formData.get("value") ?? "") as DrivetrainFactValue;
+  if (!leadId || !["4x2", "4x4", "unknown"].includes(value)) {
+    throw new Error("marca inválida: faltan lead o tracción");
+  }
+
+  const db = await getDb();
+  await applyDrivetrainFact(db, leadId, value);
   revalidatePath(`/leads/${leadId}`);
   revalidatePath("/");
 }

@@ -26,6 +26,7 @@ import {
   approveSellerMessage,
   rejectSellerMessage,
   replySellerMessage,
+  setDrivetrainFact,
   setImportFact,
   setIssueFinding,
 } from "./actions";
@@ -303,7 +304,7 @@ export default async function LeadDetail({
       {/* Verified import facts: the photos tell what the text hides. */}
       <details open={imported.rhd || imported.foreignPlate} style={{ margin: "0.2rem 0 0.5rem" }}>
         <summary style={{ cursor: "pointer", fontSize: "0.82rem", color: "var(--ink-muted)" }}>
-          Verificar importación (volante / matrícula)
+          Verificar en las fotos (volante / matrícula / tracción)
         </summary>
         <div style={{ display: "flex", gap: "1.2rem", flexWrap: "wrap", margin: "0.35rem 0 0" }}>
           <ImportFactRow
@@ -318,7 +319,23 @@ export default async function LeadDetail({
             label="Matrícula extranjera (sin matricular en España)"
             stored={listing.foreignPlates}
           />
+          <FactRow
+            leadId={lead.id}
+            action={setDrivetrainFact}
+            label="Tracción"
+            options={[
+              { value: "4x2", text: "4x2", active: listing.drivetrain === "4x2" },
+              { value: "4x4", text: "4x4", active: listing.drivetrain === "4x4" },
+              { value: "unknown", text: "¿?", active: listing.drivetrain === null },
+            ]}
+          />
         </div>
+        {brief.criteria.drivetrain?.length === 1 && (
+          <small style={{ color: "var(--ink-muted)", fontSize: "0.75rem" }}>
+            Esta búsqueda es solo {brief.criteria.drivetrain[0]}: marcar la otra tracción descarta
+            el lead para siempre.
+          </small>
+        )}
       </details>
       {listing.imageUrl && (
         <a href={listing.url} target="_blank" rel="noreferrer">
@@ -708,19 +725,46 @@ function ImportFactRow({
   label: string;
   stored: boolean | null;
 }) {
-  const options: Array<{ value: string; text: string; active: boolean }> = [
-    { value: "true", text: "Sí", active: stored === true },
-    { value: "false", text: "No", active: stored === false },
-    { value: "unknown", text: "¿?", active: stored === null },
-  ];
+  return (
+    <FactRow
+      leadId={leadId}
+      action={setImportFact}
+      field={field}
+      label={label}
+      options={[
+        { value: "true", text: "Sí", active: stored === true },
+        { value: "false", text: "No", active: stored === false },
+        { value: "unknown", text: "¿?", active: stored === null },
+      ]}
+    />
+  );
+}
+
+/**
+ * One row of pill buttons for a fact the user verifies by eye. Shared by every
+ * hand-set fact on this page so they look and behave as one control.
+ */
+function FactRow({
+  leadId,
+  action,
+  field,
+  label,
+  options,
+}: {
+  leadId: string;
+  action: (formData: FormData) => Promise<void>;
+  field?: string;
+  label: string;
+  options: Array<{ value: string; text: string; active: boolean }>;
+}) {
   return (
     // div, not span: a form may not nest inside phrasing content (hydration error).
     <div style={{ display: "flex", gap: "0.35rem", alignItems: "center", fontSize: "0.83rem" }}>
       <span style={{ color: "var(--ink-muted)" }}>{label}:</span>
       {options.map((o) => (
-        <form key={o.value} action={setImportFact} style={{ display: "inline" }}>
+        <form key={o.value} action={action} style={{ display: "inline" }}>
           <input type="hidden" name="leadId" value={leadId} />
-          <input type="hidden" name="field" value={field} />
+          {field && <input type="hidden" name="field" value={field} />}
           <input type="hidden" name="value" value={o.value} />
           <button
             type="submit"
