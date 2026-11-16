@@ -163,6 +163,20 @@ modelos, adopción manual de anuncios con dossier-first, vía LLM activa
 (API key) y Fase 2 en Wallapop: mensajes al vendedor con aprobación, lectura
 de respuestas, contraofertas e informe de visita. 274 tests verdes.
 
+**Cambio 2026-11-16 (33) — eléctrico sí tiene valor en la API: se llama
+`electric-hybrid`.** La nota 32 lo dio por imposible tras probar `electric`
+y `electric_hybrid`. Nico: "raro que no lo tengan". Lo era. El valor es el
+slug del filtro web antiguo "Eléctrico/Híbrido", con guion, y hoy devuelve
+solo eléctricos puros: Kona → 40/40 Electric; `hybride,electric-hybrid` → 33
+Hybrid + 7 Electric. El valor con guion bajo que trae la ficha del anuncio
+(`electric_hybrid`) se ignora — un carácter de diferencia.
+
+Con esto los cuatro combustibles del formulario se filtran en la búsqueda y
+ninguna combinación cae ya al "todo o nada". La lección queda en RECON: en
+esta API un valor que no existe no da error, da los resultados sin filtrar,
+así que "probé dos nombres y no filtró" no demuestra que no haya valor.
+5 peticiones más, sin bloqueos.
+
 **Cambio 2026-11-16 (32) — combustible y cambio se filtran en la búsqueda
 de Wallapop, no solo después.** Nico: si vamos a descartarlos igualmente,
 traerlos es gastar. Y lo es más de lo que parece: la búsqueda devuelve 40

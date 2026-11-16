@@ -25,18 +25,22 @@ type Fuel = NonNullable<SearchQuery["fuels"]>[number];
 type Gearbox = NonNullable<SearchQuery["gearboxes"]>[number];
 
 /**
- * Wallapop's `engine` values, each verified live 2026-11-16 (RECON.md). They
- * are the detail page's `type_attributes.engine.value`, not English: a hybrid
- * is "hybride". The adapter sent "hybrid" for months and Wallapop ignored it
- * without a word — an unknown value is not an error, it is no filter at all.
+ * Wallapop's `engine` values, each verified live 2026-11-16 (RECON.md). None
+ * can be guessed: a hybrid is "hybride", and a pure electric is
+ * "electric-hybrid" — the web filter's old combined "Eléctrico/Híbrido" slug,
+ * which today returns electrics only. The adapter sent "hybrid" for months and
+ * Wallapop ignored it without a word: an unknown value is not an error, it is
+ * no filter at all. ("electric", and the detail page's own "electric_hybrid"
+ * with an underscore, are both ignored the same way.)
  *
- * Electric has no verified value ("electric" and "electric_hybrid" are both
- * ignored), so it is absent on purpose.
+ * Partial on purpose: a fuel added to the domain later has no value here until
+ * someone verifies one, and wallapopFilterParams then sends no filter at all.
  */
 const WALLAPOP_ENGINE: Partial<Record<Fuel, string>> = {
   gasoline: "gasoline",
   diesel: "gasoil",
   hybrid: "hybride",
+  electric: "electric-hybrid",
 };
 
 /**

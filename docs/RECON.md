@@ -38,8 +38,14 @@ jittered pacing), just via HTTP instead of a browser.
       (`engine=hybride` on "hyundai kona": 40/40 Hybrid, from a 18/17/2 mix).
     - `hybrid` — **silently IGNORED** (results identical to no filter, 40/40
       overlap). This doc listed it as a value from 07-07 without verifying it.
-    - Electric: **no working value found.** `electric` and `electric_hybrid`
-      (the detail's own value) are both ignored. Not sent.
+    - Electric: **`electric-hybrid`** (hyphen) — the web filter's combined
+      "Eléctrico/Híbrido" slug. Despite the name it returns pure electrics
+      only: on "hyundai kona" → 40/40 Electric, 0 Hybrid; and
+      `engine=hybride,electric-hybrid` → 33 Hybrid + 7 Electric. `electric`
+      and `electric_hybrid` (underscore — the detail page's own value) are
+      both silently ignored.
+    - `others` is a real value too (0 results on that query rather than the
+      unfiltered 40) — presumably LPG/CNG. Not used.
     - **Comma lists work**: `engine=gasoline,gasoil` on "toyota yaris" (36/40
       hybrids unfiltered) → 37 Gasoline + 3 Diesel, 0 Hybrid.
     - **Unknown values inside a list are dropped, the rest still apply**:
