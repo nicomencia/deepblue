@@ -542,9 +542,42 @@ function likelihoodFor(listing: NormalizedListing, issue: KnownIssue): IssueAsse
   return "medium"; // can't narrow it down — say so honestly
 }
 
+const SEVERITY_RANK: Record<KnownIssue["severity"], number> = {
+  critical: 3,
+  major: 2,
+  moderate: 1,
+  minor: 0,
+};
+
+/** Likelihood-weighted midpoint of an unconfirmed issue's repair band. */
+function expectedIssueCost(i: IssueAssessment): number {
+  if (!i.typicalRepairCostEur) return 0;
+  return (LIKELIHOOD_P[i.likelihood] * (i.typicalRepairCostEur.min + i.typicalRepairCostEur.max)) / 2;
+}
+
+/**
+ * First question of every list, then every second one, and so on. An issue
+ * usually carries two or three questions; taking them issue by issue would
+ * spend a whole opener on the worst issue and never mention the next.
+ */
+function roundRobin(lists: string[][]): string[] {
+  const out: string[] = [];
+  const longest = Math.max(0, ...lists.map((l) => l.length));
+  for (let i = 0; i < longest; i++) {
+    for (const list of lists) {
+      const q = list[i];
+      if (q !== undefined) out.push(q);
+    }
+  }
+  return out;
+}
+
 interface ReliabilityAssessment {
   factor: VerdictFactor;
   issues: IssueAssessment[];
+  /** Questions about live critical/major issues — the ones worth an opener. */
+  priorityQuestions: string[];
+  /** Questions about the remaining live issues. */
   questions: string[];
   wouldRaise: string[];
   /** true when a confirmed critical issue must veto the overall grade */
@@ -572,6 +605,7 @@ function assessModelReliability(
         unverified: ["Dossier de fiabilidad del modelo pendiente de construir"],
       },
       issues: [],
+      priorityQuestions: [],
       questions: [],
       wouldRaise: ["Construir el dossier de fiabilidad del modelo"],
       criticalConfirmed: false,
@@ -601,6 +635,7 @@ function assessModelReliability(
         unverified: [],
       },
       issues,
+      priorityQuestions: [],
       questions: [],
       wouldRaise: [],
       criticalConfirmed: false,
@@ -620,6 +655,19 @@ function assessModelReliability(
   // costs 25 points; the same risk on a 5.000€ car costs 50.
   const priceRef = Math.max(effectivePrice(listing) ?? 8000, 3000);
   const score = clamp(95 - (expectedCost / priceRef) * 250);
+
+  // Unresolved issues, worst first: severity, then what the issue is expected
+  // to cost on THIS unit. The order decides which questions reach the seller.
+  const liveIssues = applicableIssues
+    .map((issue, idx) => ({ issue, assessed: issues[idx] as IssueAssessment }))
+    .filter((x) => x.assessed.status === "unconfirmed")
+    .sort(
+      (a, b) =>
+        SEVERITY_RANK[b.issue.severity] - SEVERITY_RANK[a.issue.severity] ||
+        expectedIssueCost(b.assessed) - expectedIssueCost(a.assessed),
+    );
+  const isSerious = (x: { issue: KnownIssue }): boolean =>
+    x.issue.severity === "critical" || x.issue.severity === "major";
 
   // Exactly one summary line ("7/7 riesgos sin verificar"); the verdict's
   // issues[] is the single detailed view (status, likelihood, cost, evidence).
@@ -642,9 +690,8 @@ function assessModelReliability(
     },
     issues,
     // Only unresolved issues still generate seller questions and evidence asks.
-    questions: applicableIssues
-      .filter((_, idx) => issues[idx]?.status === "unconfirmed")
-      .flatMap((i) => i.sellerQuestions),
+    priorityQuestions: roundRobin(liveIssues.filter(isSerious).map((x) => x.issue.sellerQuestions)),
+    questions: roundRobin(liveIssues.filter((x) => !isSerious(x)).map((x) => x.issue.sellerQuestions)),
     wouldRaise: applicableIssues
       .filter((_, idx) => issues[idx]?.status === "unconfirmed")
       .slice(0, 3)
@@ -660,7 +707,10 @@ function assessModelReliability(
 function assessUnit(
   listing: NormalizedListing,
   criteria: BriefCriteria,
+  /** Hard facts the ad leaves out (year, km, gearbox, drivetrain). */
   openQuestions: string[],
+  /** The four every-car questions; asked last, when nothing sharper is left. */
+  courtesyQuestions: string[],
   impliedDrivetrain?: Drivetrain,
 ): VerdictFactor {
   const known: string[] = [];
@@ -737,7 +787,7 @@ function assessUnit(
     "Accidentes o reparaciones estructurales",
     "Estado de la ITV",
   );
-  openQuestions.push(
+  courtesyQuestions.push(
     "¿Tiene el libro de mantenimiento al día? ¿Facturas de las revisiones?",
     "¿Cuántos propietarios ha tenido?",
     "¿Ha tenido algún accidente o reparación importante?",
@@ -957,26 +1007,54 @@ function buildVerdict(
   dossier?: ModelDossier,
   findings?: IssueFinding[],
 ): ConfidenceVerdict {
-  const openQuestions: string[] = [];
+  const factQuestions: string[] = [];
+  const courtesyQuestions: string[] = [];
 
-  const unitEvidence = assessUnit(listing, criteria, openQuestions, dossierDrivetrain(dossier));
+  const unitEvidence = assessUnit(
+    listing,
+    criteria,
+    factQuestions,
+    courtesyQuestions,
+    dossierDrivetrain(dossier),
+  );
   const reliability = assessModelReliability(listing, dossier, findings);
-  openQuestions.push(...reliability.questions);
 
   // Import signals (RHD / foreign plates) hit the price factor and always
   // deserve a direct question — sellers rarely volunteer the paperwork cost.
-  if (imported.rhdAssumed) {
-    openQuestions.unshift("¿El volante está a la derecha o a la izquierda?");
-  }
+  const importQuestions: string[] = [];
   if (imported.foreignPlate) {
-    openQuestions.unshift(
+    importQuestions.push(
       "¿Quién asume la rematriculación en España (y aduanas/IVA si viene de UK)? ¿Qué documentación de importación tiene?",
     );
   } else if (imported.rhd) {
-    openQuestions.unshift(
+    importQuestions.push(
       "¿El coche está ya matriculado en España o sigue con matrícula extranjera?",
     );
   }
+  if (imported.rhdAssumed) {
+    importQuestions.push("¿El volante está a la derecha o a la izquierda?");
+  }
+
+  // RANKED, best first — the opener sends the top three and nothing else, so
+  // this order is what the seller actually gets asked. It used to be the
+  // order the code happened to run in, which put the four every-car questions
+  // (libro, propietarios, accidentes, ITV) ahead of everything the dossier
+  // knows: on the 207 RC the timing-chain question, the one that separates a
+  // 6.000 € car from a 12.000 € one, sat sixth and was never sent (live,
+  // 2026-07-26; PROJECT.md "message economy").
+  //
+  //  1. a live critical/major issue of this model — the reason deepblue exists
+  //  2. import paperwork — changes the price by thousands
+  //  3. a hard fact the ad leaves out
+  //  4. the model's lesser issues
+  //  5. the questions that fit any car
+  const openQuestions = [
+    ...reliability.priorityQuestions,
+    ...importQuestions,
+    ...factQuestions,
+    ...reliability.questions,
+    ...courtesyQuestions,
+  ];
 
   const price = assessPrice(listing, criteria, imported, benchmark);
   const sellerCredibility = price.scamSignal

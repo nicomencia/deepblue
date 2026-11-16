@@ -122,8 +122,6 @@ export function composeOpeningMessage(input: OpeningMessageInput): string {
     return `${greeting} ${seedPick(AVAILABILITY_LINES, `${seed}|availability`)}`;
   }
 
-  // Fit the chat limit by dropping the LAST questions (they arrive best
-  // first); the rest wait for the follow-up.
   const build = (qs: string[]): string =>
     [
       `${greeting} ${seedPick(INTEREST_LINES, `${seed}|interest`)}`,
@@ -131,13 +129,19 @@ export function composeOpeningMessage(input: OpeningMessageInput): string {
       "",
       seedPick(OPENER_CLOSINGS, `${seed}|opener-closing`),
     ].join("\n");
-  let kept = questions;
-  let msg = build(kept);
-  while (msg.length > CHAT_MAX_CHARS && kept.length > 1) {
-    kept = kept.slice(0, -1);
-    msg = build(kept);
+  // Fit the chat limit by taking questions best-first and SKIPPING any that
+  // does not fit, instead of only trimming from the end: one long dossier
+  // question at the top used to leave a draft over the limit that the send
+  // path then refused, so the opener could not be approved until hand-edited.
+  // Skipped questions wait for the follow-up.
+  const kept: string[] = [];
+  for (const q of questions) {
+    if (build([...kept, q]).length <= CHAT_MAX_CHARS) kept.push(q);
   }
-  return msg;
+  if (kept.length === 0) {
+    return `${greeting} ${seedPick(AVAILABILITY_LINES, `${seed}|availability`)}`;
+  }
+  return build(kept);
 }
 
 /**

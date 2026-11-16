@@ -110,6 +110,71 @@ describe("drivetrain question", () => {
   });
 });
 
+// --- Open questions arrive ranked: the opener only sends the top three ---------
+
+describe("open question ranking", () => {
+  const issue = (
+    title: string,
+    severity: "minor" | "moderate" | "major" | "critical",
+    questions: string[],
+    cost = { min: 500, max: 1_000 },
+  ) => ({
+    title,
+    description: "",
+    applicability: {},
+    typicalRepairCostEur: cost,
+    evidence: ["Factura"],
+    sellerQuestions: questions,
+    severity,
+    sources: ["https://example.com"],
+  });
+  const chain = issue("Cadena de distribución", "critical", ["¿Se ha cambiado la cadena?", "¿Hay factura de la cadena?"]);
+  const turbo = issue("Turbo", "major", ["¿Se ha cambiado el turbo?"], { min: 1_500, max: 2_500 });
+  const rattle = issue("Grillos en el salpicadero", "minor", ["¿Suena el salpicadero?"]);
+  const GENERIC = "¿Cuántos propietarios ha tenido?";
+
+  it("puts the model's serious issues ahead of the every-car questions (207 RC, live 2026-07-26)", () => {
+    const q = evaluateListing(listing(), criteria(), hardLimits, benchmark, dossier([rattle, turbo, chain]))
+      .verdict.openQuestions;
+    // Worst issue first, one question per issue before any second question.
+    expect(q.slice(0, 3)).toEqual([
+      "¿Se ha cambiado la cadena?",
+      "¿Se ha cambiado el turbo?",
+      "¿Hay factura de la cadena?",
+    ]);
+    expect(q.indexOf("¿Suena el salpicadero?")).toBeLessThan(q.indexOf(GENERIC));
+  });
+
+  it("asks import paperwork and missing facts before lesser issues and courtesy", () => {
+    const q = evaluateListing(
+      listing({ gearbox: undefined, description: "Coche con matrícula inglesa" }),
+      criteria(),
+      hardLimits,
+      benchmark,
+      dossier([rattle, chain]),
+    ).verdict.openQuestions;
+    const pos = (needle: string) => q.findIndex((x) => x.includes(needle));
+    expect(pos("cadena")).toBe(0);
+    expect(pos("rematriculación")).toBeGreaterThan(pos("factura de la cadena"));
+    expect(pos("rematriculación")).toBeLessThan(pos("manual o automático"));
+    expect(pos("manual o automático")).toBeLessThan(pos("salpicadero"));
+    expect(pos("salpicadero")).toBeLessThan(pos("propietarios"));
+  });
+
+  it("stops ranking an issue once the seller has settled it", () => {
+    const q = evaluateListing(listing(), criteria(), hardLimits, benchmark, dossier([turbo, chain]), [
+      { title: chain.title, status: "ruled_out", at: "2026-11-16" },
+    ]).verdict.openQuestions;
+    expect(q[0]).toBe("¿Se ha cambiado el turbo?");
+    expect(q.join(" ")).not.toContain("cadena");
+  });
+
+  it("without a dossier the generic questions still lead, as before", () => {
+    const q = evaluateListing(listing(), criteria(), hardLimits, benchmark).verdict.openQuestions;
+    expect(q[0]).toContain("libro de mantenimiento");
+  });
+});
+
 // --- Issue findings: seller evidence beats theory ------------------------------
 
 describe("issue findings", () => {

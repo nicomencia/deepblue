@@ -252,7 +252,8 @@ extra question is a chance to lose it, so ask little and go for the visit slot; 
 we doubt, questions are cheap insurance against a wasted two-hour drive, so ask more and
 take more rounds. Two halves, and the order matters.
 
-*First, ranking — and this is a bug, not a preference.* `composeOpeningMessage` sends
+*First, ranking — ✅ fixed 2026-11-16 (DEV-SETUP §5, cambio 35); the diagnosis below is
+kept as the why.* `composeOpeningMessage` sends
 `openQuestions.slice(0, 3)` under a comment saying "best first", but `buildVerdict`
 assembles that array in construction order: `assessUnit` pushes the four generic
 questions (libro de mantenimiento, propietarios, accidentes, ITV) before

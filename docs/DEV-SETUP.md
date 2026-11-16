@@ -163,6 +163,40 @@ modelos, adopción manual de anuncios con dossier-first, vía LLM activa
 (API key) y Fase 2 en Wallapop: mensajes al vendedor con aprobación, lectura
 de respuestas, contraofertas e informe de visita. 274 tests verdes.
 
+**Cambio 2026-11-16 (35) — el primer mensaje pregunta por fin lo que sabe
+el dossier.** Bug ya diagnosticado en PROJECT.md el 2026-07-26 y sin
+arreglar: el opener manda las 3 primeras `openQuestions` creyendo que vienen
+"la mejor primero", pero `buildVerdict` las montaba en el orden en que corre
+el código — las cuatro de cualquier coche (libro, propietarios, accidentes,
+ITV) por delante de todo lo que aporta el dossier. En los 207 RC la pregunta
+de la cadena de distribución, la que separa un coche de 6.000 € de uno de
+12.000 €, quedaba sexta y no se enviaba nunca. Al vendedor le llegaba el
+mismo mensaje que escribiría cualquiera.
+
+Ahora `openQuestions` sale ordenada con el rango que fijaba PROJECT.md:
+
+1. riesgos vivos del modelo, críticos o graves — peor primero (severidad, y a
+   igualdad el coste esperado en ESTA unidad), y una pregunta por riesgo
+   antes de la segunda de ninguno, para que tres huecos cubran tres riesgos;
+2. papeles de importación (mueven el precio en miles);
+3. datos duros que el anuncio calla (año, km, cambio, tracción);
+4. riesgos menores del modelo;
+5. las cuatro genéricas.
+
+Un riesgo descartado o confirmado deja de preguntar, como antes. Sin dossier
+el orden no cambia. No se ha tocado la segunda mitad de aquella nota (que el
+número de preguntas dependa de la confianza y la distancia): es diseño, no
+bug, y va después.
+
+De paso, el opener ya no puede quedar inenviable: si la mejor pregunta era
+larga, el borrador pasaba de los 300 caracteres del chat y el envío lo
+rechazaba hasta editarlo a mano. Ahora se salta la que no cabe y sigue con
+la siguiente; si no cabe ninguna, pregunta solo si sigue disponible.
+
+Los veredictos guardados se reordenan al reevaluarse (edición de la
+búsqueda, refresco diario del digest, llegada del detalle). 6 tests nuevos;
+252 + 50 verdes. No se ha generado un borrador real contra un lead en vivo.
+
 **Cambio 2026-11-16 (34) — la tracción se puede marcar a mano, junto al
 volante y la matrícula.** Nico compró un coche cuyo anuncio no decía la
 tracción y llevaba el "4x4" a la vista en el portón. El texto no lo sabe; él,

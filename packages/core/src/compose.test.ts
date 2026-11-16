@@ -149,6 +149,24 @@ describe("chat length limit", () => {
     expect(msg).toContain("libro de mantenimiento"); // best question survives
   });
 
+  it("skips a question too long to fit instead of producing an unsendable opener", () => {
+    const tooLong = `¿${"se ha cambiado la cadena de distribución y el tensor con factura de taller ".repeat(4)}?`;
+    const msg = composeOpeningMessage({
+      title: "Peugeot 207 RC",
+      openQuestions: [tooLong, "¿Cuántos propietarios ha tenido?"],
+    });
+    expect(msg.length).toBeLessThanOrEqual(CHAT_MAX_CHARS);
+    expect(msg).toContain("Cuántos propietarios ha tenido?");
+    expect(msg).not.toContain("tensor");
+  });
+
+  it("falls back to a plain availability opener when no question fits at all", () => {
+    const tooLong = `¿${"una pregunta larguísima sobre el historial completo del coche ".repeat(6)}?`;
+    const msg = composeOpeningMessage({ title: "Golf", openQuestions: [tooLong] });
+    expect(msg.length).toBeLessThanOrEqual(CHAT_MAX_CHARS);
+    expect(msg).toMatch(/disponible|todavía|vendiendo/);
+  });
+
   it("follow-ups drop questions to fit", () => {
     const msg = composeFollowUpMessage({
       openQuestions: longQuestions,
