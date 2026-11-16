@@ -1,6 +1,6 @@
 "use server";
 
-import { BODY_STYLES, type BriefCriteria, type HardLimits } from "@deepblue/core";
+import { BODY_STYLES, DRIVETRAINS, type BriefCriteria, type HardLimits } from "@deepblue/core";
 import { briefs, events, users } from "@deepblue/db";
 import { eq } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
@@ -35,6 +35,7 @@ const lines = (v: FormDataEntryValue | null): string[] =>
 
 const fuelSchema = z.array(z.enum(["gasoline", "diesel", "hybrid", "electric"]));
 const gearboxSchema = z.array(z.enum(["manual", "automatic"]));
+const drivetrainSchema = z.array(z.enum(DRIVETRAINS));
 const bodyStyleSchema = z.array(z.enum(BODY_STYLES));
 const riskSchema = z.enum(["low", "medium", "high"]).catch("medium");
 const sellerPrefSchema = z.enum(["any", "prefer_private"]).catch("any");
@@ -82,6 +83,11 @@ function parseBriefForm(formData: FormData): {
     targetPriceEur: num(formData.get("targetPriceEur")),
     fuel: fuelSchema.catch([]).parse(formData.getAll("fuel").map(String)) || undefined,
     gearbox: gearboxSchema.catch([]).parse(formData.getAll("gearbox").map(String)) || undefined,
+    // Parsed here or lost: a brief born from a discovery carries the drivetrain
+    // the recommendation chose, and saving this form without reading the field
+    // back silently erased it (gearbox too, which had no input at all).
+    drivetrain:
+      drivetrainSchema.catch([]).parse(formData.getAll("drivetrain").map(String)) || undefined,
     bodyStyle: bodyStyleSchema.catch([]).parse(formData.getAll("bodyStyle").map(String)) || undefined,
     // Empty radius → no location at all → all of Spain (see searchArea). It
     // used to default to Madrid/100 km, which silently shrank every brief the
@@ -93,6 +99,7 @@ function parseBriefForm(formData: FormData): {
   };
   if (criteria.fuel?.length === 0) delete criteria.fuel;
   if (criteria.gearbox?.length === 0) delete criteria.gearbox;
+  if (criteria.drivetrain?.length === 0) delete criteria.drivetrain;
   if (criteria.bodyStyle?.length === 0) delete criteria.bodyStyle;
 
   const hardLimits: HardLimits = {

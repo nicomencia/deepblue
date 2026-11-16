@@ -49,6 +49,10 @@ const MISS_LABEL: Record<string, (m: NearMiss) => string> = {
     `${Math.round(m.actual).toLocaleString("es-ES")} €, ${Math.round(m.overshoot * 100)}% por encima de tu presupuesto con margen de negociación`,
   year_below_minimum: (m) => `del ${m.actual}, un año por debajo de tu mínimo (${m.limit})`,
   year_above_maximum: (m) => `del ${m.actual}, un año por encima de tu máximo (${m.limit})`,
+  fuel_mismatch: (m) => `es ${m.filter?.actual} y buscas ${m.filter?.wanted.join(" o ")}`,
+  gearbox_mismatch: (m) =>
+    `es de cambio ${m.filter?.actual} y lo buscas ${m.filter?.wanted.join(" o ")}`,
+  drivetrain_mismatch: (m) => `es ${m.filter?.actual} y buscas ${m.filter?.wanted.join(" o ")}`,
   outside_search_radius: (m) =>
     `a ${Math.round(m.actual)} km, ${Math.round(m.overshoot * 100)}% más lejos de tu radio de ${Math.round(m.limit)} km`,
 };
@@ -115,8 +119,13 @@ export async function ingestSearchResults(
         // misses never reach the daily digest either — the shortlist is the
         // digest's subject, and this is explicitly not on it.
         const nearMiss = evaluation.outcome === "near_miss";
+        // A unit that misses a FILTER (wrong fuel, gearbox, drivetrain) never
+        // interrupts: "8% over your round number" is news about the market,
+        // "it's the diesel" is the thing you already said you didn't want.
+        // It waits on the home page with the other near misses.
+        const missesFilter = evaluation.nearMiss?.filter !== undefined;
         const worthInterrupting =
-          topOfBand && (!nearMiss || evaluation.verdict.score > barToBeat);
+          topOfBand && !missesFilter && (!nearMiss || evaluation.verdict.score > barToBeat);
 
         // With the LLM lane on, a shortlisted lead's alert WAITS for its
         // enrichment. The keyLine — this unit's own best argument and worst

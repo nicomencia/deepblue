@@ -11,9 +11,14 @@
  *    identical-looking cars can differ wildly here.
  */
 
-import { MIN_BENCHMARK_SAMPLE, type PriceBenchmark } from "./benchmark.js";
+import {
+  MIN_BENCHMARK_SAMPLE,
+  normalizeFuel,
+  normalizeGearbox,
+  type PriceBenchmark,
+} from "./benchmark.js";
 import { extractImportSignals, type ImportSignals } from "./extract.js";
-import { bodyStyleFromText, dossierDrivetrain } from "./domain.js";
+import { bodyStyleFromText, dossierDrivetrain, isDrivetrain, normalizeDrivetrain } from "./domain.js";
 import type {
   BriefCriteria,
   ConfidenceGrade,
@@ -38,6 +43,13 @@ export interface NearMiss {
   actual: number;
   /** Overshoot as a fraction of the boundary (0.08 = 8% over). */
   overshoot: number;
+  /**
+   * Set when the miss is a brief FILTER the unit states it does not meet
+   * (fuel, gearbox, drivetrain) rather than a number it overshot. There is no
+   * degree to measure, so limit/actual/overshoot are 0 and this carries what
+   * was wanted and what the ad says, in the user's words.
+   */
+  filter?: { wanted: string[]; actual: string };
 }
 
 export interface EvaluationResult {
@@ -277,11 +289,102 @@ export function evaluateListing(
 
   // Then elastic limits, which have a stretch band beyond the boundary.
   const found = elasticMiss(listing, criteria, hardLimits);
-  if (!found) return { outcome: "shortlisted", verdict };
-  if (found.beyondBand) {
+  if (found?.beyondBand) {
     return { outcome: "dead", deadReason: found.miss.reason, verdict };
   }
+  // Then the brief's own filters. Named before a numeric near miss because
+  // "es diésel y buscas gasolina" is the more useful thing to be told.
+  const filtered = filterMiss(listing, criteria, dossierDrivetrain(dossier));
+  if (filtered) {
+    return { outcome: "near_miss", deadReason: filtered.reason, nearMiss: filtered, verdict };
+  }
+  if (!found) return { outcome: "shortlisted", verdict };
   return { outcome: "near_miss", deadReason: found.miss.reason, nearMiss: found.miss, verdict };
+}
+
+const FUEL_LABEL: Record<string, string> = {
+  gasoline: "gasolina",
+  diesel: "diésel",
+  hybrid: "híbrido",
+  electric: "eléctrico",
+};
+const GEARBOX_LABEL: Record<string, string> = { manual: "manual", automatic: "automático" };
+/** A hybrid the seller filed under its combustion fuel still says so in its name. */
+const HYBRID_TEXT = /h[ií]brid|hybrid|\b(hev|phev|mhev)\b/i;
+
+/**
+ * Fuel, gearbox and drivetrain as the brief asked for them.
+ *
+ * These three were stored on every brief and enforced by nothing: a search
+ * for petrol manuals shortlisted diesel automatics, and a discovery that
+ * recommended "the 4x4" opened a hunt that happily collected 4x2s. (Only a
+ * single fuel ever reached Wallapop, as a search parameter.)
+ *
+ * A mismatch is a NEAR MISS, never a death, and that is deliberate. Body style
+ * kills because a Variant is a different car; these are read from a field the
+ * seller picked from a dropdown, and sellers mis-pick — a hybrid filed under
+ * "gasolina" is routine. Dead leads never come back, so killing on that field
+ * would lose the right car for good over someone else's typo. Out of the
+ * shortlist, still recoverable, is the honest weight for this evidence.
+ *
+ * Facts only, like every filter here: a field the ad does not state, or
+ * states in words we cannot classify, passes.
+ */
+function filterMiss(
+  listing: NormalizedListing,
+  criteria: BriefCriteria,
+  impliedDrivetrain: Drivetrain | undefined,
+): NearMiss | undefined {
+  const miss = (reason: string, wanted: string[], actual: string): NearMiss => ({
+    reason,
+    limit: 0,
+    actual: 0,
+    overshoot: 0,
+    filter: { wanted, actual },
+  });
+
+  if (criteria.fuel?.length) {
+    // AutoScout24 writes a hybrid as "Electro/Gasolina"; read that first or
+    // the combustion half wins.
+    const raw = listing.fuel ?? "";
+    const fuel = /electro\s*\//i.test(raw) ? "hybrid" : normalizeFuel(listing.fuel);
+    const wanted: readonly string[] = criteria.fuel;
+    if (fuel !== undefined && fuel in FUEL_LABEL && !wanted.includes(fuel)) {
+      const saysHybrid = HYBRID_TEXT.test(`${listing.title} ${listing.version ?? ""}`);
+      if (!(wanted.includes("hybrid") && saysHybrid)) {
+        return miss(
+          "fuel_mismatch",
+          wanted.map((f) => FUEL_LABEL[f] ?? f),
+          FUEL_LABEL[fuel] ?? fuel,
+        );
+      }
+    }
+  }
+
+  if (criteria.gearbox?.length) {
+    const gearbox = normalizeGearbox(listing.gearbox);
+    const wanted: readonly string[] = criteria.gearbox;
+    if (gearbox !== undefined && gearbox in GEARBOX_LABEL && !wanted.includes(gearbox)) {
+      return miss(
+        "gearbox_mismatch",
+        wanted.map((g) => GEARBOX_LABEL[g] ?? g),
+        GEARBOX_LABEL[gearbox] ?? gearbox,
+      );
+    }
+  }
+
+  if (criteria.drivetrain?.length) {
+    // The ad's own word first; failing that, what the dossier says every unit
+    // of this generation has.
+    const stated = isDrivetrain(listing.drivetrain)
+      ? listing.drivetrain
+      : normalizeDrivetrain(listing.drivetrain);
+    const drivetrain = stated ?? impliedDrivetrain;
+    if (drivetrain !== undefined && !criteria.drivetrain.includes(drivetrain)) {
+      return miss("drivetrain_mismatch", [...criteria.drivetrain], drivetrain);
+    }
+  }
+  return undefined;
 }
 
 /**

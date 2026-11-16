@@ -204,7 +204,9 @@ export async function reevaluateLead(
     .set({
       verdict,
       state: nextState,
-      deadReason: evaluation.deadReason,
+      // null, not undefined: drizzle skips undefined, so a lead promoted back
+      // into the shortlist kept the reason it had been demoted for.
+      deadReason: evaluation.deadReason ?? null,
       updatedAt: new Date(),
     })
     .where(eq(leads.id, lead.id));

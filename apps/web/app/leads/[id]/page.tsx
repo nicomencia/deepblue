@@ -19,7 +19,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getDb } from "../../../lib/db";
 import { draftSellerProse } from "../../../lib/draft-message";
-import { fmtDate, fmtEur, fmtKm, gradeVar } from "../../../lib/ui";
+import { fmtDate, fmtEur, fmtKm, gradeVar, missReasonLabel } from "../../../lib/ui";
 import { SubmitButton } from "../../submit-button";
 import { GenerateLink } from "./generate-link";
 import {
@@ -356,6 +356,21 @@ export default async function LeadDetail({
           ? ` · Vendedor: ${listing.sellerName}${listing.sellerType === "dealer" ? " (profesional)" : ""}`
           : ""}
       </p>
+
+      {lead.state === "near_miss" && lead.origin !== "manual" && (
+        <p
+          style={{
+            border: "1px solid var(--grade-c)",
+            color: "var(--grade-c)",
+            borderRadius: 8,
+            padding: "0.5rem 0.8rem",
+            fontSize: "0.85rem",
+          }}
+        >
+          Fuera de esta búsqueda por poco: {missReasonLabel(lead.deadReason)}. No entra en la
+          lista ni en el resumen diario; vuelve sola si el anuncio o la búsqueda cambian.
+        </p>
+      )}
 
       {lead.origin === "manual" && lead.state !== "dead" && lead.deadReason && (
         <p

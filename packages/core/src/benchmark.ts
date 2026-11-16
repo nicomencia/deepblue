@@ -103,7 +103,7 @@ const yearWeight = (delta: number): number => 1 / (1 + 0.5 * delta);
 const UNKNOWN_YEAR_WEIGHT = 0.6;
 
 /** Fuel synonyms across sources (es/en, gasolina/petrol, gasoil/gasóleo). */
-function normalizeFuel(fuel: string | undefined): string | undefined {
+export function normalizeFuel(fuel: string | undefined): string | undefined {
   if (!fuel) return undefined;
   const f = fuel.trim().toLowerCase();
   if (/gasolina|petrol|gasoline|nafta/.test(f)) return "gasoline";
@@ -114,7 +114,7 @@ function normalizeFuel(fuel: string | undefined): string | undefined {
   return f;
 }
 
-function normalizeGearbox(gearbox: string | undefined): string | undefined {
+export function normalizeGearbox(gearbox: string | undefined): string | undefined {
   if (!gearbox) return undefined;
   const g = gearbox.trim().toLowerCase();
   if (/autom|dsg|tiptronic|s-tronic|pdk|cvt|dct|auto\b/.test(g)) return "automatic";

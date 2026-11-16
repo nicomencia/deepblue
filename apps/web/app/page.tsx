@@ -4,7 +4,7 @@ import { and, asc, count, desc, eq, ne, sql } from "drizzle-orm";
 import Link from "next/link";
 import { getDb } from "../lib/db";
 import { isLlmConfigured } from "../lib/llm";
-import { fmtEur, fmtKm, gradeVar } from "../lib/ui";
+import { fmtEur, fmtKm, gradeVar, missReasonLabel } from "../lib/ui";
 export const dynamic = "force-dynamic";
 
 export default async function Home({
@@ -49,8 +49,14 @@ export default async function Home({
   // un-analysed leads are held back and counted rather than shown as if final.
   // Without the LLM lane no enrichment is ever coming, so everything shows.
   const holdUnanalysed = isLlmConfigured();
-  const shown = holdUnanalysed ? rows.filter((r) => r.lead.enrichedAt) : rows;
-  const analysing = rows.length - shown.length;
+  // Near misses are a separate list, not rows in this one. They are outside
+  // the search by definition, and they are never enriched (cost guard), so
+  // filing them here hid every one of them behind "analizándose" for good —
+  // the count grew and the cars never appeared.
+  const fits = rows.filter((r) => r.lead.state !== "near_miss");
+  const nearMisses = rows.filter((r) => r.lead.state === "near_miss");
+  const shown = holdUnanalysed ? fits.filter((r) => r.lead.enrichedAt) : fits;
+  const analysing = fits.length - shown.length;
 
   return (
     <main style={{ maxWidth: 1080, margin: "0 auto", padding: "2rem 1.5rem" }}>
@@ -180,6 +186,55 @@ export default async function Home({
             </tbody>
           </table>
         </div>
+      )}
+
+      {nearMisses.length > 0 && (
+        <details style={{ marginTop: "1.5rem" }}>
+          <summary style={{ cursor: "pointer", color: "var(--ink-muted)" }}>
+            {nearMisses.length} fuera de la búsqueda por poco
+          </summary>
+          <p style={{ color: "var(--ink-muted)", fontSize: "0.85rem" }}>
+            No cumplen lo que pediste, pero se quedan cerca: un límite superado por poco, o un
+            combustible, cambio o tracción distintos. No entran en el resumen diario.
+          </p>
+          <table style={{ borderCollapse: "collapse", width: "100%", fontSize: "0.9rem" }}>
+            <tbody>
+              {nearMisses.map(({ lead, listing }) => (
+                <tr key={lead.id} style={{ borderBottom: "1px solid var(--border)" }}>
+                  <td style={td}>
+                    <Link href={`/leads/${lead.id}`} style={{ textDecoration: "none" }}>
+                      {listing.title}
+                    </Link>
+                    <span
+                      style={{
+                        display: "block",
+                        color: "var(--grade-c)",
+                        fontSize: "0.78rem",
+                        marginTop: "0.15rem",
+                      }}
+                    >
+                      {missReasonLabel(lead.deadReason)}
+                    </span>
+                  </td>
+                  <td style={td}>{fmtEur(listing.cashPriceEur ?? listing.priceEur)}</td>
+                  <td style={td}>{listing.year ?? "—"}</td>
+                  <td style={td}>{fmtKm(listing.km)}</td>
+                  <td style={td}>{listing.locationText ?? "—"}</td>
+                  <td style={td}>
+                    {lead.verdict && (
+                      <>
+                        <span style={{ fontWeight: 700, color: gradeVar(lead.verdict.overall) }}>
+                          {lead.verdict.overall}
+                        </span>
+                        <span style={{ color: "var(--ink-muted)" }}> {lead.verdict.score}</span>
+                      </>
+                    )}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </details>
       )}
     </main>
   );

@@ -106,6 +106,7 @@ export function BriefForm({
               ["gasoline", "Gasolina"],
               ["diesel", "Diésel"],
               ["hybrid", "Híbrido"],
+              ["electric", "Eléctrico"],
             ] as const
           ).map(([value, text]) => (
             <label key={value}>
@@ -114,6 +115,48 @@ export function BriefForm({
           ))}
         </span>
       </fieldset>
+      <fieldset style={{ ...lbl, border: "none", padding: 0, margin: 0 }}>
+        Cambio (vacío = cualquiera)
+        <span style={{ display: "flex", gap: "0.8rem", marginTop: "0.3rem" }}>
+          {(
+            [
+              ["manual", "Manual"],
+              ["automatic", "Automático"],
+            ] as const
+          ).map(([value, text]) => (
+            <label key={value}>
+              <input
+                type="checkbox"
+                name="gearbox"
+                value={value}
+                defaultChecked={c?.gearbox?.includes(value)}
+              />{" "}
+              {text}
+            </label>
+          ))}
+        </span>
+      </fieldset>
+      <fieldset style={{ ...lbl, border: "none", padding: 0, margin: 0 }}>
+        Tracción (vacío = cualquiera)
+        <span style={{ display: "flex", gap: "0.8rem", marginTop: "0.3rem" }}>
+          {(["4x2", "4x4"] as const).map((value) => (
+            <label key={value}>
+              <input
+                type="checkbox"
+                name="drivetrain"
+                value={value}
+                defaultChecked={c?.drivetrain?.includes(value)}
+              />{" "}
+              {value}
+            </label>
+          ))}
+        </span>
+      </fieldset>
+      <small style={{ ...hint, gridColumn: "1 / -1" }}>
+        Combustible, cambio y tracción no descartan: un anuncio que diga otra cosa sale de la
+        lista y queda en «fuera de la búsqueda por poco», porque el vendedor a veces marca mal
+        la casilla. Si el anuncio no lo dice, el coche pasa.
+      </small>
       <fieldset
         style={{ ...lbl, border: "none", padding: 0, margin: 0, gridColumn: "1 / -1" }}
       >

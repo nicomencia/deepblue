@@ -163,6 +163,45 @@ modelos, adopción manual de anuncios con dossier-first, vía LLM activa
 (API key) y Fase 2 en Wallapop: mensajes al vendedor con aprobación, lectura
 de respuestas, contraofertas e informe de visita. 274 tests verdes.
 
+**Cambio 2026-11-16 (30) — combustible, cambio y tracción dejan de ser
+decorativos.** Los tres se guardaban en cada búsqueda y ninguna regla los
+miraba (lo que quedó "sin decidir" en la nota 29): una búsqueda de gasolina
+manual metía diésel automáticos en la lista, y la búsqueda nacida de un
+descubrimiento que recomendaba "el 4x4" coleccionaba 4x2. Nico: que se
+apliquen.
+
+Un anuncio que DICE otra cosa pasa a `near_miss` — no muere. Es deliberado y
+distinto de la carrocería, que sí mata: estos tres salen de una casilla que
+el vendedor marca a mano y marca mal (un híbrido archivado como "gasolina" es
+rutina), y un lead muerto no vuelve. Fuera de la lista pero recuperable es el
+peso justo para esa evidencia. Solo hechos: si el anuncio no lo dice, o lo
+dice con palabras que no sabemos clasificar, pasa. Un híbrido archivado bajo
+su combustible de combustión se salva si el título lo nombra. La tracción
+vale también desde el dossier cuando toda la generación salió igual. No
+interrumpen por email: "es el diésel" no es noticia, es lo que ya dijiste que
+no querías.
+
+Hacerlo de verdad obligó a arreglar tres cosas alrededor:
+
+- *Los near-miss eran invisibles.* La portada los metía en la misma lista y
+  esa lista esconde lo que no está enriquecido — y un near-miss no se
+  enriquece nunca (guarda de coste). Quedaban para siempre tras el contador
+  "⏳ analizándose". Ahora tienen su propio desplegable bajo la lista, con el
+  motivo, y la página del lead lo explica.
+- *Editar una búsqueda borraba cambio y tracción.* El formulario no tenía
+  casilla de cambio ni de tracción (ni "Eléctrico"), y al guardar se
+  reescribe `criteria` entero: la tracción que eligió el descubrimiento se
+  perdía en la primera edición. Las tres casillas existen y se leen.
+- *Un lead ascendido conservaba el motivo por el que había bajado.*
+  `reevaluateLead` escribía `deadReason: undefined`, que drizzle ignora.
+
+Los leads existentes se recolocan solos: al editar la búsqueda o en el
+refresco diario del digest. Verificado contra una PGlite temporal: diésel →
+near-miss al entrar; el automático cae al llegar el detalle con su cambio; al
+quitar los filtros los dos vuelven a la lista sin motivo colgando. `next
+build` compila; las páginas no se han abierto en un navegador. 8 tests
+nuevos, 246 + 50 verdes.
+
 **Cambio 2026-11-16 (29) — la tracción llevaba desde julio guardada y sin
 usar.** El cambio (10) del 2026-07-28 ("4x2 y 4x4 dejan de ser el mismo
 coche") añadió la columna, el peso en `computeBenchmark` y sus tests — y la
