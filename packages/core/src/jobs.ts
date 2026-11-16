@@ -34,6 +34,8 @@ export const searchSweepPayload = z.object({
     yearMax: z.number().optional(),
     kmMax: z.number().optional(),
     fuel: z.enum(["gasoline", "diesel", "hybrid", "electric"]).optional(),
+    fuels: z.array(z.enum(["gasoline", "diesel", "hybrid", "electric"])).optional(),
+    gearboxes: z.array(z.enum(["manual", "automatic"])).optional(),
     location: z
       .object({ lat: z.number(), lon: z.number(), radiusKm: z.number() })
       .optional(),

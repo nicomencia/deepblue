@@ -18,8 +18,16 @@ export interface SearchQuery {
   /** Cap for old-unit hunts (e.g. a gen-I search on a model still in production). */
   yearMax?: number;
   kmMax?: number;
-  /** Only set when the brief pins exactly one fuel. */
+  /** @deprecated Single-fuel form; still read so jobs queued before `fuels` run. */
   fuel?: "gasoline" | "diesel" | "hybrid" | "electric";
+  /**
+   * The brief's fuel and gearbox filters, for platforms that can apply them in
+   * the search itself. A hint, not a guarantee: the adapter sends only what it
+   * has verified the platform honours, and evaluation enforces the filter on
+   * whatever comes back either way.
+   */
+  fuels?: Array<"gasoline" | "diesel" | "hybrid" | "electric">;
+  gearboxes?: Array<"manual" | "automatic">;
   location?: { lat: number; lon: number; radiusKm: number };
 }
 

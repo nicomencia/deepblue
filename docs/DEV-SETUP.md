@@ -163,6 +163,46 @@ modelos, adopción manual de anuncios con dossier-first, vía LLM activa
 (API key) y Fase 2 en Wallapop: mensajes al vendedor con aprobación, lectura
 de respuestas, contraofertas e informe de visita. 274 tests verdes.
 
+**Cambio 2026-11-16 (32) — combustible y cambio se filtran en la búsqueda
+de Wallapop, no solo después.** Nico: si vamos a descartarlos igualmente,
+traerlos es gastar. Y lo es más de lo que parece: la búsqueda devuelve 40
+anuncios por página, así que en un Golf gasolina manual dos tercios de la
+página eran diésel o automáticos que se pedían solo para matarlos — y los 40
+más nuevos SIN filtro no son los 40 más nuevos que le sirven a la búsqueda.
+
+Estudiado en vivo antes de tocar nada (29 peticiones espaciadas, ningún
+bloqueo; detalle en RECON.md). Lo que salió, y contradice lo que teníamos:
+
+- `gearbox` existe y funciona: `manual`, `automatic`, `semiautomatic`.
+  `automatic` a secas EXCLUYE los semiautomáticos (los DSG), así que
+  "automático" se envía como `automatic,semiautomatic`.
+- Los resultados de búsqueda SÍ traen el cambio. La nota 31 decía que no,
+  fiándose de un RECON de julio: el automático ya moría al entrar, sin pagar
+  su detalle.
+- `engine` admite listas con coma. Pero el valor de híbrido es `hybride`, no
+  `hybrid`: llevábamos meses enviando `engine=hybrid` y Wallapop lo ignoraba
+  sin error — una búsqueda "solo híbrido" no filtraba nada.
+- Eléctrico no tiene valor conocido (`electric` y `electric_hybrid` se
+  ignoran).
+- En una lista, Wallapop descarta el valor que no conoce y aplica el resto:
+  `gasoline,electric` devolvería solo gasolina y perdería los eléctricos en
+  silencio. Por eso el filtro es todo o nada: si algún combustible pedido no
+  tiene valor verificado, no se envía `engine` y filtra la evaluación.
+
+`wallapopFilterParams` en el adaptador hace esa traducción; el sweep pasa
+`fuels` y `gearboxes` (el `fuel` único se sigue leyendo para jobs ya
+encolados). La regla de evaluación de la nota 31 se queda como red: cubre
+eléctrico, la búsqueda de reserva sin filtros y cualquier valor que Wallapop
+cambie mañana sin avisar.
+
+Coste asumido: con el filtro en la API, un anuncio que no declara el cambio
+ya no llega (antes pasaba como "desconocido"), y el benchmark deja de recoger
+de paso los comparables de otro combustible — que ya pesaban poco.
+
+Verificado con el adaptador real: Kona híbrido automático → 40/40 Hybrid,
+38 Automatic + 2 Semi-automatic; Golf gasolina manual → 40/40 Gasoline,
+40/40 Manual. 246 + 50 tests verdes.
+
 **Cambio 2026-11-16 (31) — combustible, cambio y tracción matan; ya no
 degradan.** La nota 30 los dejó en near-miss por miedo a la casilla mal
 marcada. Nico, al verlo: "no tiene sentido listar cosas que el usuario no

@@ -82,7 +82,12 @@ export async function enqueueSweeps(
             yearMin: brief.criteria.yearMin,
             yearMax: brief.criteria.yearMax,
             kmMax: brief.criteria.kmMax,
-            fuel: brief.criteria.fuel?.length === 1 ? brief.criteria.fuel[0] : undefined,
+            // Filtered in the platform's own search where it can be (see the
+            // adapter): every result of a 40-item page is then one the brief
+            // could actually want, instead of a third of them being diesels
+            // we fetch only to kill.
+            fuels: brief.criteria.fuel,
+            gearboxes: brief.criteria.gearbox,
             location: brief.criteria.location,
           },
         };

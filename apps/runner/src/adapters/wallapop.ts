@@ -21,13 +21,57 @@ const API = `${API_BASE}/search`;
 const CARS_CATEGORY_ID = 100;
 const ITEM_URL_PREFIX = "https://es.wallapop.com/item/";
 
-/** Wallapop's engine param vocabulary (verified: gasoil → all-Diesel results). */
-const WALLAPOP_ENGINE: Record<NonNullable<SearchQuery["fuel"]>, string> = {
+type Fuel = NonNullable<SearchQuery["fuels"]>[number];
+type Gearbox = NonNullable<SearchQuery["gearboxes"]>[number];
+
+/**
+ * Wallapop's `engine` values, each verified live 2026-11-16 (RECON.md). They
+ * are the detail page's `type_attributes.engine.value`, not English: a hybrid
+ * is "hybride". The adapter sent "hybrid" for months and Wallapop ignored it
+ * without a word — an unknown value is not an error, it is no filter at all.
+ *
+ * Electric has no verified value ("electric" and "electric_hybrid" are both
+ * ignored), so it is absent on purpose.
+ */
+const WALLAPOP_ENGINE: Partial<Record<Fuel, string>> = {
   gasoline: "gasoline",
   diesel: "gasoil",
-  hybrid: "hybrid",
-  electric: "electric",
+  hybrid: "hybride",
 };
+
+/**
+ * Wallapop's `gearbox` values. It files DSG-style boxes as "semiautomatic", a
+ * third value: asking for "automatic" alone drops every one of them, and to a
+ * buyer who wants an automatic they are automatics.
+ */
+const WALLAPOP_GEARBOX: Record<Gearbox, string[]> = {
+  manual: ["manual"],
+  automatic: ["automatic", "semiautomatic"],
+};
+
+/**
+ * The brief's fuel/gearbox filters as Wallapop search params. Both take comma
+ * lists (verified).
+ *
+ * All or nothing per filter. In a list, Wallapop drops the values it does not
+ * know and applies the rest: "gasoline,electric" would return petrol only and
+ * silently lose every electric the brief asked for. So if any wanted fuel has
+ * no verified value, no engine filter is sent at all and evaluation does the
+ * filtering on the full results instead.
+ */
+export function wallapopFilterParams(query: SearchQuery): { engine?: string; gearbox?: string } {
+  const out: { engine?: string; gearbox?: string } = {};
+  const fuels = query.fuels?.length ? query.fuels : query.fuel ? [query.fuel] : [];
+  const engines = fuels.map((f) => WALLAPOP_ENGINE[f]);
+  if (engines.length > 0 && engines.every((e): e is string => e !== undefined)) {
+    out.engine = [...new Set(engines)].join(",");
+  }
+  const gearboxes = [...new Set((query.gearboxes ?? []).flatMap((g) => WALLAPOP_GEARBOX[g]))];
+  // Both wanted = no preference; sending all three values would only add a
+  // way for a listing with no gearbox stated to be excluded.
+  if (gearboxes.length > 0 && (query.gearboxes ?? []).length < 2) out.gearbox = gearboxes.join(",");
+  return out;
+}
 
 /**
  * Node's fetch has no deadline of its own: a connection that stalls would
@@ -91,7 +135,9 @@ export const wallapopAdapter: PlatformAdapter = {
     if (query.yearMin !== undefined) params.set("min_year", String(query.yearMin));
     if (query.yearMax !== undefined) params.set("max_year", String(query.yearMax));
     if (query.kmMax !== undefined) params.set("max_km", String(query.kmMax));
-    if (query.fuel !== undefined) params.set("engine", WALLAPOP_ENGINE[query.fuel]);
+    const filters = wallapopFilterParams(query);
+    if (filters.engine) params.set("engine", filters.engine);
+    if (filters.gearbox) params.set("gearbox", filters.gearbox);
 
     // Fallback: if the filtered request is ever rejected (param drift), retry
     // with the minimal verified set rather than failing the sweep. A 403/429

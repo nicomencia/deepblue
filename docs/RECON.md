@@ -32,16 +32,35 @@ jittered pacing), just via HTTP instead of a browser.
   - `max_year` — respected (verified live 2026-07-21: `keywords=renault master`
     + `max_year=1997` → 9 items, all years 1982–1997). Enables old-unit /
     single-generation briefs.
-  - `engine` — values: `gasoline`, `gasoil` (diesel), `hybrid`, `electric`
-    (verified: `engine=gasoil` → all-Diesel results).
+  - `engine` — **re-verified live 2026-11-16.** The values are the detail
+    page's `type_attributes.engine.value`, not English:
+    - `gasoline`, `gasoil` (diesel), **`hybride`** (hybrid) — each honoured
+      (`engine=hybride` on "hyundai kona": 40/40 Hybrid, from a 18/17/2 mix).
+    - `hybrid` — **silently IGNORED** (results identical to no filter, 40/40
+      overlap). This doc listed it as a value from 07-07 without verifying it.
+    - Electric: **no working value found.** `electric` and `electric_hybrid`
+      (the detail's own value) are both ignored. Not sent.
+    - **Comma lists work**: `engine=gasoline,gasoil` on "toyota yaris" (36/40
+      hybrids unfiltered) → 37 Gasoline + 3 Diesel, 0 Hybrid.
+    - **Unknown values inside a list are dropped, the rest still apply**:
+      `engine=hybrid,gasoil` → 40 Diesel. A list containing one bad value
+      therefore silently LOSES that fuel — never send a partly-verified list.
+  - `gearbox` — **verified live 2026-11-16.** Values `manual`, `automatic`,
+    `semiautomatic` (DSG-style boxes are filed as a third value). Each
+    honoured: `gearbox=automatic` → 40/40 Automatic, `gearbox=manual` → 40/40
+    Manual, confirmed against 3 item details each. `automatic` alone EXCLUDES
+    semi-automatics; `gearbox=automatic,semiautomatic` → 33 Automatic + 6
+    Semi-automatic, 0 Manual.
+  - Search items now DO carry the gearbox: `type_attributes.gearbox`, as text
+    ("Manual" / "Automatic" / "Semi-automatic"). The 07-07 note below said
+    they did not.
   - `order_by=newest` — respected (verified via created_at ordering). Default is
     `closest`.
   - `distance` / `dist` — NOT respected (verified live 2026-07-22: both names,
     Madrid center + 30 km → 40 items nationwide, 37 beyond 45 km). Results are
     country-wide regardless of coordinates; the search radius is therefore
     enforced in the Core's evaluation (`outside_search_radius`), not the query.
-  - Unverified (assumed to exist, not sent): `min_km`, `gearbox`
-    (can't verify from search payload — no gearbox field in search items).
+  - Unverified (assumed to exist, not sent): `min_km`.
 - `GET https://api.wallapop.com/api/v3/items/{item_id}` — **HTTP 200**, same headers.
   Detail `type_attributes` come wrapped as `{value, text}` and add what search omits:
   **`gear_box`**, `horsepower`, `doors`, `seats`, **`eco_label`** (DGT badge), `body_type`.
