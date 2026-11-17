@@ -163,6 +163,53 @@ modelos, adopción manual de anuncios con dossier-first, vía LLM activa
 (API key) y Fase 2 en Wallapop: mensajes al vendedor con aprobación, lectura
 de respuestas, contraofertas e informe de visita. 274 tests verdes.
 
+**Cambio 2026-11-17 (44) — el prompt de descubrimiento hace que Opus 5.5
+rinda como Fable, al mismo coste de antes.** La nota 43 dejó a Fable 5.2
+claramente por delante, pero a ~$4 y 5 min por análisis. Nico: con ~10 $ por
+usuario entre descubrimiento y búsqueda, 4 $ en el primer paso no salen, y 5
+min es demasiado esperar en una app. Así que en vez de cambiar de modelo, se
+tomó el informe de Fable como listón y se le pidió a Opus lo que Fable hacía
+por su cuenta.
+
+Cambios en el prompt (`discovery.ts`):
+
+- Las prioridades deciden qué entra: si el propio "whyFits" admite que un
+  modelo pierde en una prioridad, va a "discarded". Con "kart", "ligero" o
+  "sensaciones", peso, plazas y dirección cuentan como el motor.
+- Ninguna ausencia sin explicar: lo que propondría un foro de aficionados
+  sale recomendado o descartado con motivo.
+- Precios de anuncios de portales españoles, diciendo si son vistos o
+  estimados; lo no contrastado se marca como tal.
+- Búsquedas, priorizadas en precios reales e imprescindibles de los
+  finalistas.
+- En `constraintRules`: cada imprescindible se comprueba en CADA
+  recomendación (no todas las unidades lo traen), y un descarte
+  interpretable ("no coches modernos") se traduce en un corte explícito que
+  se cuenta en el titular y se aplica a todas.
+
+Mismo perfil del purista, mismo método (nada guardado):
+
+| | Opus antes | Opus ahora | Fable limitado (medium, 6 búsq.) | Fable completo (nota 43) |
+| --- | --- | --- | --- | --- |
+| Coste | $0,43 | $0,45 | $1,05 | hasta $4,01 |
+| Tiempo | 93 s | 108 s | 94 s | 305 s |
+| Recomienda | MX-5 NC, Boxster 986, Z4 E85, BMW 130i | MX-5 NB, MR2 W30, Boxster 986, BMW E30 325i | MR2 W30, MX-5 NB, MX-5 NA | MR2 W30, MX-5 NB, Boxster 986, Z3 |
+| Descartes | 8 | 14 | 12 | 9 |
+
+Opus ahora traduce "no moderno" a un corte explícito (diseños de los 80-90
+vendidos hasta 2005, dirección hidráulica) y lo aplica a las cuatro; mira el
+aire acondicionado coche por coche y solo admite el E30 "si lo trae de
+origen y enfría"; cita precios de Milanuncios, Wallapop, coches.net y
+el-parking; deja el Boxster S "solo si baja de 20.000 €"; y descarta con
+motivo el Z4 E85 y la familia BMW pesada que antes recomendaba. Fable
+limitado gasta solo 4 búsquedas, razona igual de bien, pero propone tres
+coches de los que dos son MX-5: menos donde elegir, a 2,3x el coste.
+
+Decisión: descubrimiento sigue en Opus 5.5, ahora con este prompt. Fable no
+compensa ni limitado. Pendiente: comprobar en el otro perfil real
+(trabajo + escapadas, 4 plazas) que el prompt no se ha ajustado solo a este
+caso — ~$0,45.
+
 **Cambio 2026-11-17 (43) — comparativa de descubrimiento: Opus 5.5 frente
 a Fable 5.2. Aquí Fable sí gana.** Mismo método que la 42 (`draftReport`
 con parámetro de modelo, nada guardado), con el perfil real del purista de

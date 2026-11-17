@@ -131,6 +131,25 @@ Reglas estrictas:
 - Cada recomendación lleva al menos una URL real encontrada en tus búsquedas; no
   inventes fuentes. Pocas recomendaciones bien fundadas valen más que muchas.
 - Todos los textos visibles en español.
+
+Antes de dar el informe por bueno, comprueba estas cuatro cosas:
+- Las PRIORIDADES deciden qué entra, no adornan. Cada recomendación tiene que
+  servir a las primeras prioridades del perfil; si tu propio "whyFits" admite
+  que un modelo pierde justo en una de ellas, no es una recomendación: va a
+  "discarded" con ese motivo. Cuando las prioridades hablan de agilidad o de
+  tacto ("kart", "ligero", "sensaciones"), el peso, las plazas y el tipo de
+  dirección cuentan tanto como el motor.
+- Ninguna ausencia sin explicar. Piensa qué modelos propondría un foro de
+  aficionados para este perfil y este presupuesto: cada uno aparece en las
+  recomendaciones o en "discarded" con su motivo. Un candidato evidente que
+  no sale en ningún sitio es un fallo del informe.
+- Los precios, de anuncios. Usa las búsquedas sobre todo para ver anuncios en
+  portales españoles de los finalistas; "priceBandEur" sale de lo que has
+  visto, y la línea de "whyFits" sobre presupuesto dice si es de anuncios
+  vistos o estimación tuya. Una afirmación que no has podido contrastar se
+  dice como tal ("conocimiento general, no contrastado").
+- Las búsquedas son pocas: no gastes ninguna en lo que ya sabes. Priorízalas
+  en precios reales y en comprobar los imprescindibles de los finalistas.
 ${constraintRules(profile)}`;
 }
 
@@ -142,6 +161,23 @@ ${constraintRules(profile)}`;
  */
 function constraintRules(profile: DiscoveryProfile): string {
   const rules: string[] = [];
+  // Must-haves are per CAR, not per model name: "aire acondicionado" was a
+  // must-have and a first report recommended a generation whose basic trims
+  // came without it, never checking (live, 2026-11-17, cambio 44).
+  if (profile.mustHaves.length > 0) {
+    rules.push(
+      `- Imprescindibles: ${profile.mustHaves.join(", ")}. Compruébalos en CADA recomendación, ` +
+        "en esa generación y versión: no todas las unidades los traen. Si solo algunas los llevan, " +
+        "dilo en 'versions' (qué acabados sí) o en 'watchouts' (cómo verificarlo en la visita).",
+    );
+  }
+  if (profile.dealBreakers.length > 0) {
+    rules.push(
+      `- Descartes del comprador: ${profile.dealBreakers.join(", ")}. Tómalos al pie de la letra; ` +
+        "si uno es interpretable (\"no coches modernos\"), di en 'headline' cómo lo has traducido " +
+        "(un corte de años, de electrónica...) y aplícalo igual a todas las recomendaciones.",
+    );
+  }
   if (profile.yearMin !== undefined || profile.yearMax !== undefined) {
     rules.push(
       `- SOLO generaciones que se vendan dentro de ${profile.yearMin ?? "…"}–${profile.yearMax ?? "hoy"}: ` +
@@ -169,14 +205,21 @@ function constraintRules(profile: DiscoveryProfile): string {
   return rules.length ? `\nRestricciones duras del comprador:\n${rules.join("\n")}` : "";
 }
 
+/** Knobs a model comparison may turn; production uses the defaults. */
+export interface ResearchOptions {
+  model?: string;
+  effort?: "low" | "medium" | "high";
+  maxSearches?: number;
+}
+
 /**
  * One research turn; loops while the server pauses long tool interactions.
- * `model` defaults to the configured lane; exported so a model comparison
- * runs exactly this code with another model, without saving anything.
+ * Defaults are the configured lane; exported so a model comparison runs
+ * exactly this code with other settings, without saving anything.
  */
 export async function draftReport(
   profile: DiscoveryProfile,
-  model: string = DISCOVERY_MODEL,
+  { model = DISCOVERY_MODEL, effort = "high", maxSearches = MAX_SEARCHES }: ResearchOptions = {},
 ): Promise<DiscoveryReport> {
   const client = getAnthropic();
   let messages: Anthropic.Beta.Messages.BetaMessageParam[] = [{ role: "user", content: prompt(profile) }];
@@ -188,8 +231,8 @@ export async function draftReport(
         // Room for thinking plus the report; only produced tokens are billed.
         max_tokens: 64_000,
         thinking: { type: "adaptive" },
-        tools: [{ type: "web_search_20260318", name: "web_search", max_uses: MAX_SEARCHES }],
-        output_config: { effort: "high", format: betaZodOutputFormat(discoveryResearchSchema) },
+        tools: [{ type: "web_search_20260318", name: "web_search", max_uses: maxSearches }],
+        output_config: { effort, format: betaZodOutputFormat(discoveryResearchSchema) },
         ...refusalFallback(model),
         messages,
       })
