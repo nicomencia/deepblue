@@ -163,6 +163,43 @@ modelos, adopción manual de anuncios con dossier-first, vía LLM activa
 (API key) y Fase 2 en Wallapop: mensajes al vendedor con aprobación, lectura
 de respuestas, contraofertas e informe de visita. 274 tests verdes.
 
+**Cambio 2026-11-18 (45) — prueba final del descubrimiento con un perfil
+nuevo de Nico.** Para comprobar que el prompt de la nota 44 no estaba
+ajustado solo al purista: coche familiar para todo, 20.000 km/año, 4x4
+imprescindible, automático, desde 2018, ≤ 27.000 € y ≤ 150.000 km,
+"idealmente no SUV", y notas libres: el RAV4 PHEV "camión en curvas", el
+Forester 2.0 de 2007 "poco insonorizado y pedía muchas revoluciones". Los
+tres con el prompt nuevo, nada guardado.
+
+| | Opus 5.5 (high, 12) | Fable 5.2 limitado (medium, 6) | Fable 5.2 completo (high, 12) |
+| --- | --- | --- | --- |
+| Coste | $0,48 | $1,86 | $4,94 |
+| Tiempo | 120 s | 128 s | 333 s |
+| Recomienda | Outback, V60 CC, Passat Alltrack, Superb 4x4, A4 Allroad | Octavia Scout/RS, Passat Alltrack, Superb 4x4, 320d xDrive Touring | Octavia Scout, A4 Allroad, V60 CC, 320d xDrive Touring |
+| Descartes | 8 grupos | 13 | 13 |
+
+Los tres respetan lo duro: todos familiares 4x4 automáticos, ningún SUV,
+precios de anuncios españoles, lo no contrastado marcado. Diferencias:
+
+- Opus recomienda el Subaru Outback 2.5 atmosférico con CVT, y su propia
+  advertencia dice "revoluciona mucho al exprimirlo": es justo la queja del
+  Forester en las notas. Los dos Fable lo descartan por eso. Es el único
+  fallo de juicio de Opus, y sale de no tratar las notas libres como
+  criterio.
+- Fable limitado descarta el V60 Cross Country "por precio" porque solo vio
+  anuncios de 2022-2023; Opus y Fable completo encontraron D4 2019-2020 a
+  22.900-25.000 €. Con 6 búsquedas no le llega: limitarlo empeora el
+  informe, y aquí costó 1,86 $, no 1 $.
+- Fable completo es el más riguroso: precia también los descartes con
+  anuncios (Passat Alltrack casi todo por encima de 150.000 km, Outback
+  22.990-28.500 €) y detalla la oferta por portal.
+
+Conclusión: se mantiene Opus 5.5 con el prompt nuevo. Da un informe
+utilizable a 0,48 $ y 2 min; Fable completo es mejor pero cuesta 10x y
+5,5 min, y el limitado pierde candidatos. Siguiente arreglo barato: tratar
+las notas libres del comprador (coches que tuvo, qué le gustó o no) como
+criterio explícito, igual que las prioridades.
+
 **Cambio 2026-11-17 (44) — el prompt de descubrimiento hace que Opus 5.5
 rinda como Fable, al mismo coste de antes.** La nota 43 dejó a Fable 5.2
 claramente por delante, pero a ~$4 y 5 min por análisis. Nico: con ~10 $ por
