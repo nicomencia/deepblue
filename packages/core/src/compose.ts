@@ -17,10 +17,17 @@ import type { ConfidenceVerdict } from "./domain.js";
  */
 export const CHAT_MAX_CHARS = 300;
 
-/** Wallapop chat accepts long texts, but sellers don't read them. */
-const MAX_OPENING_QUESTIONS = 3;
+/** Default questions per message when no budget is given (tests, old callers). */
+const DEFAULT_MAX_QUESTIONS = 3;
+/** Never more than this in one chat message: sellers don't read questionnaires. */
+const MAX_QUESTIONS_CEILING = 4;
 
 const GREETINGS = ["Hola", "Buenas", "Qué tal"];
+const INTEREST_LINES_ONE = [
+  "Me interesa el coche, solo una duda antes de verlo.",
+  "Me ha gustado bastante el anuncio, te pregunto una cosa.",
+  "Estoy buscando uno así y el tuyo me encaja, solo una pregunta.",
+];
 const INTEREST_LINES = [
   "Me interesa el coche y quería preguntarte un par de cosas antes de verlo.",
   "Me ha gustado bastante el anuncio y tengo un par de dudas.",
@@ -31,6 +38,16 @@ const AVAILABILITY_LINES = [
   "Me interesa el coche, sigue disponible?",
   "Me interesa el coche, lo tienes todavía?",
   "Me interesa, lo sigues vendiendo?",
+];
+/**
+ * Closings for a unit we are already sure about: ask for a slot, never name a
+ * number — negotiating before the visit gives the leverage away, and naming
+ * the visit is what wins a scarce good unit over the dozen other messages.
+ */
+const VISIT_CLOSINGS = [
+  "Si todo cuadra, cuándo podría pasarme a verlo?",
+  "Me gustaría verlo esta semana, cuándo te vendría bien?",
+  "Si sigue disponible, dime cuándo puedo ir a verlo. Gracias!",
 ];
 const OPENER_CLOSINGS = [
   "Gracias!",
@@ -93,6 +110,77 @@ function asQuestion(q: string): string {
   return s;
 }
 
+// ---------------------------------------------------------------------------
+// Question budget — message economy scales with doubt, not with politeness
+// ---------------------------------------------------------------------------
+
+export interface QuestionBudgetInput {
+  verdict: Pick<ConfidenceVerdict, "overall" | "confidencePct" | "issues" | "vetoes">;
+  /** One-way km from the brief's search centre to the car, when both are known. */
+  distanceKm?: number;
+}
+
+export interface QuestionBudget {
+  /** Questions per message: the opener's, and each follow-up batch's. */
+  maxQuestions: number;
+  /** Close fast: the opener asks for a visit slot instead of a polite goodbye. */
+  goForVisit: boolean;
+  /** Why, in the user's words — shown next to the "generate" button. */
+  reason: string;
+}
+
+/** A car past this is a day trip: pre-screen it harder before driving out. */
+const FAR_KM = 100;
+/** A car this close costs an afternoon: ask less, go and look. */
+const NEAR_KM = 25;
+
+/**
+ * How many questions a message to this seller should carry (PROJECT.md,
+ * "message economy scales with doubt"). On a unit we are sure about, every
+ * extra question is another chance for the seller to sell it to someone else
+ * first — ask one thing and ask for a slot. On a unit we doubt, questions are
+ * cheap insurance against a wasted two-hour drive — ask more, and take more
+ * rounds. Distance moves it either way.
+ *
+ * Two floors stay in code whatever the grade:
+ *  - every live CRITICAL issue gets its question. An A-priced 1.6 THP is still
+ *    a 1.6 THP; openQuestions is ranked so those come first, one per issue.
+ *  - going for the visit never means naming a price; that stays behind the
+ *    follow-up's `warm && lastBatch` gate.
+ */
+export function questionBudget(input: QuestionBudgetInput): QuestionBudget {
+  const { verdict, distanceKm } = input;
+  const vetoed = (verdict.vetoes?.length ?? 0) > 0;
+  const sure =
+    !vetoed && (verdict.overall === "A" || verdict.overall === "B") && verdict.confidencePct >= 70;
+  const doubtful =
+    vetoed || verdict.overall === "D" || verdict.overall === "E" || verdict.confidencePct < 40;
+
+  let max = sure ? 1 : doubtful ? 3 : 2;
+  const reasons = [sure ? "unidad clara" : doubtful ? "muchas dudas" : "dudas normales"];
+
+  const far = distanceKm !== undefined && distanceKm > FAR_KM;
+  const near = distanceKm !== undefined && distanceKm <= NEAR_KM;
+  if (far) {
+    max += 1;
+    reasons.push(`a ${Math.round(distanceKm)} km, mejor filtrar antes de ir`);
+  } else if (near && max > 1) {
+    max -= 1;
+    reasons.push(`a ${Math.round(distanceKm)} km, se comprueba en persona`);
+  }
+
+  const liveCritical = verdict.issues.filter(
+    (i) => i.severity === "critical" && i.status === "unconfirmed",
+  ).length;
+  if (liveCritical > max) {
+    max = liveCritical;
+    reasons.push(`${liveCritical} riesgo${liveCritical === 1 ? "" : "s"} crítico${liveCritical === 1 ? "" : "s"} sin verificar`);
+  }
+
+  max = Math.min(Math.max(max, 1), MAX_QUESTIONS_CEILING);
+  return { maxQuestions: max, goForVisit: sure && !far, reason: reasons.join(" · ") };
+}
+
 export interface OpeningMessageInput {
   /** Listing title — part of the variety seed so each lead reads different. */
   title: string;
@@ -100,6 +188,8 @@ export interface OpeningMessageInput {
   sellerName?: string;
   /** Verdict open questions, already phrased for the seller, best first. */
   openQuestions: string[];
+  /** From questionBudget; without it, three questions and a polite closing. */
+  budget?: Pick<QuestionBudget, "maxQuestions" | "goForVisit">;
 }
 
 /**
@@ -112,30 +202,33 @@ export function composeOpeningMessage(input: OpeningMessageInput): string {
   const name = firstName(input.sellerName);
   const greeting = `${seedPick(GREETINGS, seed)}${name ? `, ${name}` : ""}!`;
 
-  const questions = input.openQuestions
-    .map(asQuestion)
-    .filter(Boolean)
-    .slice(0, MAX_OPENING_QUESTIONS);
+  const maxQuestions = input.budget?.maxQuestions ?? DEFAULT_MAX_QUESTIONS;
+  const questions = input.openQuestions.map(asQuestion).filter(Boolean);
 
   if (questions.length === 0) {
     // No open questions (fully verified unit): keep the opener meaningful.
     return `${greeting} ${seedPick(AVAILABILITY_LINES, `${seed}|availability`)}`;
   }
 
+  const closing = seedPick(
+    input.budget?.goForVisit ? VISIT_CLOSINGS : OPENER_CLOSINGS,
+    `${seed}|opener-closing`,
+  );
   const build = (qs: string[]): string =>
     [
-      `${greeting} ${seedPick(INTEREST_LINES, `${seed}|interest`)}`,
+      `${greeting} ${seedPick(qs.length === 1 ? INTEREST_LINES_ONE : INTEREST_LINES, `${seed}|interest`)}`,
       ...qs,
       "",
-      seedPick(OPENER_CLOSINGS, `${seed}|opener-closing`),
+      closing,
     ].join("\n");
   // Fit the chat limit by taking questions best-first and SKIPPING any that
   // does not fit, instead of only trimming from the end: one long dossier
   // question at the top used to leave a draft over the limit that the send
   // path then refused, so the opener could not be approved until hand-edited.
-  // Skipped questions wait for the follow-up.
+  // Skipped questions wait for the follow-up; the budget counts kept ones.
   const kept: string[] = [];
   for (const q of questions) {
+    if (kept.length >= maxQuestions) break;
     if (build([...kept, q]).length <= CHAT_MAX_CHARS) kept.push(q);
   }
   if (kept.length === 0) {
@@ -217,6 +310,8 @@ export interface FollowUpInput {
    * BEFORE negotiating — the visit is offered contingent on the number.
    */
   offer?: Omit<OfferMessageInput, "seed">;
+  /** Questions per batch, from questionBudget. Default 3. */
+  maxQuestions?: number;
 }
 
 /**
@@ -232,7 +327,8 @@ export function composeFollowUpMessage(input: FollowUpInput): string | null {
   const remainingAll = input.openQuestions
     .map(asQuestion)
     .filter((q) => q && !asked.includes(q.toLowerCase()));
-  const remaining = remainingAll.slice(0, MAX_OPENING_QUESTIONS);
+  const maxQuestions = input.maxQuestions ?? DEFAULT_MAX_QUESTIONS;
+  const remaining = remainingAll.slice(0, maxQuestions);
   if (remaining.length === 0) return null;
 
   const replies = input.sellerReplies ?? 0;
@@ -248,7 +344,7 @@ export function composeFollowUpMessage(input: FollowUpInput): string | null {
   // appears contingent on the number. The compact→minimal→bare ladder keeps
   // the PRICE inside the chat limit — the number is the one part that must
   // never be the part that gets cut.
-  const lastBatch = remainingAll.length <= MAX_OPENING_QUESTIONS;
+  const lastBatch = remainingAll.length <= maxQuestions;
   if (input.offer && warm && lastBatch) {
     for (const level of ["compact", "minimal", "bare"] as const) {
       const offerPart = composeOfferClosing(input.offer, seed, level);

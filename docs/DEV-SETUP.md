@@ -163,6 +163,39 @@ modelos, adopción manual de anuncios con dossier-first, vía LLM activa
 (API key) y Fase 2 en Wallapop: mensajes al vendedor con aprobación, lectura
 de respuestas, contraofertas e informe de visita. 274 tests verdes.
 
+**Cambio 2026-11-17 (36) — cuántas preguntas depende de la duda, no de la
+cortesía.** La segunda mitad de la nota de PROJECT.md ("message economy"),
+que la 35 dejó para después. Con el orden ya arreglado, el número fijo de 3
+preguntas era el siguiente error: en una unidad buena cada pregunta de más es
+una ocasión de que el vendedor se la venda a otro de la docena que le
+escriben; en una dudosa, preguntar es seguro barato contra dos horas de
+coche para nada.
+
+`questionBudget` (core/compose.ts) decide, desde el veredicto y la distancia:
+
+- *Unidad clara* (A/B, sin vetos, verificación ≥ 70 %): 1 pregunta, y el
+  cierre pide día para ir a verlo — nunca un precio; negociar sigue detrás
+  de la puerta `warm && lastBatch` del seguimiento.
+- *Muchas dudas* (D/E, vetos o verificación < 40 %): 3.
+- *Lo normal*: 2.
+- Distancia desde el centro de la búsqueda: a más de 100 km, +1 (y no se
+  corre a por la visita); a 25 km o menos, −1 (se mira en persona). Sin
+  centro (búsqueda en toda España) no cuenta.
+- Suelo: cada riesgo CRÍTICO sin verificar tiene su pregunta, sea cual sea la
+  nota. Techo: 4.
+
+El mismo número manda en cada tanda del seguimiento, así que una unidad
+dudosa también hace más rondas. El borrador con una sola pregunta ya no dice
+"un par de cosas", y el botón de generar dice cuántas y por qué
+("1 pregunta — unidad clara, pide visita"). La vía de prosa con LLM recibe
+la intención de pedir visita cuando toca.
+
+Verificado imprimiendo borradores reales del compositor: unidad clara a 40
+km → la pregunta de la cadena y "Si todo cuadra, cuándo podría pasarme a
+verlo?" (187 car.); dudosa a 180 km → presupuesto 4, caben 3 en 300 car. y
+la cuarta espera al seguimiento. 6 tests; 258 + 50 verdes. No se ha
+generado contra un lead vivo ni abierto la página en un navegador.
+
 **Cambio 2026-11-16 (35) — el primer mensaje pregunta por fin lo que sabe
 el dossier.** Bug ya diagnosticado en PROJECT.md el 2026-07-26 y sin
 arreglar: el opener manda las 3 primeras `openQuestions` creyendo que vienen

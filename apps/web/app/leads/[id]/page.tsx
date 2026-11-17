@@ -8,6 +8,8 @@ import {
   composeUnitLine,
   computeOfferEur,
   extractImportSignals,
+  questionBudget,
+  searchDistanceKm,
   respondToCounterEur,
   type IssueAssessment,
   type IssueFinding,
@@ -173,6 +175,14 @@ export default async function LeadDetail({
         }
       : undefined;
   const offerEur = offerInput ? computeOfferEur(offerInput) : null;
+  // How many questions this seller gets per message: few on a unit we are
+  // sure about (go for the visit), more on a doubtful or far-away one.
+  const budget = lead.verdict
+    ? questionBudget({
+        verdict: lead.verdict,
+        distanceKm: searchDistanceKm(brief.criteria.location, listing),
+      })
+    : undefined;
   const followUp =
     hasExchange && !waitingForSeller
       ? composeFollowUpMessage({
@@ -185,6 +195,7 @@ export default async function LeadDetail({
           ).length,
           // A justified offer rides along: negotiate before promising a visit.
           offer: offerEur !== null ? offerInput : undefined,
+          maxQuestions: budget?.maxQuestions,
         })
       : null;
   const suggestion = !hasExchange
@@ -192,6 +203,7 @@ export default async function LeadDetail({
         title: listing.title,
         sellerName: listing.sellerName ?? undefined,
         openQuestions: lead.verdict?.openQuestions ?? [],
+        budget,
       })
     : waitingForSeller
       ? quietMs >= NUDGE_AFTER_MS
@@ -213,7 +225,7 @@ export default async function LeadDetail({
         : `mantener oferta (${counterDecision.priceEur.toLocaleString("es-ES")} €)`
     : "";
   const suggestLabel = !hasExchange
-    ? `✍️ Generar mensaje inicial${suggestionQuestions > 0 ? ` (${suggestionQuestions} pregunta${suggestionQuestions === 1 ? "" : "s"})` : ""}`
+    ? `✍️ Generar mensaje inicial${suggestionQuestions > 0 ? ` (${suggestionQuestions} pregunta${suggestionQuestions === 1 ? "" : "s"}${budget ? ` — ${budget.reason}${budget.goForVisit ? ", pide visita" : ""}` : ""})` : ""}`
     : waitingForSeller
       ? "✍️ Generar recordatorio suave (sin preguntas nuevas)"
       : counterDecision
@@ -248,7 +260,9 @@ export default async function LeadDetail({
                   ? `responder a la contraoferta con ${counterDecision.priceEur.toLocaleString("es-ES")} €, justificado en los riesgos pendientes, sin aceptar su cifra`
                   : `mantener con amabilidad nuestra oferta de ${counterDecision.priceEur.toLocaleString("es-ES")} €, dejando la puerta abierta`
               : !hasExchange
-                ? "primer contacto: mostrar interés y hacer las preguntas del borrador base"
+                ? budget?.goForVisit
+                  ? "primer contacto: mostrar interés, hacer la pregunta del borrador base y pedir día para ir a verlo, sin hablar de precio"
+                  : "primer contacto: mostrar interés y hacer las preguntas del borrador base"
                 : waitingForSeller
                   ? "recordatorio suave, sin preguntas nuevas"
                   : followUp

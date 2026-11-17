@@ -474,6 +474,18 @@ function elasticMiss(
 /** City-centroid coordinates put a village seller ~this far from their pin. */
 const RADIUS_SLACK_KM = 15;
 
+/**
+ * One-way km from the brief's search centre to the car, or undefined when
+ * either side has no coordinates (an all-Spain brief has no centre).
+ */
+export function searchDistanceKm(
+  location: BriefCriteria["location"],
+  listing: { lat?: number | null; lon?: number | null },
+): number | undefined {
+  if (!location || listing.lat == null || listing.lon == null) return undefined;
+  return haversineKm(location, { lat: listing.lat, lon: listing.lon });
+}
+
 export function haversineKm(
   a: { lat: number; lon: number },
   b: { lat: number; lon: number },

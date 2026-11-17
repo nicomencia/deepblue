@@ -265,7 +265,8 @@ position 6 and is never asked. So `openQuestions` must carry a rank (live critic
 with repair exposure > import/paperwork > missing hard fact > generic courtesy), and the
 opener must take the top of that rank.
 
-*Then the budget.* `MAX_OPENING_QUESTIONS = 3` ignores the verdict entirely; it should be
+*Then the budget — ✅ built 2026-11-17 (`questionBudget` in core/compose.ts; DEV-SETUP §5,
+cambio 36). The reasoning below is what it implements.* `MAX_OPENING_QUESTIONS = 3` ignored the verdict entirely; it should be
 a function of it — `confidencePct` and live-issue count are already computed, and
 distance (brief location vs listing lat/lon) belongs in it too, since a 200 km round trip
 deserves pre-screening a 15 km one does not. Cutting the budget **before** fixing the

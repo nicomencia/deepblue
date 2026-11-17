@@ -9,9 +9,10 @@ import {
   composeTriageLine,
   composeUnitLine,
   computeOfferEur,
+  questionBudget,
   respondToCounterEur,
 } from "./compose.js";
-import type { ConfidenceVerdict } from "./domain.js";
+import type { ConfidenceVerdict, IssueAssessment } from "./domain.js";
 
 const verdict = (over: Partial<ConfidenceVerdict>): ConfidenceVerdict =>
   ({ overall: "C", score: 60, confidencePct: 40, openQuestions: [], ...over }) as ConfidenceVerdict;
@@ -496,5 +497,78 @@ describe("composeFollowUpMessage", () => {
     // Follow-up closings come from their own pool; whatever the seed picks,
     // the message must end in a closing, not in a bare question.
     expect(followUp!.trimEnd()).toMatch(/(saludo!|gracias!|Gracias!)$/i);
+  });
+});
+
+// --- Question budget: ask little on sure units, more on doubtful or far ones ---
+
+describe("questionBudget", () => {
+  const issue = (severity: IssueAssessment["severity"], status: IssueAssessment["status"] = "unconfirmed"): IssueAssessment => ({
+    title: `riesgo ${severity}`,
+    severity,
+    status,
+    likelihood: "medium",
+    verifyBy: [],
+  });
+  const v = (over: Partial<ConfidenceVerdict> = {}) =>
+    ({ overall: "C", score: 60, confidencePct: 55, issues: [], openQuestions: [], ...over }) as ConfidenceVerdict;
+  const QS = ["Se ha cambiado la cadena?", "Cuántos propietarios ha tenido?", "Tiene la ITV en vigor?", "Tiene libro?"];
+  const questionsIn = (msg: string) => msg.split(String.fromCharCode(10)).filter((l) => l.trim().endsWith("?")).length;
+
+  it("asks one thing and goes for the visit on a unit we are sure about", () => {
+    const b = questionBudget({ verdict: v({ overall: "A", confidencePct: 80 }) });
+    expect(b).toMatchObject({ maxQuestions: 1, goForVisit: true });
+    const msg = composeOpeningMessage({ title: "Golf GTI", openQuestions: QS, budget: b });
+    expect(msg).toContain("Se ha cambiado la cadena?");
+    expect(msg).not.toContain("propietarios");
+    expect(msg).toMatch(/verlo/);
+    expect(msg).not.toMatch(/€/); // going for the visit never names a price
+  });
+
+  it("asks more on a doubtful unit, and never asks for the visit", () => {
+    expect(questionBudget({ verdict: v({ overall: "D", confidencePct: 30 }) })).toMatchObject({
+      maxQuestions: 3,
+      goForVisit: false,
+    });
+    expect(questionBudget({ verdict: v({ overall: "A", confidencePct: 80, vetoes: ["scam_price"] }) }))
+      .toMatchObject({ maxQuestions: 3, goForVisit: false });
+  });
+
+  it("pre-screens a far car harder and lets a near one be checked in person", () => {
+    const mid = v();
+    expect(questionBudget({ verdict: mid }).maxQuestions).toBe(2);
+    expect(questionBudget({ verdict: mid, distanceKm: 180 }).maxQuestions).toBe(3);
+    expect(questionBudget({ verdict: mid, distanceKm: 10 }).maxQuestions).toBe(1);
+    // Sure but 200 km away: one more question and no rush for the slot.
+    expect(questionBudget({ verdict: v({ overall: "A", confidencePct: 80 }), distanceKm: 200 }))
+      .toMatchObject({ maxQuestions: 2, goForVisit: false });
+  });
+
+  it("never drops a live critical issue's question, however good the grade", () => {
+    const b = questionBudget({
+      verdict: v({ overall: "A", confidencePct: 80, issues: [issue("critical"), issue("critical"), issue("major")] }),
+      distanceKm: 5,
+    });
+    expect(b.maxQuestions).toBe(2);
+    expect(b.reason).toContain("2 riesgos críticos");
+    // A settled critical issue no longer counts.
+    expect(
+      questionBudget({ verdict: v({ overall: "A", confidencePct: 80, issues: [issue("critical", "ruled_out")] }) })
+        .maxQuestions,
+    ).toBe(1);
+  });
+
+  it("caps at four whatever stacks up", () => {
+    const crit = Array.from({ length: 6 }, () => issue("critical"));
+    expect(questionBudget({ verdict: v({ overall: "E", confidencePct: 10, issues: crit }) }).maxQuestions).toBe(4);
+  });
+
+  it("drives how many questions the opener and follow-ups carry", () => {
+    const one = composeOpeningMessage({ title: "Golf", openQuestions: QS, budget: { maxQuestions: 1, goForVisit: false } });
+    expect(questionsIn(one)).toBe(1);
+    expect(one).toMatch(/una (duda|cosa|pregunta)/); // not "un par de cosas" for a single question
+    expect(questionsIn(composeOpeningMessage({ title: "Golf", openQuestions: QS }))).toBe(3); // default unchanged
+    const followUp = composeFollowUpMessage({ openQuestions: QS, alreadyAsked: [], sellerReplies: 1, maxQuestions: 1 });
+    expect(questionsIn(followUp!)).toBe(1);
   });
 });

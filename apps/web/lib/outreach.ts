@@ -10,6 +10,8 @@ import {
   canTransition,
   CHAT_MAX_CHARS,
   composeOpeningMessage,
+  questionBudget,
+  searchDistanceKm,
   isPlatformActive,
   medianSellerReplyMinutes,
   replyPollCooldownMinutes,
@@ -74,6 +76,12 @@ export async function draftOutreach(db: Db, leadId: string): Promise<OutreachRes
     title: listing.title,
     sellerName: listing.sellerName ?? undefined,
     openQuestions: lead.verdict?.openQuestions ?? [],
+    budget: lead.verdict
+      ? questionBudget({
+          verdict: lead.verdict,
+          distanceKm: searchDistanceKm(row.brief.criteria.location, listing),
+        })
+      : undefined,
   });
 
   const [message] = await db
