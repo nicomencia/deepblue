@@ -30,7 +30,8 @@ type BriefRow = typeof briefs.$inferSelect;
 /** Ad descriptions are capped — beyond this it's filler, not signal. */
 const MAX_DESCRIPTION_CHARS = 2000;
 
-function prompt(listing: ListingRow, brief: BriefRow, lead: LeadRow): string {
+/** Exported so model comparisons send exactly the production prompt. */
+export function enrichmentPrompt(listing: ListingRow, brief: BriefRow, lead: LeadRow): string {
   const v = lead.verdict;
   const factorLines = v
     ? Object.entries(v.factors)
@@ -195,7 +196,7 @@ export async function enrichLead(
     max_tokens: 16_000,
     output_config: { effort: "high", format: betaZodOutputFormat(llmEnrichmentPayloadSchema) },
     ...refusalFallback(ENRICH_MODEL),
-    messages: [{ role: "user", content: prompt(listing, brief, lead) }],
+    messages: [{ role: "user", content: enrichmentPrompt(listing, brief, lead) }],
   });
   if (msg.stop_reason === "max_tokens") {
     throw new Error(`enriquecimiento truncado por max_tokens (${ENRICH_MODEL}) — sube el límite`);

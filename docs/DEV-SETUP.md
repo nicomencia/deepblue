@@ -163,6 +163,45 @@ modelos, adopción manual de anuncios con dossier-first, vía LLM activa
 (API key) y Fase 2 en Wallapop: mensajes al vendedor con aprobación, lectura
 de respuestas, contraofertas e informe de visita. 274 tests verdes.
 
+**Cambio 2026-11-17 (39) — comparativa de la lectura del anuncio: Haiku
+5.5, Sonnet 5.5 y Opus 5.5.** Nico propone lectura del anuncio en Haiku y
+lectura del chat en Sonnet. Antes de decidir el `.env`, medido: el mismo
+prompt de producción (`enrichmentPrompt`, ahora exportado para esto) sobre los
+10 leads vivos de la copia local, veredicto de reglas recalculado, sin
+escribir nada ni mandar correos. 30 llamadas, 0 errores, 0 sospechas de
+estafa (ninguna de estas unidades lo es: la detección de estafa NO queda
+probada).
+
+| Modelo | Coste/lectura | Por 1.000 | Tiempo medio | Salida media |
+| --- | --- | --- | --- | --- |
+| Haiku 5.5 | $0,0033 | $3,30 | 28 s | 6.060 tok |
+| Sonnet 5.5 | $0,0179 | $17,92 | 11 s | 1.257 tok |
+| Opus 5.5 | $0,0557 | $55,71 | 24 s | 2.251 tok |
+
+(Precios de lista: $0,10/$0,50, $2/$10, $4/$20 por millón. Haiku piensa ~5x
+más que Sonnet a esfuerzo `high`, por eso tarda más; aun así sale 5x más
+barato.)
+
+Lo que importa — la nota final casi no cambia: misma letra en 9 de 10, y la
+puntuación a ±4 entre modelos. Pero Haiku lee distinto en dos cosas:
+
+- *Castiga a vendedores buenos.* Ajuste de credibilidad negativo (−3) en 4
+  vendedores particulares de 4,9–5/5 donde Sonnet da +2/+3 y Opus 0/+2.
+- *Se equivoca de signo en lo que aporta el anuncio.* 207 RC con embrague
+  nuevo y factura reciente: Haiku −10, Sonnet y Opus +6. 207 RC con cadena
+  cambiada y certificado: Haiku −5, los otros +6/+8. Master con correa hecha
+  hace <5.000 km: Haiku −5 y su frase dice "sin factura de la correa",
+  omitiendo que la correa está hecha — el dato bueno del anuncio.
+
+Sonnet 5.5 coincide con Opus en dirección casi siempre y en frase clave
+(menciona la correa, la cadena, el embrague), a un tercio de su coste y en
+menos de la mitad de tiempo.
+
+Lectura (para decidir con Nico): Haiku es barato de verdad pero sesga hacia
+abajo justo los anuncios con historial documentado, que son los que más
+interesan. Sonnet 5.5 rinde como Opus aquí. Muestra pequeña (10, todos con
+dossier, base de julio).
+
 **Cambio 2026-11-17 (38) — el botón "Generar" llevaba meses sin usar
 Haiku.** Al probar la nota 37 contra el modelo real (con la clave nueva de
 Nico): todas las llamadas volvían al borrador determinista. Causa:
