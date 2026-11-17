@@ -22,6 +22,22 @@ import { z } from "zod";
 import { getAnthropic, isLlmConfigured, messageText } from "./llm";
 
 const DRAFT_MODEL = process.env.DEEPBLUE_DRAFT_MODEL ?? "claude-haiku-5-5";
+/**
+ * `effort` only where the model takes it. Haiku 4.5 answers it with a 400
+ * ("does not support the effort parameter"), and with DEEPBLUE_DRAFT_MODEL
+ * pinned to it in .env.local every draft fell back to the template, silently,
+ * from the day effort was added (cambio 24) until 2026-11-17. Haiku 5.5
+ * thinks by default; there `low` keeps the thinking short.
+ */
+const effort = (model: string): { effort?: "low" } =>
+  /haiku-4/.test(model) ? {} : { effort: "low" };
+
+/** A fallback that nobody sees is how this lane stayed broken for months. */
+function logFallback(why: unknown): void {
+  console.warn(
+    `[draft] ${DRAFT_MODEL} no usado, va el borrador determinista: ${why instanceof Error ? why.message : String(why)}`,
+  );
+}
 
 const draftSchema = z.object({ message: z.string() });
 /** Framing only: the questions are inserted by code between the two. */
@@ -168,15 +184,16 @@ export async function draftSellerProse(req: DraftRequest): Promise<{ text: strin
     const msg = await client.messages.create({
       model: DRAFT_MODEL,
       max_tokens: 2_000,
-      output_config: { effort: "low", format: zodOutputFormat(draftSchema) },
+      output_config: { ...effort(DRAFT_MODEL), format: zodOutputFormat(draftSchema) },
       messages: [{ role: "user", content: prompt(req) }],
     });
     const { message } = draftSchema.parse(JSON.parse(messageText(msg)));
     const text = message.trim();
-    return isValidDraft(text, req)
-      ? { text, model: DRAFT_MODEL }
-      : { text: req.fallback, model: "deterministic" };
-  } catch {
+    if (isValidDraft(text, req)) return { text, model: DRAFT_MODEL };
+    logFallback(`borrador rechazado por las validaciones: ${JSON.stringify(text).slice(0, 200)}`);
+    return { text: req.fallback, model: "deterministic" };
+  } catch (err) {
+    logFallback(err);
     return { text: req.fallback, model: "deterministic" };
   }
 }
@@ -194,15 +211,16 @@ async function draftFraming(
     const msg = await getAnthropic().messages.create({
       model: DRAFT_MODEL,
       max_tokens: 2_000,
-      output_config: { effort: "low", format: zodOutputFormat(framingSchema) },
+      output_config: { ...effort(DRAFT_MODEL), format: zodOutputFormat(framingSchema) },
       messages: [{ role: "user", content: framingPrompt(req, questions) }],
     });
     const { intro, closing } = framingSchema.parse(JSON.parse(messageText(msg)));
     const text = [intro.trim(), ...questions, "", closing.trim()].join("\n");
-    return isValidFraming(intro, closing, req, questions) && isValidDraft(text, req)
-      ? { text, model: DRAFT_MODEL }
-      : { text: req.fallback, model: "deterministic" };
-  } catch {
+    if (isValidFraming(intro, closing, req, questions) && isValidDraft(text, req)) return { text, model: DRAFT_MODEL };
+    logFallback(`borrador rechazado por las validaciones: ${JSON.stringify(text).slice(0, 200)}`);
+    return { text: req.fallback, model: "deterministic" };
+  } catch (err) {
+    logFallback(err);
     return { text: req.fallback, model: "deterministic" };
   }
 }

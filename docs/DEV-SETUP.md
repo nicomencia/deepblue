@@ -163,6 +163,29 @@ modelos, adopción manual de anuncios con dossier-first, vía LLM activa
 (API key) y Fase 2 en Wallapop: mensajes al vendedor con aprobación, lectura
 de respuestas, contraofertas e informe de visita. 274 tests verdes.
 
+**Cambio 2026-11-17 (38) — el botón "Generar" llevaba meses sin usar
+Haiku.** Al probar la nota 37 contra el modelo real (con la clave nueva de
+Nico): todas las llamadas volvían al borrador determinista. Causa:
+`.env.local` fija `DEEPBLUE_DRAFT_MODEL=claude-haiku-4-5-20251001`, y desde
+el cambio 24 el código manda `effort: "low"`, que Haiku 4.5 rechaza con un
+400 ("does not support the effort parameter"). El `catch` lo tragaba en
+silencio y el usuario recibía la plantilla creyendo que era Haiku.
+
+Arreglo: `effort` solo se envía a modelos que lo aceptan (no a Haiku 4.x), y
+cada vuelta al borrador determinista — error de la API o rechazo de las
+validaciones — deja una línea `[draft]` en el log del servidor. Un fallo que
+nadie ve es como esta vía estuvo rota tanto tiempo.
+
+Verificado en vivo: 8 borradores reales, 4 con Haiku 4.5 (el de
+`.env.local`) y 4 con Haiku 5.5 (el del código), apertura normal y apertura
+pidiendo visita. Los 8 los escribió Haiku, los 8 llevan las preguntas
+palabra por palabra, ninguno pasa de 209 caracteres. Haiku 5.5 se queda más
+cerca de la plantilla (conserva el nombre del vendedor); 4.5 reescribe más y
+lo pierde. 258 + 56 tests verdes.
+
+Recomendado: quitar `DEEPBLUE_DRAFT_MODEL` de `.env.local` para que mande
+el `claude-haiku-5-5` del código.
+
 **Cambio 2026-11-17 (37) — Haiku ya no toca las preguntas.** Nico: "que
 Haiku no modifique las preguntas". Lo podía hacer: el botón "Generar" pasa el
 borrador determinista a Haiku para que suene natural, y Haiku reescribía el
