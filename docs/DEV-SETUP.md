@@ -163,6 +163,56 @@ modelos, adopción manual de anuncios con dossier-first, vía LLM activa
 (API key) y Fase 2 en Wallapop: mensajes al vendedor con aprobación, lectura
 de respuestas, contraofertas e informe de visita. 274 tests verdes.
 
+**Cambio 2026-11-18 (46) — descubrimiento: orden, capacidades medidas,
+notas y descartes contrastados.** Nico estudió a fondo el caso del familiar
+4x4 y dio su propia lista: V60 Cross Country > A4 Allroad > Skodas > Outback
+> Passat; el BMW 320d xDrive fuera ("sin capacidad de offroad"); el Mercedes
+All-Terrain como opción a mirar. Contra esa lista, los informes de la nota
+45 fallaban en cinco cosas, y cada una es ahora una regla general del
+prompt:
+
+- *Sin orden.* Las tarjetas salían en orden arbitrario (Opus puso el
+  Outback primero y el A4 último). Ahora van de mejor a peor para el
+  comprador, la primera se nombra en el titular con el porqué, y un modelo
+  que pierde en una de las tres primeras prioridades no puede ir primero.
+- *Capacidades con etiqueta.* "Algo de offroad" se daba por cumplido con
+  tracción total, y entraba un familiar bajo (el BMW). Ahora una prioridad
+  que pide una capacidad se cumple con un dato (altura libre, litros, l/100
+  km) citado y comparado entre recomendaciones.
+- *Notas ignoradas.* Las notas libres (coches que tuvo, qué le gustó y qué
+  no) cuentan como las prioridades: lo que repite una queja se descarta o se
+  justifica en la primera línea.
+- *Descartes sin contrastar.* El V60 CC (Fable limitado) y el Octavia Scout
+  (Opus) se descartaron por precio u oferta con anuncios de fuera de la
+  ventana del comprador. Ahora no se descarta así un candidato que encaja en
+  lo demás sin ver anuncios dentro de sus años y km; si no se ven, se dice.
+- *Combustible abierto.* Sin preferencia, cada recomendación elige motor y
+  dice en "versions" cuándo convendría la alternativa.
+
+Resultado con Opus 5.5 (nada guardado):
+
+- Familiar 4x4 (168 s, ~$0,90): 1 Passat Alltrack, 2 Outback, 3 V60 CC, 4
+  Octavia Scout. El BMW sale (bajo para pistas), el Superb también (150 mm),
+  el Mercedes All-Terrain se descarta marcado "no contrastado", el Outback
+  abre con "en qué se parece al Forester y por qué compensa" y propone la
+  versión GLP. El A4 Allroad se descarta: mismo motor que el Passat con
+  menos maletero y más caro.
+- Purista (107 s, $0,46): 1 MX-5 NB, 2 MR2, 3 Boxster 986, 4 Z3, cada uno
+  con "va tercero porque…". El E30 pasa a descartado (aire raro). Sin
+  regresión.
+
+Lo que queda lejos de la lista de Nico no es un fallo de reglas sino de
+pesos: el perfil trae ocho prioridades en orden, la primera "fiabilidad", y
+el modelo lo respeta al pie de la letra — por eso Passat y Outback adelantan
+al V60 (al que penaliza la fama de EGR/DPF del D4) y el A4 cae, aunque sea
+el de mejor manejo (prioridad 5ª). Nico pesa más la comodidad en viaje y el
+manejo. Mejor arreglarlo en el formulario (marcar las 2-3 prioridades que
+mandan) que adivinarlo en el prompt.
+
+Coste: en el perfil complejo la lectura sube a ~143.000 tokens de entrada
+(~$0,90, el doble que antes) por contrastar también los descartes. En el
+simple no cambia.
+
 **Cambio 2026-11-18 (45) — prueba final del descubrimiento con un perfil
 nuevo de Nico.** Para comprobar que el prompt de la nota 44 no estaba
 ajustado solo al purista: coche familiar para todo, 20.000 km/año, 4x4

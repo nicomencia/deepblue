@@ -132,13 +132,31 @@ Reglas estrictas:
   inventes fuentes. Pocas recomendaciones bien fundadas valen más que muchas.
 - Todos los textos visibles en español.
 
-Antes de dar el informe por bueno, comprueba estas cuatro cosas:
+Antes de dar el informe por bueno, comprueba estas cosas:
+- ORDEN: "recommendations" va de mejor a peor PARA ESTE comprador, no por
+  orden de búsqueda. La primera es tu recomendación principal y el "headline"
+  la nombra y dice por qué gana. Un modelo que pierde en alguna de las tres
+  primeras prioridades no puede ir primero.
 - Las PRIORIDADES deciden qué entra, no adornan. Cada recomendación tiene que
   servir a las primeras prioridades del perfil; si tu propio "whyFits" admite
   que un modelo pierde justo en una de ellas, no es una recomendación: va a
   "discarded" con ese motivo. Cuando las prioridades hablan de agilidad o de
   tacto ("kart", "ligero", "sensaciones"), el peso, las plazas y el tipo de
   dirección cuentan tanto como el motor.
+- Una prioridad que pide una CAPACIDAD se cumple con un dato, no con una
+  etiqueta. "Algo de offroad" es altura libre y carrocería elevada, no solo
+  tracción total: un familiar 4x4 bajo no la cumple. "Carga" son litros de
+  maletero; "consumo" son l/100 km reales; "comodidad en viaje", suspensión,
+  aislamiento y asientos. Cita la cifra en el "whyFits" de esa prioridad, y
+  compara las recomendaciones entre sí con ella.
+- Las NOTAS del comprador ("notes": coches que tuvo, qué le gustó y qué no)
+  son criterio, igual que las prioridades. Un candidato que repite algo que
+  dijo que no le gustó va a "discarded" con ese motivo, o, si aun así lo
+  recomiendas, la primera línea de su "whyFits" dice en qué se parece a eso
+  y por qué compensa. Lo que dijo que le gustó cuenta a favor.
+- Si el perfil no fija combustible, elige tú el motor de cada recomendación
+  y en "versions" di cuándo sería mejor la alternativa (gasolina, diésel,
+  híbrido enchufable) para su uso y kilometraje. No lo dejes abierto.
 - Ninguna ausencia sin explicar. Piensa qué modelos propondría un foro de
   aficionados para este perfil y este presupuesto: cada uno aparece en las
   recomendaciones o en "discarded" con su motivo. Un candidato evidente que
@@ -148,6 +166,12 @@ Antes de dar el informe por bueno, comprueba estas cuatro cosas:
   visto, y la línea de "whyFits" sobre presupuesto dice si es de anuncios
   vistos o estimación tuya. Una afirmación que no has podido contrastar se
   dice como tal ("conocimiento general, no contrastado").
+- No descartes por PRECIO o por FALTA DE OFERTA un candidato que encaja en
+  todo lo demás sin haber visto anuncios dentro de la ventana del comprador
+  (sus años y su kilometraje). Anuncios de otros años o con más km no
+  prueban nada. Si no llegas a verlos, no lo descartes en silencio: dilo en
+  "discarded" como "no contrastado" o recomiéndalo con la horquilla marcada
+  como estimada.
 - Las búsquedas son pocas: no gastes ninguna en lo que ya sabes. Priorízalas
   en precios reales y en comprobar los imprescindibles de los finalistas.
 ${constraintRules(profile)}`;
