@@ -85,22 +85,29 @@ Reglas estrictas:
 - En "make" y "model" usa exactamente: ${req.make} / ${req.model}.`;
 }
 
-/** One research turn; loops while the server pauses long tool interactions. */
-async function draftWithResearch(req: DossierRequest): Promise<ModelDossier> {
+/**
+ * One research turn; loops while the server pauses long tool interactions.
+ * `model` defaults to the configured lane; exported so a model comparison
+ * runs exactly this code with another model, without saving anything.
+ */
+export async function draftWithResearch(
+  req: DossierRequest,
+  model: string = DOSSIER_MODEL,
+): Promise<ModelDossier> {
   const client = getAnthropic();
   let messages: Anthropic.Beta.Messages.BetaMessageParam[] = [{ role: "user", content: prompt(req) }];
 
   for (let turn = 0; turn < MAX_TURNS; turn++) {
     const msg = await client.beta.messages
       .stream({
-        model: DOSSIER_MODEL,
+        model,
         // Thinking counts against the cap; a truncated dossier is research
         // paid for and thrown away. Only produced tokens are billed.
         max_tokens: 64_000,
         thinking: { type: "adaptive" },
         tools: [{ type: "web_search_20260318", name: "web_search", max_uses: MAX_SEARCHES }],
         output_config: { effort: "high", format: betaZodOutputFormat(modelDossierSchema) },
-        ...refusalFallback(DOSSIER_MODEL),
+        ...refusalFallback(model),
         messages,
       })
       .finalMessage();

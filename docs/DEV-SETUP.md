@@ -163,6 +163,43 @@ modelos, adopción manual de anuncios con dossier-first, vía LLM activa
 (API key) y Fase 2 en Wallapop: mensajes al vendedor con aprobación, lectura
 de respuestas, contraofertas e informe de visita. 274 tests verdes.
 
+**Cambio 2026-11-17 (42) — comparativa de dossier: Opus 5.5 frente a Fable
+5.2.** Nico: ¿usar Fable en alguna vía? La única candidata era la
+investigación de dossiers (calidad alta, volumen bajo). Medido con el código
+de producción (`draftWithResearch`, ahora con parámetro de modelo), la misma
+petición del 207 RC / THP (2007-2012) a los dos modelos, sin guardar nada.
+
+| | Opus 5.5 | Fable 5.2 |
+| --- | --- | --- |
+| Tiempo | 144 s | 368 s |
+| Tokens entrada / salida | 141.671 / 11.251 | 227.702 / 14.987 |
+| Búsquedas web | 8 | 12 |
+| Coste en tokens | $0,79 | $2,42 |
+| Problemas / fuentes | 7 / 30 | 7 / 30 |
+| Recalls | 9 | 2 |
+
+El núcleo es el mismo: cadena y tensor como crítico (10 y 12 fuentes, 4
+preguntas al vendedor), consumo de aceite, bomba de alta presión, carbonilla,
+turbo, embrague del RC 175. Horquillas de coste parecidas. Diferencias:
+Opus añade las bobinas y Fable la polea de accesorios con canto afilado
+(1 fuente); Opus acota cada problema por años y la carbonilla desde 60.000
+km, Fable no pone ningún límite de km ni año; Opus lista 9 recalls (varios de
+Reino Unido para todo el 207, y el de refrigeración de los primeros THP),
+Fable 2. Los recalls solo se muestran en /dossiers, no puntúan.
+
+Conclusión: Fable no dio un dossier mejor en lo que puntúa, a 3x el coste y
+2,5x el tiempo. La investigación se queda en Opus 5.5. Muestra de uno.
+
+De paso: los dos dossiers nuevos triplican las fuentes del de julio (30
+frente a 10) y suben la cadena de "major" a "critical" con 4 preguntas en
+vez de 2. Rehacer los dossiers antiguos con Opus 5.5 costaría ~$0,80 cada
+uno (7 en esta base). Ninguno de los dos nuevos pone `kmMin` a la cadena, así
+que su probabilidad sale "medium" para cualquier kilometraje; el de julio sí
+lo ponía (60.000 km).
+
+`refusalFallback` gana Fable 5.2 (forma `"default"`), por si algún día se
+fija por env: sin ella, un dossier que Fable declinase se perdería entero.
+
 **Cambio 2026-11-17 (41) — el digest avisa cuando sale un modelo de Claude
 más nuevo.** Los modelos van fijados por vía (nota 40) y no hay alias
 "latest"; el precio de fijarlos es que nadie se entera de que salió uno

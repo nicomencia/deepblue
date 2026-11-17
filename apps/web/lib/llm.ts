@@ -52,7 +52,10 @@ export function refusalFallback(model: string): {
   if (model === "claude-opus-5-5") {
     return { betas: ["server-side-fallback-2026-06-01"], fallbacks: [{ model: "claude-opus-5" }] };
   }
-  if (model === "claude-sonnet-5-5") {
+  if (model === "claude-sonnet-5-5" || model === "claude-fable-5-2") {
+    // "default" routes by refusal category, so no model list to maintain.
+    // Fable 5.2 accepts it as well (a stronger model is likelier to decline
+    // a benign research request on a safety classifier than to be wrong).
     // SDK 0.110 only types the list form; the wire accepts the scalar.
     const fallbacks = "default" as unknown as Anthropic.Beta.Messages.BetaFallbackParam[];
     return { betas: ["server-side-fallback-2026-07-01"], fallbacks };
