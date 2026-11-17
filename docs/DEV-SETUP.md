@@ -163,6 +163,34 @@ modelos, adopción manual de anuncios con dossier-first, vía LLM activa
 (API key) y Fase 2 en Wallapop: mensajes al vendedor con aprobación, lectura
 de respuestas, contraofertas e informe de visita. 274 tests verdes.
 
+**Cambio 2026-11-17 (41) — el digest avisa cuando sale un modelo de Claude
+más nuevo.** Los modelos van fijados por vía (nota 40) y no hay alias
+"latest"; el precio de fijarlos es que nadie se entera de que salió uno
+nuevo. Ahora, una vez al día, al correr el digest, se consulta `/v1/models`
+(gratis, sin tokens) y se compara cada vía con el más nuevo de su familia,
+por fecha de publicación de la API, nunca leyendo números del id.
+
+- Cada versión nueva se avisa UNA vez (evento `model_update_notified`), no
+  cada mañana hasta que se actualice.
+- Va dentro del digest si hay candidatos; si el día está tranquilo, llega un
+  correo corto propio ("hay un modelo nuevo de Claude").
+- También avisa si un modelo configurado ya no existe en la API (retirado o
+  mal escrito en `.env`).
+- Nunca cambia de modelo: solo lo dice, y explica cómo probarlo y adoptarlo.
+- Si la consulta falla, el digest sale igual y queda una línea `[models]` en
+  el log.
+
+`.env.local` de este PC: las cinco líneas `DEEPBLUE_*_MODEL` (que fijaban
+Haiku 4.5, Sonnet 5 y Opus 4.8) quedan comentadas y puestas a los modelos
+actuales, para tener a mano el mando local; ahora mandan los defaults del
+código. El mismo bloque comentado entra en `.env.example`.
+
+Verificado: contra la API real, las cinco vías están en el más nuevo de su
+familia → ningún aviso. Con una lista simulada sobre una PGlite temporal,
+cuatro días seguidos: nada nuevo → sin correo; sale un Sonnet → un correo;
+al día siguiente → nada; sale además un Opus → un correo solo del Opus.
+6 tests nuevos; 258 + 62 verdes.
+
 **Cambio 2026-11-17 (40) — lectura del anuncio y del chat pasan a Sonnet
 5.5 por defecto.** Decisión de Nico tras la comparativa de la nota 39. Los
 defaults del código quedan: Opus 5.5 para investigar (dossier,
@@ -174,9 +202,8 @@ modelos): cada versión nueva ha cambiado algo de lo que depende el código
 (el esfuerzo por defecto de Opus 5.5, Haiku 4.5 rechazando `effort`), así
 que subir de versión es un cambio medido, no uno silencioso.
 
-Ojo: `.env.local` de este PC aún fija los cinco modelos a versiones viejas y
-manda sobre el código; hasta quitar esas líneas, aquí no cambia nada. La
-decisión del `.env` queda pendiente.
+`.env.local` de este PC fijaba los cinco modelos a versiones viejas; quedan
+comentados en la nota 41.
 
 **Cambio 2026-11-17 (39) — comparativa de la lectura del anuncio: Haiku
 5.5, Sonnet 5.5 y Opus 5.5.** Nico propone lectura del anuncio en Haiku y

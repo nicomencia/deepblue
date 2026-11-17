@@ -21,7 +21,7 @@ import { zodOutputFormat } from "@anthropic-ai/sdk/helpers/zod";
 import { z } from "zod";
 import { getAnthropic, isLlmConfigured, messageText } from "./llm";
 
-const DRAFT_MODEL = process.env.DEEPBLUE_DRAFT_MODEL ?? "claude-haiku-5-5";
+export const DRAFT_MODEL = process.env.DEEPBLUE_DRAFT_MODEL ?? "claude-haiku-5-5";
 /**
  * `effort` only where the model takes it. Haiku 4.5 answers it with a 400
  * ("does not support the effort parameter"), and with DEEPBLUE_DRAFT_MODEL

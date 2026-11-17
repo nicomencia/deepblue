@@ -10,6 +10,7 @@ import { briefs, events, leads, listings, users, type Db } from "@deepblue/db";
 import { and, asc, desc, eq, gte, sql } from "drizzle-orm";
 import { sendEmail } from "./email";
 import { leadUrl } from "./links";
+import { checkModelUpdates, composeModelNotice, updateKey, type ModelUpdate } from "./model-updates";
 import { newEvalCaches, reevaluateLead } from "./reevaluate";
 
 /**
@@ -106,6 +107,10 @@ export async function runDigest(
     .where(eq(briefs.status, "active"));
 
   let composed = 0;
+  // Asked at most once per run, and only once some owner's digest is actually
+  // due — runDigest is triggered every scheduler tick and returns early the
+  // rest of the day, so this is one free /v1/models call a day.
+  let modelUpdates: Promise<ModelUpdate[]> | undefined;
   for (const owner of owners) {
     const [lastRun] = await db
       .select({ at: events.createdAt })
@@ -148,24 +153,58 @@ export async function runDigest(
         windowStart: windowStart.toISOString(),
       },
     });
-    if (mailable.length === 0) continue;
 
-    const { text, html } = composeDigest(mailable);
+    // Newer Claude models: each one told exactly once, not every morning until
+    // someone upgrades. Rides the digest when there is one; a quiet day still
+    // gets it, as a short email of its own.
+    modelUpdates ??= checkModelUpdates();
+    const untold = await untoldModelUpdates(db, owner.id, await modelUpdates);
+    if (mailable.length === 0 && untold.length === 0) continue;
+
+    const notice = untold.length > 0 ? composeModelNotice(untold) : undefined;
     const dateEs = new Intl.DateTimeFormat("es-ES", {
       timeZone: "Europe/Madrid",
       day: "numeric",
       month: "long",
     }).format(new Date());
-    await sendEmail({
-      to: owner.email,
-      subject: `deepblue · ${mailable.length} candidato${mailable.length === 1 ? "" : "s"} nuevo${mailable.length === 1 ? "" : "s"} — ${dateEs}`,
-      text,
-      html,
-    });
-    composed += 1;
+    if (mailable.length > 0) {
+      const { text, html } = composeDigest(mailable);
+      await sendEmail({
+        to: owner.email,
+        subject: `deepblue · ${mailable.length} candidato${mailable.length === 1 ? "" : "s"} nuevo${mailable.length === 1 ? "" : "s"} — ${dateEs}`,
+        text: notice ? `${text}\n\n${notice.text}\n` : text,
+        html: notice ? `${html}${notice.html}` : html,
+      });
+      composed += 1;
+    } else if (notice) {
+      await sendEmail({
+        to: owner.email,
+        subject: `deepblue · hay ${untold.length === 1 ? "un modelo nuevo" : "modelos nuevos"} de Claude — ${dateEs}`,
+        text: `${notice.text}\n`,
+        html: notice.html,
+      });
+    }
+    for (const u of untold) {
+      await db.insert(events).values({
+        userId: owner.id,
+        type: "model_update_notified",
+        payload: { key: updateKey(u), current: u.current, newest: u.newest ?? null, lanes: u.lanes },
+      });
+    }
   }
 
   return { usersProcessed: owners.length, digestsComposed: composed };
+}
+
+/** The updates this owner has not been told about yet (events log, durable). */
+async function untoldModelUpdates(db: Db, userId: string, updates: ModelUpdate[]): Promise<ModelUpdate[]> {
+  if (updates.length === 0) return [];
+  const told = await db
+    .select({ key: sql<string>`${events.payload}->>'key'` })
+    .from(events)
+    .where(and(eq(events.userId, userId), eq(events.type, "model_update_notified")));
+  const toldKeys = new Set(told.map((t) => t.key));
+  return updates.filter((u) => !toldKeys.has(updateKey(u)));
 }
 
 function leadSummary({ lead, listing }: { lead: LeadRow; listing: ListingRow }): string[] {
