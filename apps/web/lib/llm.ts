@@ -7,24 +7,31 @@
 import Anthropic from "@anthropic-ai/sdk";
 
 /**
- * Every judgement lane defaults to Opus 5.5: cheaper than Opus 5 ($4/$20 per
- * millón vs $5/$25) for the same work, so the guards downstream — lotes
- * acotados, marcas una-vez-por-lead, banderas en vuelo, enfriamientos — no
- * cambian. Dos diferencias con Opus 5 que el código asume: el thinking no se
- * puede apagar (el esfuerzo es el único mando, y por defecto baja a `medium`,
- * así que cada vía lo fija explícito) y cuenta contra `max_tokens`.
+ * One model per lane, each the newest of its family (checked against
+ * /v1/models 2026-11-17). Pinned on purpose, never a moving alias: each new
+ * version has changed something the code relies on (Opus 5.5's effort default,
+ * Haiku 4.5 rejecting `effort`), so a version bump is a measured change, not a
+ * silent one.
  *
- * Todos overridables por env, que es la vía para probar un modelo sin tocar
- * código. La prosa barata (DRAFT_MODEL) sigue en Haiku a propósito.
+ *  - Research (dossier, discovery): Opus 5.5 — its claims ARE the product.
+ *  - Reading (ad enrichment, chat readings): Sonnet 5.5. Measured against
+ *    Opus 5.5 and Haiku 5.5 on 10 real leads (DEV-SETUP §5, cambio 39):
+ *    same direction as Opus on almost every adjustment at a third of the
+ *    cost; Haiku marked down exactly the ads with documented history.
+ *  - Prose (DRAFT_MODEL, in draft-message.ts): Haiku 5.5 — writing is not
+ *    judging, and code decides the content.
+ *
+ * All overridable by env, which is the way to try a model without touching
+ * code. Every judgement lane sets its effort explicitly.
  */
 export const DOSSIER_MODEL = process.env.DEEPBLUE_DOSSIER_MODEL ?? "claude-opus-5-5";
-export const ENRICH_MODEL = process.env.DEEPBLUE_ENRICH_MODEL ?? "claude-opus-5-5";
+export const ENRICH_MODEL = process.env.DEEPBLUE_ENRICH_MODEL ?? "claude-sonnet-5-5";
 /**
  * Conversation readings get their own dial: tiny volume, highest stakes
  * (issue rulings move repair exposure and therefore the euros we offer;
  * escalation detection is a safety net) — downgrade with care.
  */
-export const READS_MODEL = process.env.DEEPBLUE_READS_MODEL ?? "claude-opus-5-5";
+export const READS_MODEL = process.env.DEEPBLUE_READS_MODEL ?? "claude-sonnet-5-5";
 export const DISCOVERY_MODEL = process.env.DEEPBLUE_DISCOVERY_MODEL ?? "claude-opus-5-5";
 
 /**

@@ -33,8 +33,8 @@ código en las cinco, así que el modelo refina pero nunca manda:
 | --- | --- | --- | --- |
 | `DEEPBLUE_DOSSIER_MODEL` | `claude-opus-5-5` | Opus 5.5 | Búsqueda web + salida larga; un dossier flojo estropea el veredicto de cada unidad de ese modelo durante meses |
 | `DEEPBLUE_DISCOVERY_MODEL` | `claude-opus-5-5` | Opus 5.5 | Igual: investigación, y de aquí salen las búsquedas |
-| `DEEPBLUE_ENRICH_MODEL` | `claude-opus-5-5` | Sonnet 5.5 | Mueve subnotas ±15, y eso mueve nota, alertas y euros ofrecidos |
-| `DEEPBLUE_READS_MODEL` | `claude-opus-5-5` | Sonnet 5.5 | Volumen mínimo, pero decide exposición a reparaciones |
+| `DEEPBLUE_ENRICH_MODEL` | `claude-sonnet-5-5` | Sonnet 5.5 | Mueve subnotas ±15, y eso mueve nota, alertas y euros ofrecidos. Medido contra Opus y Haiku (cambio 39) |
+| `DEEPBLUE_READS_MODEL` | `claude-sonnet-5-5` | Sonnet 5.5 | Volumen mínimo, pero decide exposición a reparaciones |
 | `DEEPBLUE_DRAFT_MODEL` | `claude-haiku-5-5` | Haiku 5.5 | Redactar no es juzgar; lo valida `isValidDraft()` y cae a texto determinista |
 
 Las cuatro vías de juicio piden esfuerzo `high` explícito (Opus 5.5 bajaría
@@ -162,6 +162,21 @@ en la página del lead), tabs por búsqueda, página Actividad, descubrimiento d
 modelos, adopción manual de anuncios con dossier-first, vía LLM activa
 (API key) y Fase 2 en Wallapop: mensajes al vendedor con aprobación, lectura
 de respuestas, contraofertas e informe de visita. 274 tests verdes.
+
+**Cambio 2026-11-17 (40) — lectura del anuncio y del chat pasan a Sonnet
+5.5 por defecto.** Decisión de Nico tras la comparativa de la nota 39. Los
+defaults del código quedan: Opus 5.5 para investigar (dossier,
+descubrimiento), Sonnet 5.5 para leer (anuncio, chat), Haiku 5.5 para
+redactar — los tres los más nuevos de su familia según `/v1/models` hoy.
+
+Fijados a propósito, sin alias "latest" (la API tampoco ofrece uno para estos
+modelos): cada versión nueva ha cambiado algo de lo que depende el código
+(el esfuerzo por defecto de Opus 5.5, Haiku 4.5 rechazando `effort`), así
+que subir de versión es un cambio medido, no uno silencioso.
+
+Ojo: `.env.local` de este PC aún fija los cinco modelos a versiones viejas y
+manda sobre el código; hasta quitar esas líneas, aquí no cambia nada. La
+decisión del `.env` queda pendiente.
 
 **Cambio 2026-11-17 (39) — comparativa de la lectura del anuncio: Haiku
 5.5, Sonnet 5.5 y Opus 5.5.** Nico propone lectura del anuncio en Haiku y

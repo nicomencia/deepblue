@@ -67,9 +67,10 @@ Set `ANTHROPIC_API_KEY` in `apps/web/.env.local` to enable:
   each shortlisted ad's free text and refine the rule-based verdict within hard
   bounds (±15 per factor, vetoes stay code). Runs once per lead, best-scored first.
 
-One model per LLM lane, each overridable by env: judgement lanes (dossier,
-enrichment, discovery, chat readings) default to `claude-opus-5-5`, message
-drafting to `claude-haiku-5-5` — see the table in docs/DEV-SETUP.md §1. Without the key
+One model per LLM lane, each overridable by env: research (dossier, discovery)
+defaults to `claude-opus-5-5`, reading (ad enrichment, chat readings) to
+`claude-sonnet-5-5`, message drafting to `claude-haiku-5-5` — see the table in
+docs/DEV-SETUP.md §1. Without the key
 every LLM feature stays off and says so.
 
 **No API key? Subscription mode.** A Claude Code session can play the LLM role on
