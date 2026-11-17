@@ -7,6 +7,13 @@
  * Wallapop's 300-char composer, and respect the informal-tone rules. Any
  * violation (or a missing API key) falls back to the deterministic composer,
  * so the system never depends on the model behaving.
+ *
+ * Questions are not the model's to write. When the base draft carries verdict
+ * questions, the model only writes the opening line and the closing; code
+ * puts the questions between them exactly as ranked and budgeted. Before
+ * this, the model rewrote the whole message and nothing checked the
+ * questions: it could reword the timing-chain question into something vaguer,
+ * drop it for length, or add one of its own (2026-11-17).
  */
 
 import { CHAT_MAX_CHARS } from "@deepblue/core";
@@ -17,6 +24,8 @@ import { getAnthropic, isLlmConfigured, messageText } from "./llm";
 const DRAFT_MODEL = process.env.DEEPBLUE_DRAFT_MODEL ?? "claude-haiku-5-5";
 
 const draftSchema = z.object({ message: z.string() });
+/** Framing only: the questions are inserted by code between the two. */
+const framingSchema = z.object({ intro: z.string(), closing: z.string() });
 
 export interface DraftRequest {
   /** Listing headline for context. */
@@ -29,6 +38,58 @@ export interface DraftRequest {
   fallback: string;
   /** Exact price that MUST appear (es-ES formatted), when negotiating. */
   mustContainPrice?: string;
+  /**
+   * The verdict questions inside `fallback`, verbatim (questionLinesOf). When
+   * present, the model writes only the framing and these go in untouched.
+   */
+  questions?: string[];
+}
+
+/** Shared rules for both modes; `scope` says what the model is writing. */
+function rules(req: DraftRequest, scope: string): string[] {
+  return [
+    "Reglas ESTRICTAS:",
+    `- ${scope}`,
+    "- Tono informal español de chat: nada de ¿ ni ¡, sin listas con guiones, sin párrafos largos.",
+    req.mustContainPrice
+      ? `- El precio "${req.mustContainPrice} €" debe aparecer EXACTAMENTE así — no lo cambies ni lo redondees.`
+      : "- No menciones ningún precio nuevo que no esté en el borrador base.",
+    "- No prometas visita incondicional si el objetivo es negociar: la visita solo condicionada al precio.",
+    "- No inventes datos del coche que no estén en la conversación.",
+    "- NUNCA afirmes disponibilidad ni planes del comprador (días, fines de semana, horarios): no los conoces. Para la visita, pide opciones al vendedor y ya confirmará el comprador.",
+    "- Responde a lo último que dijo el vendedor de forma natural (que no parezca un robot).",
+  ];
+}
+
+/** Framing mode: the model writes the line before the questions and the one after. */
+function framingPrompt(req: DraftRequest, questions: string[]): string {
+  return [
+    "Eres el comprador en un chat de Wallapop interesado en un coche de segunda mano.",
+    `Anuncio: ${req.title}`,
+    "",
+    "CONVERSACIÓN hasta ahora:",
+    req.transcript || "(ninguna: es el primer mensaje)",
+    "",
+    `OBJETIVO del siguiente mensaje: ${req.intent}`,
+    "",
+    "El mensaje tendrá esta forma, y las PREGUNTAS ya están escritas y no se tocan:",
+    "[intro]",
+    ...questions,
+    "",
+    "[closing]",
+    "",
+    "BORRADOR BASE completo, como referencia del tono y de lo que dice el cierre:",
+    req.fallback,
+    "",
+    "Escribe SOLO `intro` (saludo y una frase que lleve a las preguntas) y `closing`",
+    "(despedida; si el borrador base pide visita o propone un precio, el cierre",
+    "también). No repitas ni reformules las preguntas, y no añadas preguntas nuevas.",
+    "",
+    ...rules(
+      req,
+      `El mensaje entero, con las preguntas, no puede pasar de ${CHAT_MAX_CHARS} caracteres: intro y cierre cortos.`,
+    ),
+  ].join("\n");
 }
 
 function prompt(req: DraftRequest): string {
@@ -44,18 +105,11 @@ function prompt(req: DraftRequest): string {
     "BORRADOR BASE (puedes mejorarlo, no cambiar lo que dice):",
     req.fallback,
     "",
-    "Reglas ESTRICTAS:",
-    `- Máximo ${CHAT_MAX_CHARS} caracteres (el chat corta el resto).`,
-    "- Tono informal español de chat: nada de ¿ ni ¡, sin listas con guiones, sin párrafos largos.",
-    req.mustContainPrice
-      ? `- El precio "${req.mustContainPrice} €" debe aparecer EXACTAMENTE así — no lo cambies ni lo redondees.`
-      : "- No menciones ningún precio nuevo que no esté en el borrador base.",
-    "- No prometas visita incondicional si el objetivo es negociar: la visita solo condicionada al precio.",
-    "- No inventes datos del coche que no estén en la conversación.",
-    "- NUNCA afirmes disponibilidad ni planes del comprador (días, fines de semana, horarios): no los conoces. Para la visita, pide opciones al vendedor y ya confirmará el comprador.",
-    "- Responde a lo último que dijo el vendedor de forma natural (que no parezca un robot).",
+    ...rules(req, `Máximo ${CHAT_MAX_CHARS} caracteres (el chat corta el resto). No añadas preguntas que no estén en el borrador base.`),
   ].join("\n");
 }
+
+const questionMarks = (s: string): number => (s.match(/\?/g) ?? []).length;
 
 /**
  * The buyer's schedule is unknown to the model — a draft asserting it
@@ -79,7 +133,24 @@ function isValidDraft(text: string, req: DraftRequest): boolean {
   for (const m of text.matchAll(/([\d.]+)\s*€/g)) {
     if (!allowed.has(m[1] ?? "")) return false;
   }
+  // No questions code didn't decide: never more question marks than the base.
+  if (questionMarks(text) > questionMarks(req.fallback)) return false;
   return true;
+}
+
+/**
+ * Framing mode's own check, on top of isValidDraft for the assembled text:
+ * the intro and closing must not smuggle in questions. The closing may ask
+ * only if the base draft's closing did (a visit slot: "cuándo podría ir?").
+ */
+function isValidFraming(intro: string, closing: string, req: DraftRequest, questions: string[]): boolean {
+  if (!intro.trim() || !closing.trim()) return false;
+  if (/\n/.test(intro) || /\n\s*\n/.test(closing)) return false;
+  const baseFraming = req.fallback
+    .split("\n")
+    .filter((l) => !questions.includes(l))
+    .join("\n");
+  return questionMarks(intro) + questionMarks(closing) <= questionMarks(baseFraming);
 }
 
 /**
@@ -89,6 +160,7 @@ function isValidDraft(text: string, req: DraftRequest): boolean {
  */
 export async function draftSellerProse(req: DraftRequest): Promise<{ text: string; model: string }> {
   if (!isLlmConfigured()) return { text: req.fallback, model: "deterministic" };
+  if (req.questions?.length) return draftFraming(req, req.questions);
   try {
     const client = getAnthropic();
     // Haiku 5.5 thinks by default and the thinking counts against the cap:
@@ -102,6 +174,32 @@ export async function draftSellerProse(req: DraftRequest): Promise<{ text: strin
     const { message } = draftSchema.parse(JSON.parse(messageText(msg)));
     const text = message.trim();
     return isValidDraft(text, req)
+      ? { text, model: DRAFT_MODEL }
+      : { text: req.fallback, model: "deterministic" };
+  } catch {
+    return { text: req.fallback, model: "deterministic" };
+  }
+}
+
+/**
+ * Framing mode: the model writes intro + closing, code assembles the message
+ * with the questions verbatim in between. Same fallback contract: any
+ * failure or violation returns the deterministic draft unchanged.
+ */
+async function draftFraming(
+  req: DraftRequest,
+  questions: string[],
+): Promise<{ text: string; model: string }> {
+  try {
+    const msg = await getAnthropic().messages.create({
+      model: DRAFT_MODEL,
+      max_tokens: 2_000,
+      output_config: { effort: "low", format: zodOutputFormat(framingSchema) },
+      messages: [{ role: "user", content: framingPrompt(req, questions) }],
+    });
+    const { intro, closing } = framingSchema.parse(JSON.parse(messageText(msg)));
+    const text = [intro.trim(), ...questions, "", closing.trim()].join("\n");
+    return isValidFraming(intro, closing, req, questions) && isValidDraft(text, req)
       ? { text, model: DRAFT_MODEL }
       : { text: req.fallback, model: "deterministic" };
   } catch {

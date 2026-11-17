@@ -9,6 +9,7 @@ import {
   computeOfferEur,
   extractImportSignals,
   questionBudget,
+  questionLinesOf,
   searchDistanceKm,
   respondToCounterEur,
   type IssueAssessment,
@@ -269,6 +270,9 @@ export default async function LeadDetail({
                     ? "agradecer las respuestas y hacer las preguntas del borrador base"
                     : "proponer el precio del borrador base justificado con los riesgos pendientes",
             fallback: suggestion,
+            // The ranked, budgeted questions go in verbatim; Haiku only
+            // writes the lines around them.
+            questions: questionLinesOf(suggestion, lead.verdict?.openQuestions ?? []),
             mustContainPrice: counterDecision
               ? counterDecision.priceEur.toLocaleString("es-ES")
               : !followUp && offerEur !== null

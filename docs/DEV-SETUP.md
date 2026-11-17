@@ -163,6 +163,34 @@ modelos, adopción manual de anuncios con dossier-first, vía LLM activa
 (API key) y Fase 2 en Wallapop: mensajes al vendedor con aprobación, lectura
 de respuestas, contraofertas e informe de visita. 274 tests verdes.
 
+**Cambio 2026-11-17 (37) — Haiku ya no toca las preguntas.** Nico: "que
+Haiku no modifique las preguntas". Lo podía hacer: el botón "Generar" pasa el
+borrador determinista a Haiku para que suene natural, y Haiku reescribía el
+mensaje ENTERO. El código solo comprobaba precio, longitud y tono, así que
+podía suavizar la pregunta de la cadena hasta dejarla en nada, quitarla por
+espacio o añadir una suya — y el orden y el presupuesto de las notas 35–36
+no valían nada en ese camino.
+
+Ahora, si el borrador lleva preguntas del veredicto, Haiku escribe SOLO dos
+cosas: `intro` (saludo y frase que lleva a las preguntas) y `closing`
+(despedida, o la petición de visita/precio si el borrador la lleva). El
+código monta el mensaje con las preguntas exactas entre medias
+(`questionLinesOf` las saca del borrador). Validaciones nuevas: la intro y
+el cierre no pueden traer más "?" que el texto fijo del borrador base (no
+cuelan preguntas), y sin preguntas del veredicto (recordatorio, oferta,
+contraoferta) el mensaje entero tampoco puede tener más preguntas que el
+base. Cualquier fallo → borrador determinista intacto, como antes.
+
+`lib/draft-message.test.ts` (nuevo, 6 tests) lo prueba con el cliente
+simulado. NO verificado contra Haiku real: la llamada desde este PC da
+**401 invalid x-api-key** — la clave de `apps/web/.env.local` está muerta.
+Consecuencia más allá de esto: `isLlmConfigured()` mira solo que la clave
+exista, así que aquí todas las vías de LLM fallan y la portada esconde cada
+lead nuevo tras "analizándose" (la nota 26 al menos impide pagar reintentos
+sin techo). Además `.env.local` fija `DEEPBLUE_DRAFT_MODEL` a
+`claude-haiku-4-5-20251001`, que manda sobre el `claude-haiku-5-5` del
+código. 258 + 56 tests verdes.
+
 **Cambio 2026-11-17 (36) — cuántas preguntas depende de la duda, no de la
 cortesía.** La segunda mitad de la nota de PROJECT.md ("message economy"),
 que la 35 dejó para después. Con el orden ya arreglado, el número fijo de 3

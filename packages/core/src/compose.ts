@@ -293,6 +293,16 @@ const NUDGES = [
  * never a new batch of questions on top of unanswered ones (user rule,
  * 2026-07-17). Seeded like everything else: same lead, same nudge.
  */
+/**
+ * The lines of a composed message that are verdict questions, verbatim and in
+ * order. Lets the prose lane keep them untouched: it rewrites the framing
+ * around them, never the questions themselves.
+ */
+export function questionLinesOf(message: string, openQuestions: string[]): string[] {
+  const wanted = new Set(openQuestions.map(asQuestion).filter(Boolean));
+  return message.split("\n").filter((line) => wanted.has(line));
+}
+
 export function composeNudgeMessage(seed: string): string {
   return seedPick(NUDGES, `${seed}|nudge`);
 }
