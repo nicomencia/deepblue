@@ -169,21 +169,28 @@ function constraintRules(profile: DiscoveryProfile): string {
   return rules.length ? `\nRestricciones duras del comprador:\n${rules.join("\n")}` : "";
 }
 
-/** One research turn; loops while the server pauses long tool interactions. */
-async function draftReport(profile: DiscoveryProfile): Promise<DiscoveryReport> {
+/**
+ * One research turn; loops while the server pauses long tool interactions.
+ * `model` defaults to the configured lane; exported so a model comparison
+ * runs exactly this code with another model, without saving anything.
+ */
+export async function draftReport(
+  profile: DiscoveryProfile,
+  model: string = DISCOVERY_MODEL,
+): Promise<DiscoveryReport> {
   const client = getAnthropic();
   let messages: Anthropic.Beta.Messages.BetaMessageParam[] = [{ role: "user", content: prompt(profile) }];
 
   for (let turn = 0; turn < MAX_TURNS; turn++) {
     const msg = await client.beta.messages
       .stream({
-        model: DISCOVERY_MODEL,
+        model,
         // Room for thinking plus the report; only produced tokens are billed.
         max_tokens: 64_000,
         thinking: { type: "adaptive" },
         tools: [{ type: "web_search_20260318", name: "web_search", max_uses: MAX_SEARCHES }],
         output_config: { effort: "high", format: betaZodOutputFormat(discoveryResearchSchema) },
-        ...refusalFallback(DISCOVERY_MODEL),
+        ...refusalFallback(model),
         messages,
       })
       .finalMessage();

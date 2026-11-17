@@ -163,6 +163,38 @@ modelos, adopción manual de anuncios con dossier-first, vía LLM activa
 (API key) y Fase 2 en Wallapop: mensajes al vendedor con aprobación, lectura
 de respuestas, contraofertas e informe de visita. 274 tests verdes.
 
+**Cambio 2026-11-17 (43) — comparativa de descubrimiento: Opus 5.5 frente
+a Fable 5.2. Aquí Fable sí gana.** Mismo método que la 42 (`draftReport`
+con parámetro de modelo, nada guardado), con el perfil real del purista de
+findes: propulsión, < 20.000 €, "comportamiento de kart", aire acondicionado
+imprescindible, "no coches modernos". Referencia: el informe de julio (sesión
+de Claude Code: MX-5, Boxster, MR2).
+
+| | Opus 5.5 | Fable 5.2 |
+| --- | --- | --- |
+| Tiempo | 93 s | 305 s |
+| Coste en tokens | $0,43 | hasta $4,01 (leyó 402.500 tokens de páginas) |
+| Búsquedas / fuentes | 12 / 8 | 12 / 34 |
+| Recomienda | MX-5 NC, Boxster 986 (S 3.2 y 2.7), Z4 E85, BMW 130i | MR2 W30, MX-5 NB, Boxster 986 2.7, Z3 |
+
+Opus mete dos que chocan con el perfil: el Z4 E85, del que él mismo dice
+que pierde en tacto de dirección (eléctrica) frente a "sensaciones al
+volante", y el 130i, un compacto de cuatro plazas y ~1.450 kg frente a
+"kart". Y no menciona el MR2 ni para descartarlo, cuando es el más kart que
+cabe en el presupuesto. Fable recomienda cuatro biplazas ligeros de
+1997-2006, coherentes con "no moderno"; comprueba en cada uno el aire
+acondicionado (que es imprescindible) — los 986 básicos y muchos NA no lo
+traían; saca las horquillas de precio de anuncios españoles vistos y marca
+qué afirmaciones son conocimiento general sin contrastar. Discrepan en un
+dato verificable: Opus pone el Boxster S 3.2 en presupuesto (cita ~18.000 €
+en Sexta Marcha); Fable lo descarta (S 986 vistos a 19.000-31.900 €). No lo
+he comprobado.
+
+Conclusión: en descubrimiento, donde el trabajo es juicio sobre encaje y no
+recopilar fallos, Fable dio un informe claramente mejor. Cuesta ~$4 y 5 min
+por análisis, que se lanza a mano una vez por decisión de compra. Muestra de
+uno. Decisión del modelo por defecto, pendiente de Nico.
+
 **Cambio 2026-11-17 (42) — comparativa de dossier: Opus 5.5 frente a Fable
 5.2.** Nico: ¿usar Fable en alguna vía? La única candidata era la
 investigación de dossiers (calidad alta, volumen bajo). Medido con el código
