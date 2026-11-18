@@ -178,7 +178,8 @@ export default async function DiscoveryPage() {
           </p>
         </fieldset>
 
-        <div style={grid2}>
+        {/* One row each: side by side, the examples in the placeholders were cut off. */}
+        <div style={{ display: "grid", gap: "0.6rem" }}>
           <label style={lbl}>
             Imprescindible (separa con comas)
             <input name="mustHaves" placeholder="Isofix, aire acondicionado, bola de remolque…" style={input} />
