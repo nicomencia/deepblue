@@ -4,6 +4,14 @@ import { desc, ne } from "drizzle-orm";
 import Link from "next/link";
 import { getDb } from "../../lib/db";
 import { briefNameForRecommendation } from "../../lib/discovery";
+import {
+  BODY_OPTIONS,
+  KM_BANDS,
+  MAX_TOP_PRIORITIES,
+  PRIORITY_OPTIONS,
+  SEAT_OPTIONS,
+} from "../../lib/discovery-form";
+import { SEARCH_CENTERS } from "../../lib/search-area";
 import { modelPhotoKey, resolveModelPhotos } from "../../lib/model-photo";
 import { isLlmConfigured } from "../../lib/llm";
 import { fmtDate, fmtEur } from "../../lib/ui";
@@ -70,151 +78,215 @@ export default async function DiscoveryPage() {
         en una búsqueda con un clic.
       </p>
 
-      {/* Intake form */}
-      <ActionForm action={createDiscovery} style={{ ...card, display: "grid", gap: "0.6rem" }}>
-        <strong>Nuevo perfil de búsqueda</strong>
+      {/* Intake form. Free text where the buyer explains themselves; dropdowns
+          and checkboxes for the few facts the advisor cannot do without. */}
+      <ActionForm action={createDiscovery} style={{ ...card, display: "grid", gap: "0.9rem" }}>
+        <div>
+          <strong>Nuevo perfil de búsqueda</strong>
+          <p style={{ ...hint, margin: "0.2rem 0 0" }}>
+            Cuanto más cuentes con tus palabras, mejor afina. Lo marcado con * es obligatorio.
+          </p>
+        </div>
+
         <div style={grid2}>
           <label style={lbl}>
             Presupuesto (€) *
-            <input name="budgetEur" required placeholder="8.000" style={input} />
+            <input name="budgetEur" required inputMode="numeric" placeholder="20.000" style={input} />
           </label>
           <label style={lbl}>
-            Km al año
-            <input name="kmPerYear" placeholder="12.000" style={input} />
+            Kilómetros al año *
+            <select name="kmBand" required defaultValue="" style={input}>
+              <option value="" disabled>
+                Elige…
+              </option>
+              {KM_BANDS.map((b) => (
+                <option key={b.value} value={b.value}>
+                  {b.label}
+                </option>
+              ))}
+            </select>
           </label>
         </div>
+
         <label style={lbl}>
           ¿Para qué lo quieres? *
-          <input
+          <textarea
             name="usage"
             required
-            placeholder="diario ciudad + viajes de finde, algo divertido…"
+            rows={4}
+            placeholder="Uso diario, autopista o ciudad, niños, montaña, viajes largos, aparcar en la calle… Cuéntalo como se lo contarías a un amigo que sabe de coches."
             style={input}
           />
         </label>
-        <div style={grid2}>
+
+        <div style={grid3}>
           <label style={lbl}>
-            Plazas mínimas
-            <input name="seatsMin" placeholder="4" style={input} />
+            Plazas *
+            <select name="seats" required defaultValue="" style={input}>
+              <option value="" disabled>
+                Elige…
+              </option>
+              {SEAT_OPTIONS.map((o) => (
+                <option key={o.value} value={o.value}>
+                  {o.label}
+                </option>
+              ))}
+            </select>
           </label>
           <label style={lbl}>
             Cambio
-            <select name="gearbox" style={input} defaultValue="any">
-              <option value="any">Indiferente</option>
+            <select name="gearbox" defaultValue="any" style={input}>
+              <option value="any">Me da igual</option>
               <option value="manual">Manual</option>
               <option value="automatic">Automático</option>
             </select>
           </label>
+          <label style={lbl}>
+            Tracción
+            <select name="drivetrain" defaultValue="any" style={input}>
+              <option value="any">Me da igual</option>
+              <option value="4x4">Necesito 4x4</option>
+            </select>
+          </label>
         </div>
-        <fieldset style={{ border: "none", padding: 0, margin: 0, display: "flex", gap: "1rem", flexWrap: "wrap" }}>
-          <span style={{ fontSize: "0.85rem", color: "var(--ink-muted)" }}>Combustible:</span>
-          {(["gasoline", "diesel", "hybrid", "electric"] as const).map((f) => (
-            <label key={f} style={{ fontSize: "0.85rem" }}>
-              <input type="checkbox" name="fuel" value={f} />{" "}
-              {{ gasoline: "Gasolina", diesel: "Diésel", hybrid: "Híbrido", electric: "Eléctrico" }[f]}
-            </label>
-          ))}
+
+        <fieldset style={fieldset}>
+          <legend style={legend}>Combustible — sin marcar, me da igual</legend>
+          <div style={chips}>
+            {(["gasoline", "diesel", "hybrid", "electric"] as const).map((f) => (
+              <label key={f} style={chip}>
+                <input type="checkbox" name="fuel" value={f} />{" "}
+                {{ gasoline: "Gasolina", diesel: "Diésel", hybrid: "Híbrido", electric: "Eléctrico" }[f]}
+              </label>
+            ))}
+          </div>
         </fieldset>
+
+        <fieldset style={fieldset}>
+          <legend style={legend}>Carrocerías que te valen — sin marcar, cualquiera</legend>
+          <div style={chips}>
+            {BODY_OPTIONS.map((b) => (
+              <label key={b.value} style={chip}>
+                <input type="checkbox" name="body" value={b.value} /> {b.label}
+              </label>
+            ))}
+          </div>
+        </fieldset>
+
+        <fieldset style={fieldset}>
+          <legend style={legend}>
+            Lo que más te importa * — marca de 1 a {MAX_TOP_PRIORITIES}: son las que deciden
+          </legend>
+          <div style={chips}>
+            {PRIORITY_OPTIONS.map((p) => (
+              <label key={p} style={chip}>
+                <input type="checkbox" name="topPriority" value={p} /> {p.charAt(0).toUpperCase() + p.slice(1)}
+              </label>
+            ))}
+          </div>
+          <label style={{ ...lbl, marginTop: "0.5rem" }}>
+            ¿Algo más que te importe? (separa con comas)
+            <input name="otherPriorities" placeholder="buena insonorización, etiqueta ECO, que sea bonito…" style={input} />
+          </label>
+        </fieldset>
+
         <div style={grid2}>
           <label style={lbl}>
-            Prioridades (una por línea)
-            <textarea name="priorities" rows={3} placeholder={"fiabilidad\ndiversión\ncoste de uso"} style={input} />
+            Imprescindible (separa con comas)
+            <input name="mustHaves" placeholder="Isofix, aire acondicionado, bola de remolque…" style={input} />
           </label>
           <label style={lbl}>
-            Imprescindibles (una por línea)
-            <textarea name="mustHaves" rows={3} placeholder={"etiqueta C o mejor\nIsofix"} style={input} />
+            No lo quiero (separa con comas)
+            <input name="dealBreakers" placeholder="nada de SUV, cambio CVT, coches de más de 15 años…" style={input} />
           </label>
         </div>
+
         <label style={lbl}>
-          Descartes (una por línea)
-          <textarea name="dealBreakers" rows={2} placeholder={"nada de SUV\nni renting ni compraventas"} style={input} />
+          Coches que has tenido o probado: qué te gustó y qué no
+          <textarea
+            name="notes"
+            rows={3}
+            placeholder="Tuve un Golf y me encantó cómo iba; probé un SUV y me pareció un camión en curvas…"
+            style={input}
+          />
         </label>
 
-        {/* Optional limits. They steer the recommendation AND are inherited by
-            every búsqueda created from it, so they are not typed twice. */}
-        <fieldset style={{ border: "1px solid var(--border)", borderRadius: 6, padding: "0.6rem 0.8rem", display: "grid", gap: "0.6rem" }}>
-          <legend style={{ fontSize: "0.8rem", color: "var(--ink-muted)", padding: "0 0.3rem" }}>
-            Límites (opcional) — afinan la recomendación y se heredan en la búsqueda
-          </legend>
-          <div style={grid2}>
-            <label style={lbl}>
-              Año mínimo
-              <input name="yearMin" placeholder="2010" style={input} />
-            </label>
-            <label style={lbl}>
-              Año máximo
-              <input name="yearMax" placeholder="2018" style={input} />
-            </label>
+        {/* Everything else is optional and folded away: limits that are real
+            filters (inherited by every búsqueda created from this profile) and
+            hunt settings that don't change the recommendation. */}
+        <details style={fieldset}>
+          <summary style={{ ...legend, cursor: "pointer" }}>Más filtros (opcional)</summary>
+          <div style={{ display: "grid", gap: "0.6rem", marginTop: "0.6rem" }}>
+            <div style={grid3}>
+              <label style={lbl}>
+                Año mínimo
+                <input name="yearMin" inputMode="numeric" placeholder="2015" style={input} />
+              </label>
+              <label style={lbl}>
+                Año máximo
+                <input name="yearMax" inputMode="numeric" placeholder="2022" style={input} />
+              </label>
+              <label style={lbl}>
+                Km máximos
+                <input name="kmMax" inputMode="numeric" placeholder="150.000" style={input} />
+              </label>
+            </div>
+            <div style={grid3}>
+              <label style={lbl}>
+                Etiqueta DGT mínima
+                <select name="ecoLabelMin" defaultValue="" style={input}>
+                  <option value="">Me da igual</option>
+                  {ECO_LABELS.map((e) => (
+                    <option key={e} value={e}>
+                      {e === "0" ? "0 (cero emisiones)" : e}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label style={lbl}>
+                Tolerancia al riesgo
+                <select name="riskTolerance" defaultValue="medium" style={input}>
+                  <option value="low">Baja — prima la fiabilidad</option>
+                  <option value="medium">Media</option>
+                  <option value="high">Alta — prima el precio</option>
+                </select>
+              </label>
+              <label style={lbl}>
+                Tipo de vendedor
+                <select name="sellerPreference" defaultValue="prefer_private" style={input}>
+                  <option value="prefer_private">Prefiero particulares</option>
+                  <option value="any">Me da igual</option>
+                </select>
+              </label>
+            </div>
+            <div style={grid2}>
+              <label style={lbl}>
+                Buscar cerca de
+                <select name="center" defaultValue="" style={input}>
+                  <option value="">Toda España</option>
+                  {SEARCH_CENTERS.map((c) => (
+                    <option key={c.key} value={c.key}>
+                      {c.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label style={lbl}>
+                Radio (km) — solo si eliges ciudad
+                <input name="radiusKm" inputMode="numeric" placeholder="150" style={input} />
+              </label>
+            </div>
+            <div style={{ ...chips, fontSize: "0.85rem" }}>
+              <label>
+                <input type="checkbox" name="noRhd" value="1" /> Descartar volante a la derecha
+              </label>
+              <label>
+                <input type="checkbox" name="requireSpanishPlates" value="1" /> Solo matriculados en España
+              </label>
+            </div>
           </div>
-          <div style={grid2}>
-            <label style={lbl}>
-              Km máximos
-              <input name="kmMax" placeholder="150.000" style={input} />
-            </label>
-            <label style={lbl}>
-              Etiqueta DGT mínima
-              <select name="ecoLabelMin" style={input} defaultValue="">
-                <option value="">Indiferente</option>
-                {ECO_LABELS.map((e) => (
-                  <option key={e} value={e}>
-                    {e === "0" ? "0 (cero emisiones)" : e}
-                  </option>
-                ))}
-              </select>
-            </label>
-          </div>
-          <div style={{ display: "flex", gap: "1.2rem", flexWrap: "wrap", fontSize: "0.85rem" }}>
-            <label>
-              <input type="checkbox" name="noRhd" value="1" /> Descartar volante a la derecha
-            </label>
-            <label>
-              <input type="checkbox" name="requireSpanishPlates" value="1" /> Solo matriculados en España
-            </label>
-          </div>
-        </fieldset>
+        </details>
 
-        {/* Search settings: they don't change WHICH models get recommended,
-            only how the resulting búsqueda hunts. Kept out of the prompt. */}
-        <fieldset style={{ border: "1px solid var(--border)", borderRadius: 6, padding: "0.6rem 0.8rem", display: "grid", gap: "0.6rem" }}>
-          <legend style={{ fontSize: "0.8rem", color: "var(--ink-muted)", padding: "0 0.3rem" }}>
-            Ajustes de la búsqueda (opcional) — no cambian la recomendación
-          </legend>
-          <div style={grid2}>
-            <label style={lbl}>
-              Tolerancia al riesgo
-              <select name="riskTolerance" style={input} defaultValue="medium">
-                <option value="low">Baja — prima la fiabilidad</option>
-                <option value="medium">Media</option>
-                <option value="high">Alta — prima el precio</option>
-              </select>
-            </label>
-            <label style={lbl}>
-              Tipo de vendedor
-              <select name="sellerPreference" style={input} defaultValue="prefer_private">
-                <option value="prefer_private">Prefiero particulares</option>
-                <option value="any">Indiferente</option>
-              </select>
-            </label>
-          </div>
-          <label style={lbl}>
-            Radio de búsqueda (km) — vacío = toda España
-            <input name="radiusKm" placeholder="toda España" style={input} />
-          </label>
-          <div style={grid2}>
-            <label style={lbl}>
-              Latitud (solo si pones radio)
-              <input name="lat" placeholder="40.4168" style={input} />
-            </label>
-            <label style={lbl}>
-              Longitud (solo si pones radio)
-              <input name="lon" placeholder="-3.7038" style={input} />
-            </label>
-          </div>
-        </fieldset>
-        <label style={lbl}>
-          Notas libres
-          <textarea name="notes" rows={2} placeholder="tuve un Golf y me encantó, aparco en la calle…" style={input} />
-        </label>
         <div>
           <SubmitButton label="Crear perfil" pendingLabel="⏳ Creando…" style={btn} />
         </div>
@@ -225,7 +297,7 @@ export default async function DiscoveryPage() {
         <div key={s.id} style={card}>
           <div style={{ display: "flex", justifyContent: "space-between", gap: "0.5rem", flexWrap: "wrap" }}>
             <strong>
-              {fmtEur(s.profile.budgetEur)} · {s.profile.usage}
+              {fmtEur(s.profile.budgetEur)} · {s.profile.usage.length > 90 ? `${s.profile.usage.slice(0, 90)}…` : s.profile.usage}
             </strong>
             <span style={{ color: "var(--ink-muted)", fontSize: "0.85rem" }}>
               {fmtDate(s.createdAt)}
@@ -375,6 +447,38 @@ const grid2: React.CSSProperties = {
   gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))",
   gap: "0.6rem",
 };
+const grid3: React.CSSProperties = {
+  display: "grid",
+  gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))",
+  gap: "0.6rem",
+};
+const fieldset: React.CSSProperties = {
+  border: "1px solid var(--border)",
+  borderRadius: 6,
+  padding: "0.6rem 0.8rem",
+  margin: 0,
+};
+const legend: React.CSSProperties = {
+  fontSize: "0.85rem",
+  color: "var(--ink-muted)",
+  padding: "0 0.3rem",
+};
+const chips: React.CSSProperties = {
+  display: "flex",
+  flexWrap: "wrap",
+  gap: "0.4rem 0.6rem",
+};
+const chip: React.CSSProperties = {
+  display: "inline-flex",
+  alignItems: "center",
+  gap: "0.3rem",
+  padding: "0.25rem 0.6rem",
+  border: "1px solid var(--border)",
+  borderRadius: 999,
+  fontSize: "0.85rem",
+  cursor: "pointer",
+};
+const hint: React.CSSProperties = { fontSize: "0.8rem", color: "var(--ink-muted)" };
 const lbl: React.CSSProperties = {
   display: "grid",
   gap: "0.25rem",

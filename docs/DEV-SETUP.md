@@ -163,6 +163,41 @@ modelos, adopción manual de anuncios con dossier-first, vía LLM activa
 (API key) y Fase 2 en Wallapop: mensajes al vendedor con aprobación, lectura
 de respuestas, contraofertas e informe de visita. 274 tests verdes.
 
+**Cambio 2026-11-18 (47) — formulario de descubrimiento: más sitio para
+escribir y lo esencial forzado con desplegables y casillas.** Nico: "no se
+siente fácil". Pedía unas veinte cosas a la vez, tres listas había que
+escribirlas "una por línea" y el radio pedía latitud y longitud. Ahora:
+
+- Lo esencial arriba: presupuesto y un cuadro grande "¿Para qué lo
+  quieres?" para contarlo con sus palabras.
+- Forzado con desplegable (con salida "No lo sé" / "Me da igual"): km al
+  año por tramos (nadie sabe su cifra exacta, todos saben el tramo), plazas.
+  Cambio y una tracción nueva ("Necesito 4x4" → imprescindible) también por
+  desplegable.
+- Casillas: combustible y una nueva de carrocerías que le valen
+  (`bodyStyles`, regla en el prompt).
+- "Lo que más te importa": diez prioridades habituales, marcar de 1 a 3
+  (`topPriorities`), más una línea libre para el resto. Arregla lo de la
+  nota 46: ocho prioridades en orden se leían como ocho pesos y la primera
+  ganaba siempre. El prompt usa ahora las clave para el orden y el resto
+  solo desempata.
+- Imprescindible / No lo quiero: una línea cada uno, con comas (también
+  valen líneas o punto y coma).
+- "Coches que has tenido o probado: qué te gustó y qué no" — alimenta la
+  regla de notas de la 46.
+- Todo lo demás (años, km máx., etiqueta, riesgo, vendedor, volante,
+  matrícula, radio) plegado en "Más filtros (opcional)", y el radio se
+  centra en una ciudad de una lista de 32 (`SEARCH_CENTERS` en
+  `lib/search-area.ts`) en vez de coordenadas. El formulario de búsquedas
+  sigue aceptando lat/lon.
+
+El análisis del formulario sale de la acción a `lib/discovery-form.ts`,
+puro y con 6 tests (campos forzados, tope de 3, valores fuera de la lista
+ignorados, 4x4, carrocerías, ciudad). Los perfiles antiguos siguen siendo
+válidos: los dos campos nuevos son opcionales. Verificado en el servidor
+local: la página carga con todos los campos y las fichas existentes; el
+envío real no se ha probado en un navegador. 258 + 68 tests verdes.
+
 **Cambio 2026-11-18 (46) — descubrimiento: orden, capacidades medidas,
 notas y descartes contrastados.** Nico estudió a fondo el caso del familiar
 4x4 y dio su propia lista: V60 Cross Country > A4 Allroad > Skodas > Outback

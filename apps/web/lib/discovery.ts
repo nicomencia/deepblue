@@ -135,10 +135,11 @@ Reglas estrictas:
 Antes de dar el informe por bueno, comprueba estas cosas:
 - ORDEN: "recommendations" va de mejor a peor PARA ESTE comprador, no por
   orden de búsqueda. La primera es tu recomendación principal y el "headline"
-  la nombra y dice por qué gana. Un modelo que pierde en alguna de las tres
-  primeras prioridades no puede ir primero.
+  la nombra y dice por qué gana. Un modelo que pierde en alguna de las
+  prioridades CLAVE ("topPriorities"; si no hay, las tres primeras de
+  "priorities") no puede ir primero. Las demás prioridades desempatan.
 - Las PRIORIDADES deciden qué entra, no adornan. Cada recomendación tiene que
-  servir a las primeras prioridades del perfil; si tu propio "whyFits" admite
+  servir a las prioridades clave del perfil; si tu propio "whyFits" admite
   que un modelo pierde justo en una de ellas, no es una recomendación: va a
   "discarded" con ese motivo. Cuando las prioridades hablan de agilidad o de
   tacto ("kart", "ligero", "sensaciones"), el peso, las plazas y el tipo de
@@ -183,6 +184,20 @@ ${constraintRules(profile)}`;
  * a brief that inherits the same limits and then kills or downgrades every ad
  * it finds. Naming them costs a few tokens and saves a whole research run.
  */
+/** Body styles as the buyer reads them, for the prompt. */
+const BODY_LABEL_ES: Record<BodyStyle, string> = {
+  hatchback: "compacto o utilitario",
+  sedan: "berlina",
+  estate: "familiar",
+  coupe: "coupé",
+  convertible: "descapotable",
+  roadster: "roadster",
+  MPV: "monovolumen",
+  SUV: "SUV",
+  pickup: "pick-up",
+  van: "furgoneta",
+};
+
 function constraintRules(profile: DiscoveryProfile): string {
   const rules: string[] = [];
   // Must-haves are per CAR, not per model name: "aire acondicionado" was a
@@ -193,6 +208,18 @@ function constraintRules(profile: DiscoveryProfile): string {
       `- Imprescindibles: ${profile.mustHaves.join(", ")}. Compruébalos en CADA recomendación, ` +
         "en esa generación y versión: no todas las unidades los traen. Si solo algunas los llevan, " +
         "dilo en 'versions' (qué acabados sí) o en 'watchouts' (cómo verificarlo en la visita).",
+    );
+  }
+  if (profile.topPriorities?.length) {
+    rules.push(
+      `- Prioridades CLAVE, elegidas por el comprador: ${profile.topPriorities.join(", ")}. ` +
+        "Son las que deciden el orden; el resto de 'priorities' solo desempata.",
+    );
+  }
+  if (profile.bodyStyles?.length) {
+    rules.push(
+      `- Carrocerías que le valen: ${profile.bodyStyles.map((b) => BODY_LABEL_ES[b]).join(", ")}. ` +
+        "Recomienda solo de esas. Si el mejor coche para él es de otra, va a 'discarded' diciendo por qué no entra.",
     );
   }
   if (profile.dealBreakers.length > 0) {

@@ -1,10 +1,8 @@
 "use server";
 
-import { discoveryProfileSchema, ECO_LABELS, type DiscoveryProfile } from "@deepblue/core";
 import { briefs, discoveries, events, users } from "@deepblue/db";
 import { and, eq, ne } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
-import { z } from "zod";
 import { actionError, actionOk, type ActionResult } from "../../lib/action-result";
 import { startBriefHunt } from "../../lib/brief-hunt";
 import { getDb } from "../../lib/db";
@@ -14,7 +12,7 @@ import {
   recommendationToBrief,
 } from "../../lib/discovery";
 import { isLlmConfigured } from "../../lib/llm";
-import { searchArea } from "../../lib/search-area";
+import { parseDiscoveryForm } from "../../lib/discovery-form";
 
 // Single-user phase: everything belongs to the dev user (Firebase Auth later).
 async function resolveUserId(): Promise<string> {
@@ -30,17 +28,6 @@ async function resolveUserId(): Promise<string> {
   return user.id;
 }
 
-const num = (v: FormDataEntryValue | null): number | undefined => {
-  const n = Number(String(v ?? "").replace(/[.\s]/g, ""));
-  return Number.isFinite(n) && n > 0 ? n : undefined;
-};
-
-const lines = (v: FormDataEntryValue | null): string[] =>
-  String(v ?? "")
-    .split("\n")
-    .map((s) => s.trim())
-    .filter(Boolean);
-
 /**
  * Returns its outcome instead of throwing: budget and usage are typed by hand,
  * and a recoverable typo ("ocho mil") deserves a line under the button, not
@@ -54,57 +41,10 @@ export async function createDiscovery(
   const db = await getDb();
   const userId = await resolveUserId();
 
-  const budgetEur = num(formData.get("budgetEur"));
-  const usage = String(formData.get("usage") ?? "").trim();
-  if (!budgetEur) {
-    return actionError("Indica un presupuesto en números, por ejemplo 8.000");
-  }
-  if (!usage) return actionError("Indica para qué quieres el coche");
-
-  const profile: DiscoveryProfile = discoveryProfileSchema.parse({
-    budgetEur,
-    usage,
-    kmPerYear: num(formData.get("kmPerYear")),
-    seatsMin: num(formData.get("seatsMin")),
-    fuelPreference: z
-      .array(z.enum(["gasoline", "diesel", "hybrid", "electric"]))
-      .catch([])
-      .parse(formData.getAll("fuel").map(String)),
-    gearbox: z
-      .enum(["manual", "automatic", "any"])
-      .catch("any")
-      .parse(String(formData.get("gearbox") ?? "any")),
-    priorities: lines(formData.get("priorities")),
-    mustHaves: lines(formData.get("mustHaves")),
-    dealBreakers: lines(formData.get("dealBreakers")),
-    notes: String(formData.get("notes") ?? "").trim() || undefined,
-    yearMin: num(formData.get("yearMin")),
-    yearMax: num(formData.get("yearMax")),
-    kmMax: num(formData.get("kmMax")),
-    // Unchecked boxes are absent from FormData: absent means "not required",
-    // never `false` stored as an opinion the user didn't express.
-    noRhd: formData.get("noRhd") ? true : undefined,
-    requireSpanishPlates: formData.get("requireSpanishPlates") ? true : undefined,
-    ecoLabelMin: z
-      .enum(ECO_LABELS)
-      .optional()
-      .catch(undefined)
-      .parse(String(formData.get("ecoLabelMin") ?? "") || undefined),
-    location: searchArea(formData),
-    riskTolerance: z
-      .enum(["low", "medium", "high"])
-      .catch("medium")
-      .parse(String(formData.get("riskTolerance") ?? "medium")),
-    sellerPreference: z
-      .enum(["any", "prefer_private"])
-      .catch("prefer_private")
-      .parse(String(formData.get("sellerPreference") ?? "prefer_private")),
-  });
-  if (profile.fuelPreference?.length === 0) delete profile.fuelPreference;
-
-  if (profile.yearMin && profile.yearMax && profile.yearMin > profile.yearMax) {
-    return actionError("El año mínimo no puede ser mayor que el máximo");
-  }
+  const parsed = parseDiscoveryForm(formData);
+  if (!parsed.ok) return actionError(parsed.error);
+  const { profile } = parsed;
+  const { budgetEur, usage } = profile;
 
   await db.insert(discoveries).values({ userId, profile });
   await db.insert(events).values({

@@ -683,6 +683,15 @@ export const discoveryProfileSchema = z.object({
   gearbox: z.enum(["manual", "automatic", "any"]).optional(),
   /** Ranked what-matters: "fiabilidad", "diversión", "coste de uso"… */
   priorities: z.array(z.string()),
+  /**
+   * The 1-3 priorities that DECIDE, picked by the buyer. A list of eight in
+   * typed order was read as eight ranked weights, so the first one won every
+   * tie: a buyer who listed "fiabilidad" first got the most reliable car, not
+   * the one they would choose (live, 2026-11-18). Also in `priorities`.
+   */
+  topPriorities: z.array(z.string()).optional(),
+  /** Bodies the buyer accepts; absent = any. A recommendation stays inside them. */
+  bodyStyles: z.array(z.enum(BODY_STYLES)).optional(),
   mustHaves: z.array(z.string()),
   dealBreakers: z.array(z.string()),
   notes: z.string().optional(),
