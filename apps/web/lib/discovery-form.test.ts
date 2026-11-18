@@ -16,7 +16,7 @@ const minimal = {
 
 describe("parseDiscoveryForm", () => {
   it("turns the dropdowns and checkboxes into the profile the advisor reads", () => {
-    const r = parseDiscoveryForm(form({ ...minimal, otherPriorities: "insonorización, etiqueta ECO" }));
+    const r = parseDiscoveryForm(form(minimal));
     expect(r.ok).toBe(true);
     if (!r.ok) return;
     expect(r.profile).toMatchObject({
@@ -24,8 +24,7 @@ describe("parseDiscoveryForm", () => {
       kmPerYear: 25_000,
       seatsMin: 5,
       topPriorities: ["fiabilidad", "comodidad en viaje"],
-      // Key ones first, then the rest, so order still means importance.
-      priorities: ["fiabilidad", "comodidad en viaje", "insonorización", "etiqueta ECO"],
+      priorities: ["fiabilidad", "comodidad en viaje"],
     });
   });
 

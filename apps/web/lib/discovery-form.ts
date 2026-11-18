@@ -48,14 +48,18 @@ export const PRIORITY_OPTIONS: readonly string[] = [
 ];
 export const MAX_TOP_PRIORITIES = 3;
 
-/** One checkbox per body a buyer recognises; "coupe" also means its open cousins. */
-export const BODY_OPTIONS: ReadonlyArray<{ value: string; label: string; styles: BodyStyle[] }> = [
-  { value: "hatchback", label: "Compacto o utilitario", styles: ["hatchback"] },
-  { value: "sedan", label: "Berlina", styles: ["sedan"] },
-  { value: "estate", label: "Familiar", styles: ["estate"] },
-  { value: "SUV", label: "SUV", styles: ["SUV"] },
-  { value: "MPV", label: "Monovolumen", styles: ["MPV"] },
-  { value: "coupe", label: "Coupé o descapotable", styles: ["coupe", "convertible", "roadster"] },
+/**
+ * One checkbox per body a buyer recognises; "coupe" also means its open
+ * cousins. Optional and tucked under "Más filtros": many buyers can't tell an
+ * estate from a hatchback, so each carries an example on hover.
+ */
+export const BODY_OPTIONS: ReadonlyArray<{ value: string; label: string; hint: string; styles: BodyStyle[] }> = [
+  { value: "hatchback", label: "Compacto o utilitario", hint: "Tipo Golf, Ibiza o Clio", styles: ["hatchback"] },
+  { value: "sedan", label: "Berlina", hint: "Con maletero separado, tipo Serie 3 o Passat berlina", styles: ["sedan"] },
+  { value: "estate", label: "Familiar", hint: "Maletero largo, tipo Octavia Combi o Passat Variant", styles: ["estate"] },
+  { value: "SUV", label: "SUV", hint: "Alto, tipo Qashqai, Tucson o RAV4", styles: ["SUV"] },
+  { value: "MPV", label: "Monovolumen", hint: "Tipo Touran, Scénic o Zafira", styles: ["MPV"] },
+  { value: "coupe", label: "Coupé o descapotable", hint: "Dos puertas o techo abierto, tipo MX-5 o Serie 2 Coupé", styles: ["coupe", "convertible", "roadster"] },
 ];
 
 const FOUR_BY_FOUR = "tracción a las 4 ruedas";
@@ -99,13 +103,9 @@ export function parseDiscoveryForm(formData: FormData): ParsedDiscoveryForm {
   if (topPriorities.length > MAX_TOP_PRIORITIES) {
     return {
       ok: false,
-      error: `Marca como mucho ${MAX_TOP_PRIORITIES} cosas en «lo que más te importa»: son las que deciden, el resto ponlo debajo`,
+      error: `Marca como mucho ${MAX_TOP_PRIORITIES} cosas en «lo que más te importa»: son las que deciden. Lo demás cuéntalo en «¿Para qué lo quieres?»`,
     };
   }
-  const otherPriorities = splitList(formData.get("otherPriorities")).filter(
-    (p) => !topPriorities.includes(p.toLowerCase()),
-  );
-
   const mustHaves = splitList(formData.get("mustHaves"));
   if (formData.get("drivetrain") === "4x4" && !mustHaves.some((m) => /4x4|4 ruedas|tracci[oó]n total/i.test(m))) {
     mustHaves.unshift(FOUR_BY_FOUR);
@@ -130,8 +130,9 @@ export function parseDiscoveryForm(formData: FormData): ParsedDiscoveryForm {
       .catch([])
       .parse(formData.getAll("fuel").map(String)),
     gearbox: z.enum(["manual", "automatic", "any"]).catch("any").parse(String(formData.get("gearbox") ?? "any")),
-    // Key ones first: the prompt reads order as importance when nothing else says.
-    priorities: [...topPriorities, ...otherPriorities],
+    // Only the ticked ones. Anything softer goes in the free text; a second
+    // list next to "Imprescindible" read as the same question twice.
+    priorities: topPriorities,
     topPriorities,
     bodyStyles: bodyStyles.length > 0 ? bodyStyles : undefined,
     mustHaves,

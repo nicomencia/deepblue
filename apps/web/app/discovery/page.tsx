@@ -114,7 +114,7 @@ export default async function DiscoveryPage() {
             name="usage"
             required
             rows={4}
-            placeholder="Uso diario, autopista o ciudad, niños, montaña, viajes largos, aparcar en la calle… Cuéntalo como se lo contarías a un amigo que sabe de coches."
+            placeholder="Uso diario, autopista o ciudad, niños, montaña, viajes largos, aparcar en la calle, y cualquier cosa que te importe… Cuéntalo como se lo contarías a un amigo que sabe de coches."
             style={input}
           />
         </label>
@@ -163,17 +163,6 @@ export default async function DiscoveryPage() {
         </fieldset>
 
         <fieldset style={fieldset}>
-          <legend style={legend}>Carrocerías que te valen — sin marcar, cualquiera</legend>
-          <div style={chips}>
-            {BODY_OPTIONS.map((b) => (
-              <label key={b.value} style={chip}>
-                <input type="checkbox" name="body" value={b.value} /> {b.label}
-              </label>
-            ))}
-          </div>
-        </fieldset>
-
-        <fieldset style={fieldset}>
           <legend style={legend}>
             Lo que más te importa * — marca de 1 a {MAX_TOP_PRIORITIES}: son las que deciden
           </legend>
@@ -184,10 +173,9 @@ export default async function DiscoveryPage() {
               </label>
             ))}
           </div>
-          <label style={{ ...lbl, marginTop: "0.5rem" }}>
-            ¿Algo más que te importe? (separa con comas)
-            <input name="otherPriorities" placeholder="buena insonorización, etiqueta ECO, que sea bonito…" style={input} />
-          </label>
+          <p style={{ ...hint, margin: "0.5rem 0 0" }}>
+            ¿Te importa algo más? Cuéntalo arriba, en «¿Para qué lo quieres?».
+          </p>
         </fieldset>
 
         <div style={grid2}>
@@ -217,6 +205,19 @@ export default async function DiscoveryPage() {
         <details style={fieldset}>
           <summary style={{ ...legend, cursor: "pointer" }}>Más filtros (opcional)</summary>
           <div style={{ display: "grid", gap: "0.6rem", marginTop: "0.6rem" }}>
+            {/* Body style lives here on purpose: plenty of buyers don't tell an
+                estate from a hatchback, and a wrong tick shrinks the advice.
+                Left blank, the advisor chooses the body itself. */}
+            <div>
+              <span style={lbl}>Carrocería — solo si lo tienes claro; si no, déjalo y el asesor elige</span>
+              <div style={{ ...chips, marginTop: "0.3rem" }}>
+                {BODY_OPTIONS.map((b) => (
+                  <label key={b.value} style={chip} title={b.hint}>
+                    <input type="checkbox" name="body" value={b.value} /> {b.label}
+                  </label>
+                ))}
+              </div>
+            </div>
             <div style={grid3}>
               <label style={lbl}>
                 Año mínimo

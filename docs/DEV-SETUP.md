@@ -163,6 +163,20 @@ modelos, adopción manual de anuncios con dossier-first, vía LLM activa
 (API key) y Fase 2 en Wallapop: mensajes al vendedor con aprobación, lectura
 de respuestas, contraofertas e informe de visita. 274 tests verdes.
 
+**Cambio 2026-11-18 (48) — dos ajustes al formulario nuevo.** Nico,
+probándolo:
+
+- *Carrocería confunde*: mucha gente no distingue un familiar de un
+  compacto, y una casilla mal marcada estrecha el consejo. Pasa a "Más
+  filtros (opcional)" con el aviso "solo si lo tienes claro; si no, el
+  asesor elige", y cada opción lleva un ejemplo al pasar el ratón (tipo
+  Octavia Combi, tipo Qashqai…).
+- *"¿Algo más que te importe?" e "Imprescindible" se leían como la misma
+  pregunta.* Se queda "Imprescindible", que es un requisito duro que el
+  asesor comprueba coche por coche; lo blando va al cuadro grande, cuyo
+  texto de ayuda ahora lo invita. `priorities` pasa a ser solo las 1-3
+  marcadas.
+
 **Cambio 2026-11-18 (47) — formulario de descubrimiento: más sitio para
 escribir y lo esencial forzado con desplegables y casillas.** Nico: "no se
 siente fácil". Pedía unas veinte cosas a la vez, tres listas había que
